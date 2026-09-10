@@ -1,0 +1,20 @@
+{
+  "event_id": "01K0M0AA1A0M0AA1A0M0AA1A0M",
+  "event_type": "charging.session.completed.v1",
+  "schema_version": 1,
+  "occurred_at": "2026-07-20T04:30:00.000Z",
+  "tenant_id": "01K0M0BB2B0M0BB2B0M0BB2B0M",
+  "aggregate_type": "charging_session",
+  "aggregate_id": "01K0M0CC3C0M0CC3C0M0CC3C0M",
+  "aggregate_version": 7,
+  "correlation_id": "01K0M0DD4D0M0DD4D0M0DD4D0M",
+  "causation_id": "01K0M0EE5E0M0EE5E0M0EE5E0M",
+  "actor": {
+    "type": "charger",
+    "id": "01K0M0FF6F0M0FF6F0M0FF6F0M"
+  },
+  "data": {
+    "energy_wh": 18420,
+    "duration_seconds": 2412
+  }
+}

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vtsa-ocpp-gateway"
+version = "0.1.0"
+description = "Asynchronous OCPP protocol edge for VTSA CSMS"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.116,<1",
+    "ocpp>=2.1,<3",
+    "argon2-cffi>=25.1,<26",
+    "prometheus-client>=0.22,<1",
+    "python-ulid>=3.1,<4",
+    "redis[hiredis]>=6.4,<7",
+    "structlog>=25.4,<26",
+    "uvicorn[standard]>=0.35,<1",
+    "websockets>=15,<16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx2>=2,<3",
+    "mypy>=1.17,<2",
+    "pip-audit>=2.9,<3",
+    "pytest>=9.0.3,<10",
+    "pytest-asyncio>=1.1,<2",
+    "ruff>=0.12,<1",
+]
+
+[project.scripts]
+vtsa-ocpp-gateway = "vtsa_ocpp_gateway.__main__:main"
+vtsa-charger-simulator = "vtsa_ocpp_gateway.simulator:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["integration: requires a local infrastructure dependency"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ASYNC", "B", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+mypy_path = "typings"
+show_error_codes = true
+warn_unreachable = true

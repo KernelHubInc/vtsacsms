@@ -1,0 +1,220 @@
+openapi: 3.1.0
+info:
+  title: VTSA OCPP Gateway Internal API
+  version: 1.0.0
+  description: >-
+    Least-privilege service interface for health, metrics, and correlated charger commands.
+    A completed protocol response is not proof of a physical charging state transition.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: http://ocpp-gateway:9000
+    description: Local service-network example; deployments select their internal endpoint.
+tags:
+  - name: Health
+    description: Process and dependency health probes.
+  - name: Internal
+    description: Service-authenticated metrics and charger commands.
+paths:
+  /health/live:
+    get:
+      summary: Check gateway process liveness
+      operationId: getGatewayLiveness
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Process is live.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: The health request was malformed.
+  /health/ready:
+    get:
+      summary: Check gateway dependency readiness
+      operationId: getGatewayReadiness
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Gateway dependencies are ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '400':
+          description: The health request was malformed.
+        '503':
+          description: A required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+  /internal/metrics:
+    get:
+      summary: Read gateway Prometheus metrics
+      operationId: getGatewayMetrics
+      tags: [Internal]
+      security:
+        - serviceBearer: []
+      responses:
+        '200':
+          description: Prometheus metrics.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/InternalAuthenticationUnavailable'
+  /internal/v1/commands:
+    post:
+      summary: Dispatch a correlated command to a connected charger
+      operationId: dispatchChargerCommandV1
+      tags: [Internal]
+      security:
+        - serviceBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+      responses:
+        '200':
+          description: Protocol delivery result. Inspect `data.status`.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CommandResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Request contract validation failed.
+        '503':
+          $ref: '#/components/responses/InternalAuthenticationUnavailable'
+components:
+  securitySchemes:
+    serviceBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque service credential
+  responses:
+    Unauthorized:
+      description: Service credential is invalid.
+    InternalAuthenticationUnavailable:
+      description: Internal service authentication is not configured.
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, service, request_id, correlation_id]
+      properties:
+        status:
+          type: string
+        service:
+          const: ocpp-gateway
+        request_id:
+          $ref: '#/components/schemas/Ulid'
+        correlation_id:
+          $ref: '#/components/schemas/Ulid'
+    ReadinessResponse:
+      type: object
+      additionalProperties: false
+      required: [status, service, request_id, correlation_id, checks]
+      properties:
+        status:
+          type: string
+        service:
+          const: ocpp-gateway
+        request_id:
+          $ref: '#/components/schemas/Ulid'
+        correlation_id:
+          $ref: '#/components/schemas/Ulid'
+        checks:
+          type: object
+          additionalProperties: true
+    CommandRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - command_id
+        - tenant_id
+        - charger_id
+        - charge_point_identity
+        - action
+        - payload
+        - correlation_id
+        - actor_id
+        - reason_code
+        - expected_state
+        - deadline_at
+        - timeout_seconds
+      properties:
+        command_id:
+          $ref: '#/components/schemas/Ulid'
+        tenant_id:
+          $ref: '#/components/schemas/Ulid'
+        charger_id:
+          $ref: '#/components/schemas/Ulid'
+        charge_point_identity:
+          type: string
+          minLength: 1
+          maxLength: 120
+        action:
+          type: string
+          minLength: 1
+          maxLength: 80
+        payload:
+          type: object
+          additionalProperties: true
+        correlation_id:
+          $ref: '#/components/schemas/Ulid'
+        actor_id:
+          $ref: '#/components/schemas/Ulid'
+        reason_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_.-]{1,79}$'
+        expected_state:
+          type: object
+          additionalProperties: true
+        deadline_at:
+          type: string
+          format: date-time
+        timeout_seconds:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 120
+    CommandResult:
+      type: object
+      additionalProperties: false
+      required: [command_id, action, status, response, error]
+      properties:
+        command_id:
+          $ref: '#/components/schemas/Ulid'
+        action:
+          type: string
+        status:
+          type: string
+          enum: [completed, rejected, timed_out, not_connected, failed]
+        response:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+        error:
+          oneOf:
+            - type: string
+            - type: 'null'

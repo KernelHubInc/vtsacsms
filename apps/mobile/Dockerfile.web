@@ -1,0 +1,20 @@
+FROM ghcr.io/cirruslabs/flutter:stable AS build
+
+WORKDIR /app
+COPY pubspec.yaml pubspec.lock ./
+RUN flutter pub get
+COPY . .
+ARG API_BASE_URL=http://localhost:8000
+ARG DEFAULT_TENANT_ID=01J0000000VTSADEMA00000000
+ARG MAP_PROVIDER=openstreetmap
+RUN flutter build web --release \
+    --no-web-resources-cdn \
+    --dart-define=APP_ENVIRONMENT=local \
+    --dart-define=API_BASE_URL=${API_BASE_URL} \
+    --dart-define=DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID} \
+    --dart-define=MAP_PROVIDER=${MAP_PROVIDER}
+
+FROM nginx:1.29-alpine
+COPY --from=build /app/build/web /usr/share/nginx/html
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 CMD wget -q -O /dev/null http://127.0.0.1/
+EXPOSE 80

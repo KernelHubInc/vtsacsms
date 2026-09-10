@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Power Solutions EV charging network</title><desc id="desc">Power Solutions wordmark on a deep navy energy network background.</desc>
+  <defs><linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081B35"/><stop offset="1" stop-color="#12366B"/></linearGradient><radialGradient id="glow"><stop stop-color="#57DDD2" stop-opacity=".35"/><stop offset="1" stop-color="#57DDD2" stop-opacity="0"/></radialGradient></defs>
+  <rect width="1200" height="630" fill="url(#background)"/><circle cx="1010" cy="110" r="360" fill="url(#glow)"/>
+  <g transform="translate(88 92) scale(.8)"><rect x="0" y="66" width="30" height="30" rx="8" fill="#57DDD2"/><rect x="8" y="33" width="32" height="32" rx="8" fill="#45CFC7"/><rect x="32" y="54" width="32" height="32" rx="8" fill="#2589BE"/><rect x="39" y="19" width="34" height="34" rx="9" fill="#57DDD2"/><rect x="65" y="38" width="34" height="34" rx="9" fill="#2589BE"/><rect x="73" y="0" width="34" height="34" rx="9" fill="#FFFFFF"/></g>
+  <text x="190" y="160" fill="#57DDD2" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800" letter-spacing="-2">POWER</text><text x="365" y="160" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="41" font-style="italic">SOLUTIONS</text>
+  <text x="88" y="342" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="68" font-weight="750">A clearer charging network.</text><text x="88" y="414" fill="#C8E0EA" font-family="Inter, Arial, sans-serif" font-size="29">Know the place. Read the signal. Keep moving.</text>
+  <path d="M785 166C880 166 897 268 986 268s101 88 168 88" fill="none" stroke="#57DDD2" stroke-opacity=".55" stroke-width="3"/><g fill="#57DDD2"><circle cx="785" cy="166" r="11"/><circle cx="986" cy="268" r="11"/><circle cx="1154" cy="356" r="11"/></g>
+</svg>

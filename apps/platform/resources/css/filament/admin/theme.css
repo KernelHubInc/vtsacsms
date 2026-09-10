@@ -1,0 +1,73 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+@import '../../tokens.css';
+
+@source '../../../../app/Filament/**/*.php';
+@source '../../../../resources/views/filament/**/*.blade.php';
+
+.fi-body {
+    background-color: var(--vtsa-canvas);
+}
+
+.fi-topbar nav,
+.fi-modal-window,
+.fi-section,
+.fi-ta-ctn {
+    border-color: var(--vtsa-border);
+    background-color: var(--vtsa-surface);
+}
+
+.fi-sidebar-header {
+    border-color: rgb(87 221 210 / 18%);
+    background: linear-gradient(135deg, #12366b, #0b2448 72%);
+}
+
+.fi-logo {
+    max-width: min(18rem, 72vw);
+    object-fit: contain;
+    object-position: left center;
+}
+
+.fi-sidebar {
+    border-color: rgb(87 221 210 / 18%);
+    background: #0b2448;
+}
+
+.fi-simple-header .fi-logo {
+    border-radius: 0.875rem;
+    background: #0b2448;
+    padding: 0.65rem 1rem;
+}
+
+.fi-sidebar .fi-sidebar-group-label,
+.fi-sidebar .fi-sidebar-item-label,
+.fi-sidebar .fi-icon {
+    color: #dcecf5;
+}
+
+.fi-sidebar .fi-sidebar-item-button:hover {
+    background: rgb(87 221 210 / 10%);
+}
+
+.fi-sidebar .fi-sidebar-item.fi-active > .fi-sidebar-item-button {
+    border-inline-start: 3px solid #57ddd2;
+    background: rgb(87 221 210 / 16%);
+}
+
+.fi-sidebar .fi-sidebar-item.fi-active .fi-sidebar-item-label,
+.fi-sidebar .fi-sidebar-item.fi-active .fi-icon {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.fi-btn,
+.fi-input-wrp,
+.fi-section,
+.fi-modal-window {
+    border-radius: 0.875rem;
+}
+
+.fi-btn:focus-visible,
+.fi-input-wrp:focus-within {
+    outline: 2px solid var(--vtsa-focus);
+    outline-offset: 2px;
+}

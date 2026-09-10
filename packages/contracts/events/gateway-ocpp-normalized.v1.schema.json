@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.vtsa.invalid/events/gateway-ocpp-normalized.v1.schema.json",
+  "title": "VTSA normalized OCPP gateway event v1",
+  "description": "Protocol evidence emitted by the OCPP gateway. Null tenant and aggregate identifiers are permitted only on the quarantine stream for an unenrolled local-development charger.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "occurred_at",
+    "tenant_id",
+    "aggregate_type",
+    "aggregate_id",
+    "correlation_id",
+    "causation_id",
+    "data"
+  ],
+  "properties": {
+    "event_id": { "$ref": "#/$defs/ulid" },
+    "event_type": {
+      "type": "string",
+      "pattern": "^gateway\\.ocpp\\.[a-z][a-z0-9_]*\\.received\\.v1$"
+    },
+    "schema_version": { "const": 1 },
+    "occurred_at": { "$ref": "#/$defs/utcTimestamp" },
+    "tenant_id": {
+      "anyOf": [{ "$ref": "#/$defs/ulid" }, { "type": "null" }]
+    },
+    "aggregate_type": { "const": "charging_station" },
+    "aggregate_id": {
+      "anyOf": [{ "$ref": "#/$defs/ulid" }, { "type": "null" }]
+    },
+    "correlation_id": { "$ref": "#/$defs/ulid" },
+    "causation_id": {
+      "anyOf": [{ "$ref": "#/$defs/ulid" }, { "type": "null" }]
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "charge_point_identity",
+        "protocol",
+        "gateway_node_id",
+        "connection_id",
+        "protocol_timestamp",
+        "clock_skew_seconds",
+        "clock_skew_detected"
+      ],
+      "properties": {
+        "charge_point_identity": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "protocol": { "enum": ["ocpp1.6", "ocpp2.0.1"] },
+        "gateway_node_id": { "$ref": "#/$defs/ulid" },
+        "connection_id": { "$ref": "#/$defs/ulid" },
+        "ocpp_message_id": {
+          "anyOf": [
+            { "type": "string", "maxLength": 255 },
+            { "type": "null" }
+          ]
+        },
+        "protocol_timestamp": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "clock_skew_seconds": {
+          "anyOf": [{ "type": "number" }, { "type": "null" }]
+        },
+        "clock_skew_detected": { "type": "boolean" },
+        "samples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/meterSample" }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "meterSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp", "measurand", "value", "unit", "context", "phase"],
+      "properties": {
+        "timestamp": {
+          "anyOf": [{ "$ref": "#/$defs/dateTime" }, { "type": "null" }]
+        },
+        "measurand": { "type": "string" },
+        "value": {
+          "anyOf": [{ "type": "number" }, { "type": "string" }]
+        },
+        "unit": { "type": "string" },
+        "context": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }]
+        },
+        "phase": {
+          "anyOf": [{ "type": "string" }, { "type": "null" }]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "API_BASE_URL": "http://localhost:8000",
+  "APP_ENVIRONMENT": "local",
+  "DEFAULT_TENANT_ID": "01J0000000VTSADEMA00000000",
+  "MAP_PROVIDER": "openstreetmap",
+  "MAP_DEFAULT_LATITUDE": "14.5995",
+  "MAP_DEFAULT_LONGITUDE": "120.9842",
+  "MAP_DEFAULT_ZOOM": "11",
+  "MAP_TILE_URL_TEMPLATE": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "MAP_TILE_ATTRIBUTION": "© OpenStreetMap contributors",
+  "GOOGLE_MAPS_READY": "false",
+  "GOOGLE_MAPS_API_KEY": ""
+}

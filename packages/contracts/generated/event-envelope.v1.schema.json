@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.vtsa.invalid/events/event-envelope.v1.schema.json",
+  "title": "VTSA integration event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "occurred_at",
+    "aggregate_type",
+    "aggregate_id",
+    "aggregate_version",
+    "correlation_id",
+    "causation_id",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "event_id": { "$ref": "#/$defs/ulid" },
+    "event_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.v[1-9][0-9]*$"
+    },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "occurred_at": { "$ref": "#/$defs/utcTimestamp" },
+    "tenant_id": { "$ref": "#/$defs/ulid" },
+    "aggregate_type": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "aggregate_id": { "$ref": "#/$defs/ulid" },
+    "aggregate_version": { "type": "integer", "minimum": 1 },
+    "correlation_id": { "$ref": "#/$defs/ulid" },
+    "causation_id": { "$ref": "#/$defs/ulid" },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["identity", "service", "charger", "system"] },
+        "id": { "$ref": "#/$defs/ulid" }
+      }
+    },
+    "data": { "type": "object" }
+  },
+  "$defs": {
+    "ulid": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount_minor", "currency"],
+      "properties": {
+        "amount_minor": { "type": "integer" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    },
+    "energyWh": { "type": "integer", "minimum": 0 },
+    "powerW": { "type": "integer" },
+    "durationSeconds": { "type": "integer", "minimum": 0 }
+  }
+}

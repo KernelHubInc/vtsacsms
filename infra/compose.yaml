@@ -1,0 +1,282 @@
+name: ${COMPOSE_PROJECT_NAME:-vtsa-csms}
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run tools/bootstrap.ps1}
+      POSTGRES_USER: ${POSTGRES_USER:?Run tools/bootstrap.ps1}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run tools/bootstrap.ps1}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Run tools/bootstrap.ps1}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}" &&
+        mc anonymous set none "local/$${MINIO_BUCKET}"
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.27.6
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    volumes:
+      - mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  platform:
+    build:
+      context: ../apps/platform
+      target: development
+    environment: &platform-environment
+      APP_NAME: Power Solutions
+      APP_ENV: local
+      APP_KEY: ${APP_KEY:?Run tools/bootstrap.ps1}
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      LOG_CHANNEL: stderr-json
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:?Run tools/bootstrap.ps1}
+      DB_USERNAME: ${POSTGRES_USER:?Run tools/bootstrap.ps1}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Run tools/bootstrap.ps1}
+      DB_SSLMODE: disable
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      FILESYSTEM_DISK: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_BUCKET: ${MINIO_BUCKET:?Run tools/bootstrap.ps1}
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
+      GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
+      GOOGLE_MAPS_MOBILE_READY: ${GOOGLE_MAPS_MOBILE_READY:-false}
+      MAP_PROVIDER_DEFAULT: ${MAP_PROVIDER_DEFAULT:-openstreetmap}
+      MAP_PROVIDER_ADMIN: ${MAP_PROVIDER_ADMIN:-openstreetmap}
+      MAP_PROVIDER_OPERATOR: ${MAP_PROVIDER_OPERATOR:-openstreetmap}
+      MAP_PROVIDER_USER_WEB: ${MAP_PROVIDER_USER_WEB:-openstreetmap}
+      MAP_PROVIDER_PUBLIC: ${MAP_PROVIDER_PUBLIC:-openstreetmap}
+      MAP_PROVIDER_MOBILE: ${MAP_PROVIDER_MOBILE:-openstreetmap}
+      MAP_DEFAULT_LATITUDE: ${MAP_DEFAULT_LATITUDE:-14.5995}
+      MAP_DEFAULT_LONGITUDE: ${MAP_DEFAULT_LONGITUDE:-120.9842}
+      MAP_DEFAULT_ZOOM: ${MAP_DEFAULT_ZOOM:-11}
+      MAP_MIN_ZOOM: ${MAP_MIN_ZOOM:-3}
+      MAP_MAX_ZOOM: ${MAP_MAX_ZOOM:-19}
+      MAP_TILE_URL_TEMPLATE: ${MAP_TILE_URL_TEMPLATE:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
+      MAP_TILE_ATTRIBUTION: ${MAP_TILE_ATTRIBUTION:-© OpenStreetMap contributors}
+      MAP_TILE_SUBDOMAINS: ${MAP_TILE_SUBDOMAINS:-}
+      MAP_TILE_MAX_NATIVE_ZOOM: ${MAP_TILE_MAX_NATIVE_ZOOM:-19}
+      MAP_MARKER_CLUSTERING: ${MAP_MARKER_CLUSTERING:-true}
+      FEATURE_OCPP: ${FEATURE_OCPP:-false}
+      FEATURE_REMOTE_CHARGING: ${FEATURE_REMOTE_CHARGING:-false}
+      FEATURE_REAL_PAYMENTS: ${FEATURE_REAL_PAYMENTS:-false}
+      FEATURE_SETTLEMENTS: ${FEATURE_SETTLEMENTS:-false}
+      FEATURE_OCPI: ${FEATURE_OCPI:-false}
+      FEATURE_STORE_LOCATOR: ${FEATURE_STORE_LOCATOR:-true}
+      FEATURE_INVENTORY: ${FEATURE_INVENTORY:-true}
+      FEATURE_MAINTENANCE: ${FEATURE_MAINTENANCE:-true}
+      FEATURE_PROCUREMENT: ${FEATURE_PROCUREMENT:-true}
+      FEATURE_DEMO_MODE: ${FEATURE_DEMO_MODE:-true}
+      FEATURE_SIMULATED_CHARGING: ${FEATURE_SIMULATED_CHARGING:-false}
+      FEATURE_SIMULATED_PAYMENTS: ${FEATURE_SIMULATED_PAYMENTS:-false}
+      OCPP_GATEWAY_INTERNAL_URL: http://ocpp-gateway:9000
+      OCPP_GATEWAY_INTERNAL_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:-}
+      OCPP_GATEWAY_COMMAND_TIMEOUT_SECONDS: 20
+      CHARGING_START_EXPIRY_SECONDS: 120
+      INTEGRATION_EVENT_STREAM: ${INTEGRATION_EVENT_STREAM:-vtsa:local:platform:events:v1}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../apps/platform
+      target: development
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    environment: *platform-environment
+    depends_on:
+      platform:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "about", "--only=environment"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  scheduler:
+    build:
+      context: ../apps/platform
+      target: development
+    command: ["php", "artisan", "schedule:work"]
+    environment: *platform-environment
+    depends_on:
+      platform:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "schedule:list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ocpp-event-consumer:
+    profiles: ["milestone2"]
+    build:
+      context: ../apps/platform
+      target: development
+    command: ["php", "artisan", "charging:consume-ocpp-events"]
+    environment: *platform-environment
+    depends_on:
+      platform:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "about", "--only=environment"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ocpp-authorization-consumer:
+    profiles: ["milestone2"]
+    build:
+      context: ../apps/platform
+      target: development
+    command: ["php", "artisan", "charging:consume-ocpp-authorizations"]
+    environment: *platform-environment
+    depends_on:
+      platform:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "artisan", "about", "--only=environment"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  ocpp-gateway:
+    profiles: ["milestone2"]
+    build:
+      context: ../services/ocpp-gateway
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 9000
+      GATEWAY_LOG_LEVEL: INFO
+      GATEWAY_ENVIRONMENT: local
+      GATEWAY_SUPPORTED_SUBPROTOCOLS: ocpp2.0.1,ocpp1.6
+      GATEWAY_REDIS_URL: redis://redis:6379/0
+      GATEWAY_INTERNAL_API_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:-}
+      OCPP_CHARGER_REGISTRY_JSON: "{}"
+      OCPP_ALLOWED_COMMANDS: ${OCPP_ALLOWED_COMMANDS:-TriggerMessage,RemoteStartTransaction,RemoteStopTransaction,RequestStartTransaction,RequestStopTransaction}
+      OCPP_DATA_TRANSFER_ALLOWLIST: ${OCPP_DATA_TRANSFER_ALLOWLIST:-}
+      OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "true"
+      OCPP_REQUIRE_TLS: "false"
+    ports:
+      - "9002:9000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 30s
+
+  flutter-web:
+    build:
+      context: ../apps/mobile
+      dockerfile: Dockerfile.web
+      args:
+        API_BASE_URL: http://localhost:8000
+        DEFAULT_TENANT_ID: 01J0000000VTSADEMA00000000
+        MAP_PROVIDER: ${MAP_PROVIDER_MOBILE:-openstreetmap}
+    ports:
+      - "3000:80"
+
+  flutter-check:
+    profiles: ["quality"]
+    build:
+      context: ../apps/mobile
+      dockerfile: Dockerfile.web
+      target: build
+    command:
+      - /bin/sh
+      - -lc
+      - >-
+        dart format --output=none --set-exit-if-changed lib test integration_test &&
+        flutter analyze &&
+        flutter test
+
+volumes:
+  mailpit_data:
+  minio_data:
+  postgres_data:
+  redis_data:

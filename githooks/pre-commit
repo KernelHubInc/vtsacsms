@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+
+if [ -f "$repo_root/apps/platform/vendor/bin/pint" ]; then
+    (cd "$repo_root/apps/platform" && php vendor/bin/pint --test)
+fi
+
+if [ -x "$repo_root/services/ocpp-gateway/.venv/Scripts/python.exe" ]; then
+    (cd "$repo_root/services/ocpp-gateway" && .venv/Scripts/python.exe -m ruff check . && .venv/Scripts/python.exe -m ruff format --check .)
+elif [ -x "$repo_root/services/ocpp-gateway/.venv/bin/python" ]; then
+    (cd "$repo_root/services/ocpp-gateway" && .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check .)
+fi
+
+if [ -d "$repo_root/packages/contracts/node_modules" ]; then
+    (cd "$repo_root/packages/contracts" && npm run lint)
+fi

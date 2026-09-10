@@ -1,0 +1,18 @@
+{
+  "name": "@vtsa/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "redocly bundle openapi/platform.v1.yaml --output generated/platform.v1.openapi.json --ext json && openapi-typescript openapi/platform.v1.yaml -o generated/platform.v1.d.ts && redocly bundle openapi/ocpp-gateway.internal.v1.yaml --output generated/ocpp-gateway.internal.v1.openapi.json --ext json && openapi-typescript openapi/ocpp-gateway.internal.v1.yaml -o generated/ocpp-gateway.internal.v1.d.ts && node scripts/copy-event-schema.mjs",
+    "lint": "redocly lint openapi/platform.v1.yaml openapi/ocpp-gateway.internal.v1.yaml && node scripts/validate-events.mjs",
+    "test": "npm run lint",
+    "build": "npm run generate"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.0.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "openapi-typescript": "^7.9.1"
+  }
+}

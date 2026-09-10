@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 670 150" role="img" aria-labelledby="title desc">
+  <title id="title">Power Solutions</title><desc id="desc">Power Solutions wordmark with a rising blue and turquoise energy tile symbol.</desc>
+  <g transform="translate(8 10) scale(.95)">
+    <rect x="0" y="66" width="30" height="30" rx="8" fill="#57DDD2"/><rect x="8" y="33" width="32" height="32" rx="8" fill="#45CFC7"/>
+    <rect x="32" y="54" width="32" height="32" rx="8" fill="#2589BE"/><rect x="39" y="19" width="34" height="34" rx="9" fill="#57DDD2"/>
+    <rect x="65" y="38" width="34" height="34" rx="9" fill="#2589BE"/><rect x="73" y="0" width="34" height="34" rx="9" fill="#12366B"/>
+  </g>
+  <text x="137" y="92" fill="#45CFC7" font-family="Inter, Arial, sans-serif" font-size="66" font-weight="800" letter-spacing="-3">POWER</text>
+  <text x="375" y="92" fill="#2589BE" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="500" font-style="italic" letter-spacing="-2">SOLUTIONS</text>
+</svg>

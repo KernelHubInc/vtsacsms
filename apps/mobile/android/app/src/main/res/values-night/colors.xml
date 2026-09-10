@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="power_solutions_splash_background">#081B35</color>
+    <color name="power_solutions_status_bar">#081B35</color>
+    <color name="power_solutions_navigation_bar">#081B35</color>
+</resources>

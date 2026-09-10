@@ -1,0 +1,277 @@
+name: ${COMPOSE_PROJECT_NAME:-vtsa-csms}
+
+x-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "5"
+
+x-platform-environment: &platform-environment
+  APP_NAME: VTSA CSMS
+  APP_ENV: production
+  APP_KEY: ${APP_KEY:?APP_KEY is required}
+  APP_DEBUG: "false"
+  APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
+  ASSET_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
+  TRUSTED_PROXIES: "*"
+  LOG_CHANNEL: stderr-json
+  LOG_LEVEL: info
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${POSTGRES_DB:?POSTGRES_DB is required}
+  DB_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  DB_SSLMODE: disable
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  SESSION_SECURE_COOKIE: "true"
+  SESSION_SAME_SITE: lax
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  MAIL_MAILER: smtp
+  MAIL_SCHEME: ${MAIL_SCHEME:?MAIL_SCHEME is required}
+  MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
+  MAIL_PORT: ${MAIL_PORT:?MAIL_PORT is required}
+  MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?MAIL_FROM_ADDRESS is required}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-VTSA CSMS}
+  FILESYSTEM_DISK: s3
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+  AWS_ENDPOINT: http://minio:9000
+  AWS_URL: https://${STORAGE_DOMAIN:?STORAGE_DOMAIN is required}/${MINIO_BUCKET:?MINIO_BUCKET is required}
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+  MAP_PROVIDER_DEFAULT: ${MAP_PROVIDER_DEFAULT:-openstreetmap}
+  MAP_PROVIDER_ADMIN: ${MAP_PROVIDER_ADMIN:-openstreetmap}
+  MAP_PROVIDER_OPERATOR: ${MAP_PROVIDER_OPERATOR:-openstreetmap}
+  MAP_PROVIDER_USER_WEB: ${MAP_PROVIDER_USER_WEB:-openstreetmap}
+  MAP_PROVIDER_PUBLIC: ${MAP_PROVIDER_PUBLIC:-openstreetmap}
+  MAP_DEFAULT_LATITUDE: ${MAP_DEFAULT_LATITUDE:-14.5995}
+  MAP_DEFAULT_LONGITUDE: ${MAP_DEFAULT_LONGITUDE:-120.9842}
+  MAP_DEFAULT_ZOOM: ${MAP_DEFAULT_ZOOM:-11}
+  MAP_TILE_URL_TEMPLATE: ${MAP_TILE_URL_TEMPLATE:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
+  MAP_TILE_ATTRIBUTION: ${MAP_TILE_ATTRIBUTION:-© OpenStreetMap contributors}
+  GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
+  GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
+  FEATURE_OCPP: ${FEATURE_OCPP:-false}
+  FEATURE_REMOTE_CHARGING: ${FEATURE_REMOTE_CHARGING:-false}
+  FEATURE_REAL_PAYMENTS: ${FEATURE_REAL_PAYMENTS:-false}
+  FEATURE_SETTLEMENTS: ${FEATURE_SETTLEMENTS:-false}
+  FEATURE_OCPI: ${FEATURE_OCPI:-false}
+  FEATURE_STORE_LOCATOR: ${FEATURE_STORE_LOCATOR:-true}
+  FEATURE_INVENTORY: ${FEATURE_INVENTORY:-true}
+  FEATURE_MAINTENANCE: ${FEATURE_MAINTENANCE:-true}
+  FEATURE_PROCUREMENT: ${FEATURE_PROCUREMENT:-true}
+  FEATURE_DEMO_MODE: "false"
+  FEATURE_SIMULATED_CHARGING: "false"
+  FEATURE_SIMULATED_PAYMENTS: "false"
+  OCPP_GATEWAY_INTERNAL_URL: http://ocpp-gateway:9000
+  OCPP_GATEWAY_INTERNAL_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:?GATEWAY_INTERNAL_API_TOKEN is required}
+  OCPP_GATEWAY_REDIS_KEY_PREFIX: ${GATEWAY_REDIS_KEY_PREFIX:-vtsa:production:ocpp}
+  OCPP_GATEWAY_EVENT_STREAM: ${GATEWAY_REDIS_KEY_PREFIX:-vtsa:production:ocpp}:events:v1
+  OCPP_GATEWAY_AUTHORIZATION_STREAM: ${GATEWAY_REDIS_KEY_PREFIX:-vtsa:production:ocpp}:authorization-requests:v1
+  INTEGRATION_EVENT_STREAM: ${INTEGRATION_EVENT_STREAM:-vtsa:production:platform:events:v1}
+
+x-platform-service: &platform-service
+  image: vtsa-platform:${IMAGE_TAG:-latest}
+  build:
+    context: ../apps/platform
+    target: runtime
+  environment: *platform-environment
+  restart: unless-stopped
+  networks: [backend]
+  logging: *json-logging
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [backend]
+    logging: *json-logging
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [backend]
+    logging: *json-logging
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [backend]
+    logging: *json-logging
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}" &&
+        mc anonymous set none "local/$${MINIO_BUCKET}"
+    restart: "no"
+    networks: [backend]
+    logging: *json-logging
+
+  platform:
+    <<: *platform-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  web:
+    image: vtsa-web:${IMAGE_TAG:-latest}
+    build:
+      context: ../apps/platform
+      target: web
+    depends_on:
+      platform:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [edge, backend]
+    logging: *json-logging
+
+  worker:
+    <<: *platform-service
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90", "--max-time=3600"]
+    depends_on:
+      platform:
+        condition: service_healthy
+
+  scheduler:
+    <<: *platform-service
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      platform:
+        condition: service_healthy
+
+  ocpp-event-consumer:
+    <<: *platform-service
+    command: ["php", "artisan", "charging:consume-ocpp-events"]
+    depends_on:
+      platform:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+
+  ocpp-authorization-consumer:
+    <<: *platform-service
+    command: ["php", "artisan", "charging:consume-ocpp-authorizations"]
+    depends_on:
+      platform:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+
+  ocpp-gateway:
+    image: vtsa-ocpp-gateway:${IMAGE_TAG:-latest}
+    build:
+      context: ../services/ocpp-gateway
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 9000
+      GATEWAY_LOG_LEVEL: INFO
+      GATEWAY_ENVIRONMENT: production
+      GATEWAY_FORWARDED_ALLOW_IPS: "*"
+      GATEWAY_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      GATEWAY_REDIS_KEY_PREFIX: ${GATEWAY_REDIS_KEY_PREFIX:-vtsa:production:ocpp}
+      GATEWAY_INTERNAL_API_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:?GATEWAY_INTERNAL_API_TOKEN is required}
+      OCPP_CHARGER_REGISTRY_JSON: ${OCPP_CHARGER_REGISTRY_JSON:?OCPP_CHARGER_REGISTRY_JSON is required}
+      OCPP_ALLOWED_COMMANDS: ${OCPP_ALLOWED_COMMANDS:-}
+      OCPP_DATA_TRANSFER_ALLOWLIST: ${OCPP_DATA_TRANSFER_ALLOWLIST:-}
+      OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "false"
+      OCPP_REQUIRE_TLS: "true"
+      GATEWAY_RAW_MESSAGE_LOGGING: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    stop_grace_period: 30s
+    restart: unless-stopped
+    networks: [backend]
+    logging: *json-logging
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
+      OCPP_DOMAIN: ${OCPP_DOMAIN:?OCPP_DOMAIN is required}
+      STORAGE_DOMAIN: ${STORAGE_DOMAIN:?STORAGE_DOMAIN is required}
+      TLS_EMAIL: ${TLS_EMAIL:?TLS_EMAIL is required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      ocpp-gateway:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [edge, backend]
+    logging: *json-logging
+
+networks:
+  edge:
+  backend:
+
+volumes:
+  caddy_config:
+  caddy_data:
+  minio_data:
+  postgres_data:
+  redis_data:

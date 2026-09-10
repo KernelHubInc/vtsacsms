@@ -1,0 +1,14 @@
+/.cache/
+/backups/
+/.env
+/.env.production
+/.env.production.*
+!/.env.production.example
+/.idea/
+/.vscode/
+*.log
+.DS_Store
+Thumbs.db
+/tests/browser/node_modules/
+/tests/browser/report/
+/tests/browser/test-results/

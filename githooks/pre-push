@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+
+(cd "$repo_root/apps/platform" && composer lint && composer test)
+(cd "$repo_root/packages/contracts" && npm test)
+
+if [ -x "$repo_root/services/ocpp-gateway/.venv/Scripts/python.exe" ]; then
+    (cd "$repo_root/services/ocpp-gateway" && .venv/Scripts/python.exe -m mypy src tests && .venv/Scripts/python.exe -m pytest)
+elif [ -x "$repo_root/services/ocpp-gateway/.venv/bin/python" ]; then
+    (cd "$repo_root/services/ocpp-gateway" && .venv/bin/python -m mypy src tests && .venv/bin/python -m pytest)
+fi
+
+if command -v flutter >/dev/null 2>&1; then
+    (cd "$repo_root/apps/mobile" && flutter analyze && flutter test)
+fi

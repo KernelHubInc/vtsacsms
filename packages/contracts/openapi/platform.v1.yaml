@@ -1,0 +1,1786 @@
+openapi: 3.1.0
+info:
+  title: VTSA CSMS Platform API
+  version: 1.0.0
+  description: Versioned platform API including identity, tenancy, public station discovery, and asset administration.
+  license:
+    name: Proprietary - All rights reserved
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /
+    description: Current host
+tags:
+  - name: Health
+    description: Public liveness and readiness probes for infrastructure automation.
+  - name: Identity
+    description: First-party mobile authentication, verification, invitations, and devices.
+  - name: Sites
+    description: Tenant- and assignment-scoped site directory and reporting foundation.
+  - name: Public Stations
+    description: Public-safe discovery backed by PostGIS proximity and bounds queries.
+  - name: App Configuration
+    description: Public, cacheable, non-secret client rendering recommendations.
+  - name: Assets
+    description: Tenant- and site-scoped charging-station administration and data transfer.
+  - name: Charging
+    description: Tenant- and site-scoped charging sessions, command orchestration, review, and CDR evidence.
+  - name: Tariffs
+    description: Versioned tariff definitions and immutable published pricing rules.
+  - name: Procurement
+    description: Tenant-scoped requisition, sourcing, purchase-order, vendor-invoice, and three-way-match workflows.
+  - name: Inventory
+    description: Warehouse-scoped stock custody, immutable movements, reservations, transfers, counts, and work-order parts.
+  - name: Maintenance
+    description: Tenant- and site-scoped incidents, work orders, evidence, technician activity, and maintenance reporting.
+  - name: Payment Webhooks
+    description: Signature-verified provider callbacks with tenant-bound destination identifiers and replay protection.
+paths:
+  /api/v1/app/config:
+    get:
+      operationId: getAppConfiguration
+      summary: Read safe client configuration
+      tags: [App Configuration]
+      security: []
+      responses:
+        '200':
+          description: Non-secret configuration with a resolved map provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [map]
+                    properties:
+                      map:
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - provider
+                          - defaultLatitude
+                          - defaultLongitude
+                          - defaultZoom
+                          - minimumZoom
+                          - maximumZoom
+                          - tileUrlTemplate
+                          - tileAttribution
+                          - tileSubdomains
+                          - tileMaximumNativeZoom
+                          - tileRetina
+                          - tileRequestTimeoutSeconds
+                          - clusteringEnabled
+                        properties:
+                          provider: {type: string, enum: [openstreetmap, google]}
+                          defaultLatitude: {type: number, minimum: -90, maximum: 90}
+                          defaultLongitude: {type: number, minimum: -180, maximum: 180}
+                          defaultZoom: {type: integer, minimum: 0, maximum: 22}
+                          minimumZoom: {type: integer, minimum: 0, maximum: 22}
+                          maximumZoom: {type: integer, minimum: 0, maximum: 22}
+                          tileUrlTemplate: {type: string, maxLength: 1000}
+                          tileAttribution: {type: string, maxLength: 500}
+                          tileSubdomains:
+                            type: array
+                            items: {type: string, maxLength: 16}
+                          tileMaximumNativeZoom: {type: integer, minimum: 0, maximum: 22}
+                          tileRetina: {type: boolean}
+                          tileRequestTimeoutSeconds: {type: integer, minimum: 1, maximum: 60}
+                          clusteringEnabled: {type: boolean}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/webhooks/payments/{tenantId}/{configurationId}:
+    post:
+      operationId: receivePaymentProviderWebhook
+      summary: Receive a signed payment-provider event
+      tags: [Payment Webhooks]
+      security: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+        - name: configurationId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+        - name: X-Payment-Signature
+          in: header
+          required: false
+          description: Fake/local provider signature verified over the unmodified request body.
+          schema: {type: string, maxLength: 2048}
+        - name: Stripe-Signature
+          in: header
+          required: false
+          description: Stripe timestamped signature. Exactly the signature header for the configured provider is required.
+          schema: {type: string, maxLength: 2048}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: true}
+      responses:
+        '202':
+          description: Verified event was accepted, deduplicated, or safely ignored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [outcome]
+                    properties:
+                      outcome: {type: string, enum: [processed, duplicate, ignored, review_required]}
+        '400': {description: 'Signature, replay window, or provider envelope validation failed.'}
+        '404': {description: The tenant-bound provider destination is absent or inactive.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /health/live:
+    get:
+      operationId: getPlatformLiveness
+      summary: Check whether the platform process is alive
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Platform process is alive.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /health/ready:
+    get:
+      operationId: getPlatformReadiness
+      summary: Check whether required platform dependencies are ready
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Platform and required dependencies are ready.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          description: A required dependency is unavailable.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/auth/login:
+    post:
+      operationId: loginMobileUser
+      summary: Authenticate a first-party mobile device in one authorized tenant
+      tags: [Identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Tenant-bound Sanctum token issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '409':
+          description: MFA is required before a token can be issued.
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/forgot-password:
+    post:
+      operationId: requestPasswordReset
+      summary: Request a non-enumerating password-reset email
+      tags: [Identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email]
+              properties:
+                email: {type: string, format: email, maxLength: 254}
+      responses:
+        '202': {description: Request accepted regardless of account existence.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Reset a password and revoke every existing session and token
+      tags: [Identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: {type: string, format: email}
+                token: {type: string}
+                password: {type: string, format: password}
+                password_confirmation: {type: string, format: password}
+      responses:
+        '200': {description: Password changed and credentials revoked.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/invitations/accept:
+    post:
+      operationId: acceptUserInvitation
+      summary: Accept a single-use invitation and activate membership
+      tags: [Identity]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, minLength: 64, maxLength: 64}
+                name: {type: string, maxLength: 160}
+                password: {type: string, format: password}
+                password_confirmation: {type: string, format: password}
+      responses:
+        '200': {description: Invitation accepted.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/me:
+    get:
+      operationId: getCurrentIdentity
+      summary: Get the verified identity and effective tenant permissions
+      tags: [Identity]
+      parameters:
+        - $ref: '#/components/parameters/TenantSelector'
+      responses:
+        '200': {description: Current identity context.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/auth/logout:
+    post:
+      operationId: logoutMobileDevice
+      summary: Revoke the current mobile token
+      tags: [Identity]
+      responses:
+        '204': {description: Current token revoked.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+  /api/v1/auth/email/verification-notification:
+    post:
+      operationId: resendEmailVerification
+      summary: Send a new signed email-verification link
+      tags: [Identity]
+      responses:
+        '202': {description: Verification request accepted.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/email/verify/{userId}/{hash}:
+    get:
+      operationId: verifyEmailAddress
+      summary: Verify the authenticated user's email using a signed URL
+      tags: [Identity]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+        - name: hash
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Email address verified.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/mobile/verification:
+    post:
+      operationId: startMobileVerification
+      summary: Start optional mobile-number verification
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mobile_number]
+              properties:
+                mobile_number: {type: string, pattern: '^\+[1-9][0-9]{7,14}$'}
+      responses:
+        '202': {description: Verification challenge created.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/mobile/verify:
+    post:
+      operationId: verifyMobileNumber
+      summary: Complete optional mobile-number verification
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge_id, code]
+              properties:
+                challenge_id: {$ref: '#/components/schemas/Ulid'}
+                code: {type: string, pattern: '^[0-9]{6}$'}
+      responses:
+        '200': {description: Mobile number verified.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/devices:
+    get:
+      operationId: listIdentityDevices
+      summary: List tenant-bound mobile devices and browser sessions
+      tags: [Identity]
+      responses:
+        '200': {description: Device and session collection.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    delete:
+      operationId: revokeAllIdentityDevices
+      summary: Revoke every token and browser session for the identity
+      tags: [Identity]
+      responses:
+        '204': {description: All credentials revoked.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/devices/{deviceId}:
+    delete:
+      operationId: revokeIdentityDevice
+      summary: Revoke one owned mobile device or browser session
+      tags: [Identity]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+      responses:
+        '204': {description: Device or session revoked.}
+        '404': {description: Device was not found in this tenant and identity.}
+  /api/v1/invitations:
+    post:
+      operationId: createUserInvitation
+      summary: Invite a user with a constrained role and scope
+      tags: [Identity]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InvitationRequest'}
+      responses:
+        '201': {description: Invitation created and emailed.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/invitations/{invitationId}:
+    delete:
+      operationId: revokeUserInvitation
+      summary: Revoke an unaccepted invitation within the active tenant
+      tags: [Identity]
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+      responses:
+        '204': {description: Invitation revoked.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Invitation is absent or outside the active tenant.}
+  /api/v1/memberships/{membershipId}/suspend:
+    post:
+      operationId: suspendTenantMembership
+      summary: Suspend a tenant membership and revoke that tenant's mobile tokens
+      tags: [Identity]
+      parameters:
+        - name: membershipId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReason'}
+      responses:
+        '200': {description: Membership suspended.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Membership is absent or outside the active tenant.}
+  /api/v1/memberships/{membershipId}/activate:
+    post:
+      operationId: activateTenantMembership
+      summary: Reactivate a tenant membership through an audited workflow
+      tags: [Identity]
+      parameters:
+        - name: membershipId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LifecycleReason'}
+      responses:
+        '200': {description: Membership activated.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Membership is absent or outside the active tenant.}
+  /api/v1/sites:
+    get:
+      operationId: listAccessibleSites
+      summary: List only sites authorized by tenant and assignment scope
+      tags: [Sites]
+      responses:
+        '200': {description: Cursor-paginated accessible sites.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/sites/{siteId}:
+    get:
+      operationId: getAccessibleSite
+      summary: Get one site without disclosing cross-tenant or out-of-scope records
+      tags: [Sites]
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Ulid'}
+      responses:
+        '200': {description: Authorized site.}
+        '404': {description: Site is absent or inaccessible.}
+  /api/v1/reports/sites:
+    get:
+      operationId: generateAccessibleSiteReport
+      summary: Generate an audited report from the same scoped site query
+      tags: [Sites]
+      responses:
+        '200': {description: Accessible site report rows.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/exports/sites:
+    get:
+      operationId: exportAccessibleSites
+      summary: Export only query-authorized sites as an audited CSV attachment
+      tags: [Sites]
+      responses:
+        '200':
+          description: Tenant- and assignment-scoped CSV export.
+          content:
+            text/csv:
+              schema: {type: string}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/public/stations:
+    get:
+      operationId: searchPublicStations
+      summary: Search published active stations by radius or map bounds
+      tags: [Public Stations]
+      security: []
+      parameters:
+        - {name: latitude, in: query, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: longitude, in: query, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: radius_m, in: query, schema: {type: integer, minimum: 100, maximum: 100000, default: 10000}}
+        - {name: west, in: query, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: south, in: query, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: east, in: query, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: north, in: query, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: connector, in: query, schema: {type: string, maxLength: 40}}
+        - {name: min_power_w, in: query, schema: {type: integer, minimum: 0, maximum: 1000000}}
+        - {name: availability, in: query, schema: {type: string, enum: [available, busy, faulted, offline, stale, unknown]}}
+        - {name: operator_id, in: query, schema: {$ref: '#/components/schemas/Ulid'}}
+        - {name: site_type, in: query, schema: {type: string, enum: [public_parking, retail, workplace, fleet, highway, hospitality]}}
+        - {name: open_now, in: query, schema: {type: boolean}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 250, default: 100}}
+      responses:
+        '200':
+          description: Public-safe station results ordered by distance when a search origin is supplied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/PublicStation'}}
+                  meta:
+                    type: object
+                    required: [generated_at]
+                    properties:
+                      generated_at: {type: string, format: date-time}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/stations:
+    get:
+      operationId: listAccessibleChargingStations
+      summary: List stations permitted by tenant and site assignment
+      tags: [Assets]
+      responses:
+        '200': {description: Cursor-paginated authorized stations.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createChargingStation
+      summary: Register a charging station at an authorized site
+      tags: [Assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StoreChargingStation'}
+      responses:
+        '201': {description: Station registered and audited.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/stations/{stationId}:
+    parameters:
+      - name: stationId
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Ulid'}
+    get:
+      operationId: getAccessibleChargingStation
+      summary: Get one authorized station without revealing inaccessible records
+      tags: [Assets]
+      responses:
+        '200': {description: Authorized station.}
+        '404': {description: Station is absent or inaccessible.}
+    patch:
+      operationId: updateChargingStation
+      summary: Update mutable lifecycle and configuration fields
+      tags: [Assets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/ChargingStationMutableFields'}
+      responses:
+        '200': {description: Station updated and audited.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Station is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/stations-import-template:
+    get:
+      operationId: downloadStationImportTemplate
+      summary: Download the exact CSV station import header
+      tags: [Assets]
+      responses:
+        '200': {description: CSV template, content: {text/csv: {schema: {type: string}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/stations-imports:
+    post:
+      operationId: importChargingStations
+      summary: Atomically import up to 1000 validated station rows
+      tags: [Assets]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '200': {description: Import row count.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/exports/stations:
+    get:
+      operationId: exportAccessibleChargingStations
+      summary: Export only tenant- and site-authorized stations as CSV
+      tags: [Assets]
+      responses:
+        '200': {description: Scoped CSV export, content: {text/csv: {schema: {type: string}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/charging-sessions:
+    get:
+      operationId: listChargingSessions
+      summary: List charging sessions authorized by tenant and site scope
+      tags: [Charging]
+      responses:
+        '200': {description: Cursor-paginated charging sessions.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/charging-sessions/{sessionId}:
+    get:
+      operationId: getChargingSession
+      summary: Get one authorized session with command and CDR diagnostics
+      tags: [Charging]
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+      responses:
+        '200':
+          description: Authorized charging session.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties: {data: {$ref: '#/components/schemas/ChargingSession'}}
+        '404': {description: Session is absent or inaccessible.}
+  /api/v1/charging-sessions/remote-start:
+    post:
+      operationId: requestRemoteStart
+      summary: Reserve a connector and request a remote start idempotently
+      description: Command acknowledgement does not make the session active; normalized charger transaction evidence is required.
+      tags: [Charging]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RemoteStartRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/ChargingCommandAccepted'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/charging-sessions/{sessionId}/remote-stop:
+    post:
+      operationId: requestRemoteStop
+      summary: Request a remote stop for an evidenced physical transaction
+      tags: [Charging]
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '202': {$ref: '#/components/responses/ChargingCommandAccepted'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Session is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/charging-sessions/{sessionId}/cancel:
+    post:
+      operationId: cancelChargingSession
+      summary: Cancel a session intent before physical start
+      tags: [Charging]
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChargingCancellation'}
+      responses:
+        '200': {description: Pre-start session cancelled and reservation released.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Session is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/charging-sessions/{sessionId}/review-resolution:
+    post:
+      operationId: resolveChargingSessionReview
+      summary: Resolve an anomalous session using an audited operator decision
+      tags: [Charging]
+      parameters:
+        - {$ref: '#/components/parameters/SessionId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SessionReviewResolution'}
+      responses:
+        '200': {description: Review resolved and a new immutable CDR version generated.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Session is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/tariffs:
+    get:
+      operationId: listTariffs
+      summary: List tenant tariffs
+      tags: [Tariffs]
+      responses:
+        '200': {description: Cursor-paginated tariffs.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createTariff
+      summary: Create a draft tariff
+      tags: [Tariffs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StoreTariff'}
+      responses:
+        '201': {description: Draft tariff created and audited.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/tariffs/{tariffId}:
+    get:
+      operationId: getTariff
+      summary: Get one tenant tariff and its versions
+      tags: [Tariffs]
+      parameters:
+        - {name: tariffId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200': {description: Authorized tariff.}
+        '404': {description: Tariff is absent or inaccessible.}
+  /api/v1/tariffs/{tariffId}/versions:
+    post:
+      operationId: createTariffVersion
+      summary: Create a draft effective-dated tariff version
+      tags: [Tariffs]
+      parameters:
+        - {name: tariffId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StoreTariffVersion'}
+      responses:
+        '201': {description: Draft tariff version created.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Tariff is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/tariff-versions/{versionId}/publish:
+    post:
+      operationId: publishTariffVersion
+      summary: Publish an immutable non-overlapping tariff version
+      tags: [Tariffs]
+      parameters:
+        - {name: versionId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200': {description: Tariff version published and made immutable.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Version is absent or inaccessible.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/purchase-requests:
+    get:
+      operationId: listPurchaseRequests
+      summary: List tenant purchase requests
+      tags: [Procurement]
+      responses:
+        '200': {description: Cursor-paginated purchase requests.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createPurchaseRequest
+      summary: Create a draft purchase request with integer minor-unit estimates
+      tags: [Procurement]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PurchaseRequestInput'}
+      responses:
+        '201': {description: Draft request created and audited.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/purchase-requests/{purchaseRequestId}:
+    get:
+      operationId: getPurchaseRequest
+      summary: Get a tenant purchase request
+      tags: [Procurement]
+      parameters:
+        - {name: purchaseRequestId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200': {description: Authorized purchase request and line items.}
+        '404': {description: Request is absent or inaccessible.}
+  /api/v1/purchase-requests/{purchaseRequestId}/submit:
+    post:
+      operationId: submitPurchaseRequest
+      summary: Submit a request into its configured sequential approval matrix
+      tags: [Procurement]
+      parameters:
+        - {name: purchaseRequestId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200': {description: Request submitted and approvers notified after commit.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/purchase-requests/{purchaseRequestId}/approve:
+    post:
+      operationId: approvePurchaseRequestStep
+      summary: Approve the current role-bound request step
+      tags: [Procurement]
+      parameters:
+        - {name: purchaseRequestId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProcurementDecision'}
+      responses:
+        '200': {description: Approval evidence recorded; final approval emits a requisition fact.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      summary: List tenant purchase orders and delivery progress
+      tags: [Procurement]
+      responses:
+        '200': {description: Cursor-paginated purchase orders.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/vendor-invoices/{vendorInvoiceId}/match:
+    post:
+      operationId: matchVendorInvoice
+      summary: Capture immutable PO, accepted-receipt, and vendor-invoice comparison evidence
+      tags: [Procurement]
+      parameters:
+        - {name: vendorInvoiceId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                amount_tolerance_minor: {type: integer, minimum: 0, default: 0}
+      responses:
+        '200': {description: Match evidence recorded with matched or discrepancy outcome.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/items:
+    get:
+      operationId: listInventoryItems
+      summary: List the tenant inventory catalog
+      tags: [Inventory]
+      responses:
+        '200': {description: Cursor-paginated inventory items.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/inventory/warehouses:
+    get:
+      operationId: listAccessibleWarehouses
+      summary: List only tenant, site, or warehouse assignments visible to the actor
+      tags: [Inventory]
+      responses:
+        '200': {description: Cursor-paginated authorized warehouses.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/inventory/items/{itemId}/availability:
+    get:
+      operationId: getStockAvailability
+      summary: Get movement-derived on-hand, reserved, and available quantities
+      tags: [Inventory]
+      parameters:
+        - {name: itemId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+        - {name: warehouse_id, in: query, required: false, schema: {$ref: '#/components/schemas/Ulid'}}
+        - {name: bin_id, in: query, required: false, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200':
+          description: Quantities in integer base units; quarantine and in-transit custody are not available.
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Item or requested scope is absent or inaccessible.}
+  /api/v1/inventory/movements:
+    get:
+      operationId: listStockMovements
+      summary: List immutable movements intersected with accessible warehouses
+      tags: [Inventory]
+      responses:
+        '200': {description: Cursor-paginated immutable stock movements.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/inventory/goods-receipts:
+    get:
+      operationId: listGoodsReceipts
+      summary: List accessible goods receipts
+      tags: [Inventory]
+      responses:
+        '200': {description: Cursor-paginated goods receipts.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: receiveGoods
+      summary: Record a partial or complete PO delivery pending inspection
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GoodsReceiptInput'}
+      responses:
+        '201': {description: Receipt recorded without directly changing a balance.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/reservations:
+    post:
+      operationId: reserveStock
+      summary: Idempotently reserve available stock for a typed purpose
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StockReservationInput'}
+      responses:
+        '201': {description: "Full, partial, or rejected reservation fact."}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/transfers:
+    get:
+      operationId: listStockTransfers
+      summary: List transfers only when both endpoints are accessible
+      tags: [Inventory]
+      responses:
+        '200': {description: Cursor-paginated stock transfers.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createStockTransfer
+      summary: Create a transfer using explicit in-transit custody
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StockTransferInput'}
+      responses:
+        '201': {description: Draft transfer created.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/adjustments:
+    post:
+      operationId: requestInventoryAdjustment
+      summary: Request a reason-coded stock adjustment for separate approval
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InventoryAdjustmentInput'}
+      responses:
+        '201': {description: Adjustment awaiting a different approver.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/count-plans:
+    post:
+      operationId: createInventoryCountPlan
+      summary: Create a physical or cycle count with optional blind sheets
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CountPlanInput'}
+      responses:
+        '201': {description: Scheduled count plan and sheets created.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/inventory/work-order-parts/issue:
+    post:
+      operationId: issueWorkOrderParts
+      summary: Consume a work-order reservation through an immutable stock issue
+      tags: [Inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkOrderPartsIssueInput'}
+      responses:
+        '200': {description: Parts issued and reservation consumption recorded atomically.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders:
+    get:
+      operationId: listMaintenanceWorkOrders
+      summary: List work orders intersected with the caller's tenant and site assignments
+      tags: [Maintenance]
+      responses:
+        '200': {description: Cursor-paginated authorized work orders.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createMaintenanceWorkOrder
+      summary: Report a corrective, preventive, inspection, or vendor-repair work order
+      tags: [Maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceWorkOrderInput'}
+      responses:
+        '201':
+          description: Work order reported with immutable initial transition evidence.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MaintenanceWorkOrderEnvelope'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}:
+    get:
+      operationId: getMaintenanceWorkOrder
+      summary: Retrieve a work order and its authorized evidence
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200':
+          description: Authorized work order.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MaintenanceWorkOrderEnvelope'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Work order is absent in the active tenant.}
+  /api/v1/maintenance/work-orders/{workOrderId}/transitions:
+    post:
+      operationId: transitionMaintenanceWorkOrder
+      summary: Apply an authorized guarded work-order state transition
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceTransitionInput'}
+      responses:
+        '200':
+          description: Transition and immutable evidence committed atomically.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MaintenanceWorkOrderEnvelope'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}/assignments:
+    post:
+      operationId: assignMaintenanceWorkOrder
+      summary: Assign one qualified tenant technician or service vendor
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceAssignmentInput'}
+      responses:
+        '200': {description: Assignment recorded and queued notification requested.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}/checklist/{itemId}:
+    post:
+      operationId: completeMaintenanceChecklistItem
+      summary: Record a required checklist or safety-step result
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+        - {name: itemId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceChecklistInput'}
+      responses:
+        '200': {description: Checklist result recorded.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}/time-entries:
+    post:
+      operationId: recordMaintenanceTime
+      summary: Record labor or travel duration in integer seconds
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceTimeInput'}
+      responses:
+        '201': {description: Time and integer-minor-unit cost recorded.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}/resolution:
+    post:
+      operationId: recordMaintenanceResolution
+      summary: Record diagnosis, work performed, failure, root-cause, and resolution evidence
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceResolutionInput'}
+      responses:
+        '200': {description: Resolution evidence recorded before completion.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/work-orders/{workOrderId}/reopen:
+    post:
+      operationId: followUpClosedMaintenanceWorkOrder
+      summary: Create a new reported work order linked to a closed work order
+      tags: [Maintenance]
+      parameters:
+        - {name: workOrderId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: {type: string, maxLength: 5000}
+      responses:
+        '201': {description: New linked work order; the closed aggregate remains unchanged.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/incidents:
+    get:
+      operationId: listMaintenanceIncidents
+      summary: List authorized manual and OCPP-generated incidents
+      tags: [Maintenance]
+      responses:
+        '200': {description: Cursor-paginated authorized incidents.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/maintenance/service-requests:
+    get:
+      operationId: listMaintenanceServiceRequests
+      summary: List authorized service requests
+      tags: [Maintenance]
+      responses:
+        '200': {description: Cursor-paginated authorized service requests.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createMaintenanceServiceRequest
+      summary: Submit an operator, technician, support, or customer service request
+      tags: [Maintenance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaintenanceServiceRequestInput'}
+      responses:
+        '201': {description: Service request submitted.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/maintenance/dashboard:
+    get:
+      operationId: getMaintenanceDashboard
+      summary: Get governed maintenance metrics for the authorized site set
+      tags: [Maintenance]
+      parameters:
+        - {name: from, in: query, required: false, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: false, schema: {type: string, format: date-time}}
+      responses:
+        '200':
+          description: Open work, SLA, downtime, availability, MTTA, MTTR, repeat failure, cost, parts, and warranty metrics.
+        '403': {$ref: '#/components/responses/Forbidden'}
+components:
+  securitySchemes:
+    sanctumBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque Sanctum token
+  parameters:
+    TenantSelector:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      description: Optional selector that must equal the tenant bound to the credential.
+      schema: {$ref: '#/components/schemas/Ulid'}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Ulid'}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable caller intent key; reuse returns the original command and session.
+      schema: {type: string, minLength: 8, maxLength: 160, pattern: '^[A-Za-z0-9._:-]+$'}
+  responses:
+    TooManyRequests:
+      description: The caller exceeded the applicable rate limit.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+        X-Correlation-ID:
+          $ref: '#/components/headers/CorrelationId'
+    Unauthenticated:
+      description: The token is missing, invalid, expired, or revoked.
+    Forbidden:
+      description: Current tenant, role, scope, verification, or token abilities do not permit the action.
+    ValidationError:
+      description: The request failed boundary validation.
+    ChargingCommandAccepted:
+      description: Command intent was accepted for asynchronous delivery.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: object
+                required: [session, command]
+                properties:
+                  session: {$ref: '#/components/schemas/ChargingSession'}
+                  command: {$ref: '#/components/schemas/ChargerCommand'}
+  headers:
+    RequestId:
+      description: ULID identifying this request.
+      schema:
+        $ref: '#/components/schemas/Ulid'
+    CorrelationId:
+      description: ULID correlating related work across service boundaries.
+      schema:
+        $ref: '#/components/schemas/Ulid'
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+      example: 01K0M0JJ5X0M0JJ5X0M0JJ5X0M
+    MaintenanceWorkOrderInput:
+      type: object
+      additionalProperties: false
+      required: [work_type, site_id, asset_type, asset_id, priority_id, title, description]
+      properties:
+        work_type: {type: string, enum: [corrective, preventive, inspection, vendor_repair]}
+        site_id: {$ref: '#/components/schemas/Ulid'}
+        asset_type: {type: string, enum: [station, evse, connector, component]}
+        asset_id: {$ref: '#/components/schemas/Ulid'}
+        priority_id: {$ref: '#/components/schemas/Ulid'}
+        sla_policy_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        checklist_template_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        warranty_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        title: {type: string, maxLength: 200}
+        description: {type: string, maxLength: 10000}
+        scope: {type: [string, 'null'], maxLength: 10000}
+        currency: {type: string, pattern: '^[A-Z]{3}$', default: PHP}
+        estimated_cost_minor: {type: integer, minimum: 0, default: 0}
+        safety_critical: {type: boolean, default: false}
+        verification_required: {type: boolean, default: false}
+        asset_restriction_required: {type: boolean, default: false}
+    MaintenanceWorkOrder:
+      type: object
+      required: [id, work_order_number, work_type, site_id, asset_type, asset_id, state, title, description, currency, estimated_cost_minor, actual_cost_minor, aggregate_version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        work_order_number: {type: string}
+        work_type: {type: string}
+        site_id: {$ref: '#/components/schemas/Ulid'}
+        asset_type: {type: string, enum: [station, evse, connector, component]}
+        asset_id: {$ref: '#/components/schemas/Ulid'}
+        state:
+          type: string
+          enum: [reported, triaged, planned, scheduled, assigned, in_progress, on_hold, awaiting_parts, awaiting_access, awaiting_external, awaiting_safety_clearance, completed, verification_required, verified, closed, canceled]
+        title: {type: string}
+        description: {type: string}
+        scope: {type: [string, 'null']}
+        diagnosis: {type: [string, 'null']}
+        work_performed: {type: [string, 'null']}
+        priority_id: {$ref: '#/components/schemas/Ulid'}
+        sla_policy_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        acknowledge_target_at: {type: [string, 'null'], format: date-time}
+        resolve_target_at: {type: [string, 'null'], format: date-time}
+        started_at: {type: [string, 'null'], format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+        verified_at: {type: [string, 'null'], format: date-time}
+        closed_at: {type: [string, 'null'], format: date-time}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        estimated_cost_minor: {type: integer, minimum: 0}
+        actual_cost_minor: {type: integer, minimum: 0}
+        aggregate_version: {type: integer, minimum: 1}
+        reopened_from_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+    MaintenanceWorkOrderEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: {$ref: '#/components/schemas/MaintenanceWorkOrder'}
+    MaintenanceTransitionInput:
+      type: object
+      additionalProperties: false
+      required: [target_state, reason_code]
+      properties:
+        target_state:
+          type: string
+          enum: [reported, triaged, planned, scheduled, assigned, in_progress, on_hold, awaiting_parts, awaiting_access, awaiting_external, awaiting_safety_clearance, completed, verification_required, verified, closed, canceled]
+        reason_code: {type: string, maxLength: 80, pattern: '^[A-Za-z0-9_.-]+$'}
+        notes: {type: [string, 'null'], maxLength: 5000}
+    MaintenanceAssignmentInput:
+      type: object
+      additionalProperties: false
+      properties:
+        technician_user_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        vendor_organization_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+      oneOf:
+        - required: [technician_user_id]
+        - required: [vendor_organization_id]
+    MaintenanceChecklistInput:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result: {type: string, enum: [pass, fail, complete, not_applicable]}
+        notes: {type: [string, 'null'], maxLength: 5000}
+    MaintenanceTimeInput:
+      type: object
+      additionalProperties: false
+      required: [type, duration_seconds, rate_minor_per_hour, currency]
+      properties:
+        type: {type: string, enum: [labor, travel]}
+        duration_seconds: {type: integer, minimum: 1}
+        rate_minor_per_hour: {type: integer, minimum: 0}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        started_at: {type: [string, 'null'], format: date-time}
+        notes: {type: [string, 'null'], maxLength: 5000}
+    MaintenanceResolutionInput:
+      type: object
+      additionalProperties: false
+      required: [work_performed, resolution_code_id]
+      properties:
+        work_performed: {type: string, maxLength: 20000}
+        diagnosis: {type: [string, 'null'], maxLength: 10000}
+        failure_code_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        root_cause_code_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        resolution_code_id: {$ref: '#/components/schemas/Ulid'}
+    MaintenanceServiceRequestInput:
+      type: object
+      additionalProperties: false
+      required: [site_id, title, description]
+      properties:
+        site_id: {$ref: '#/components/schemas/Ulid'}
+        asset_type: {type: [string, 'null'], enum: [station, evse, connector, component, null]}
+        asset_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        priority_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        source: {type: string, enum: [operator, technician, support, customer], default: operator}
+        title: {type: string, maxLength: 200}
+        description: {type: string, maxLength: 10000}
+    ProcurementDecision:
+      type: object
+      additionalProperties: false
+      required: [approver_role_key]
+      properties:
+        approver_role_key: {type: string, maxLength: 120}
+        reason: {type: [string, 'null'], maxLength: 500}
+    PurchaseRequestInput:
+      type: object
+      additionalProperties: false
+      required: [request_number, department_id, cost_center_id, currency, business_reason, lines]
+      properties:
+        request_number: {type: string, maxLength: 80}
+        department_id: {$ref: '#/components/schemas/Ulid'}
+        cost_center_id: {$ref: '#/components/schemas/Ulid'}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        needed_by: {type: [string, 'null'], format: date}
+        business_reason: {type: string, maxLength: 5000}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [description, quantity_base, estimated_unit_minor]
+            properties:
+              item_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+              uom_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+              description: {type: string, maxLength: 500}
+              quantity_base: {type: integer, minimum: 1}
+              estimated_unit_minor: {type: integer, minimum: 0}
+    GoodsReceiptInput:
+      type: object
+      additionalProperties: false
+      required: [purchase_order_id, supplier_id, warehouse_id, receipt_number, lines]
+      properties:
+        purchase_order_id: {$ref: '#/components/schemas/Ulid'}
+        supplier_id: {$ref: '#/components/schemas/Ulid'}
+        warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        receipt_number: {type: string, maxLength: 80}
+        supplier_delivery_reference: {type: [string, 'null'], maxLength: 120}
+        received_at: {type: [string, 'null'], format: date-time}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [purchase_order_line_id, item_id, uom_id, destination_bin_id, received_quantity_base]
+            properties:
+              purchase_order_line_id: {$ref: '#/components/schemas/Ulid'}
+              item_id: {$ref: '#/components/schemas/Ulid'}
+              uom_id: {$ref: '#/components/schemas/Ulid'}
+              destination_bin_id: {$ref: '#/components/schemas/Ulid'}
+              rejection_bin_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+              lot_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+              serial_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+              received_quantity_base: {type: integer, minimum: 1}
+    StockReservationInput:
+      type: object
+      additionalProperties: false
+      required: [item_id, warehouse_id, requested_quantity_base, purpose_type, purpose_id, idempotency_key]
+      properties:
+        item_id: {$ref: '#/components/schemas/Ulid'}
+        warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        bin_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        lot_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        serial_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        requested_quantity_base: {type: integer, minimum: 1}
+        purpose_type: {type: string, maxLength: 48}
+        purpose_id: {$ref: '#/components/schemas/Ulid'}
+        idempotency_key: {type: string, maxLength: 160}
+        expires_at: {type: [string, 'null'], format: date-time}
+        allow_partial: {type: boolean, default: true}
+    StockTransferInput:
+      type: object
+      additionalProperties: false
+      required: [transfer_number, source_warehouse_id, destination_warehouse_id, lines]
+      properties:
+        transfer_number: {type: string, maxLength: 80}
+        source_warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        destination_warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [item_id, uom_id, source_bin_id, in_transit_bin_id, destination_bin_id, requested_quantity_base]
+            properties:
+              item_id: {$ref: '#/components/schemas/Ulid'}
+              uom_id: {$ref: '#/components/schemas/Ulid'}
+              source_bin_id: {$ref: '#/components/schemas/Ulid'}
+              in_transit_bin_id: {$ref: '#/components/schemas/Ulid'}
+              destination_bin_id: {$ref: '#/components/schemas/Ulid'}
+              requested_quantity_base: {type: integer, minimum: 1}
+    InventoryAdjustmentInput:
+      type: object
+      additionalProperties: false
+      required: [adjustment_number, warehouse_id, reason_code, reason_notes, lines]
+      properties:
+        adjustment_number: {type: string, maxLength: 80}
+        warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        reason_code: {type: string, maxLength: 80}
+        reason_notes: {type: string, maxLength: 5000}
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [item_id, uom_id, bin_id, quantity_delta_base]
+            properties:
+              item_id: {$ref: '#/components/schemas/Ulid'}
+              uom_id: {$ref: '#/components/schemas/Ulid'}
+              bin_id: {$ref: '#/components/schemas/Ulid'}
+              quantity_delta_base: {type: integer, not: {const: 0}}
+    CountPlanInput:
+      type: object
+      additionalProperties: false
+      required: [plan_number, count_type, warehouse_id, scheduled_for, blind_count, sheets]
+      properties:
+        plan_number: {type: string, maxLength: 80}
+        count_type: {type: string, enum: [physical, cycle]}
+        warehouse_id: {$ref: '#/components/schemas/Ulid'}
+        scheduled_for: {type: string, format: date}
+        blind_count: {type: boolean}
+        sheets: {type: array, minItems: 1, items: {type: object}}
+    WorkOrderPartsIssueInput:
+      type: object
+      additionalProperties: false
+      required: [reservation_id, source_bin_id, quantity_base, idempotency_key]
+      properties:
+        reservation_id: {$ref: '#/components/schemas/Ulid'}
+        source_bin_id: {$ref: '#/components/schemas/Ulid'}
+        quantity_base: {type: integer, minimum: 1}
+        idempotency_key: {type: string, maxLength: 160}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, tenant_id, device_name]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, format: password}
+        tenant_id: {$ref: '#/components/schemas/Ulid'}
+        device_name: {type: string, maxLength: 120}
+    LoginResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [tenant_id, token, token_type, device_id, expires_at]
+          properties:
+            tenant_id: {$ref: '#/components/schemas/Ulid'}
+            token: {type: string, writeOnly: true}
+            token_type: {type: string, const: Bearer}
+            device_id: {$ref: '#/components/schemas/Ulid'}
+            expires_at: {type: string, format: date-time}
+            user: {type: object}
+    InvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [email, role_id, scope_type]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        organization_id: {$ref: '#/components/schemas/Ulid'}
+        role_id: {$ref: '#/components/schemas/Ulid'}
+        scope_type:
+          type: string
+          enum: [tenant, organization, site]
+        scope_id: {$ref: '#/components/schemas/Ulid'}
+    LifecycleReason:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, maxLength: 500}
+    ChargingSessionState:
+      type: string
+      enum: [requested, authorizing, authorized, starting, charging, suspended_by_ev, suspended_by_evse, stopping, finalizing, review_required, completed, failed, cancelled, expired]
+    ChargingCancellation:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string, maxLength: 120}
+    ChargingSession:
+      type: object
+      additionalProperties: false
+      required: [id, site_id, charging_station_id, evse_id, connector_id, origin, state, authorization_status, protocol, requested_at, energy_wh, duration_seconds, parking_seconds, idle_seconds, tariff_snapshot, tariff_snapshot_hash, anomaly_flags, aggregate_version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        site_id: {$ref: '#/components/schemas/Ulid'}
+        charging_station_id: {$ref: '#/components/schemas/Ulid'}
+        evse_id: {$ref: '#/components/schemas/Ulid'}
+        connector_id: {$ref: '#/components/schemas/Ulid'}
+        origin: {type: string, enum: [remote, local, reconstructed]}
+        state: {$ref: '#/components/schemas/ChargingSessionState'}
+        authorization_status: {type: string, enum: [pending, approved, denied, charger_local, unknown]}
+        protocol: {type: string, enum: [ocpp1.6, ocpp2.0.1]}
+        protocol_transaction_id: {type: [string, 'null']}
+        requested_at: {type: string, format: date-time}
+        started_at: {type: [string, 'null'], format: date-time}
+        stopped_at: {type: [string, 'null'], format: date-time}
+        energy_wh: {type: integer, minimum: 0}
+        duration_seconds: {type: integer, minimum: 0}
+        parking_seconds: {type: integer, minimum: 0}
+        idle_seconds: {type: integer, minimum: 0}
+        estimated_cost_minor: {type: [integer, 'null'], minimum: 0}
+        final_cost_minor: {type: [integer, 'null'], minimum: 0}
+        currency: {type: [string, 'null'], pattern: '^[A-Z]{3}$'}
+        tariff_snapshot: {type: object, additionalProperties: true}
+        tariff_snapshot_hash: {type: string, pattern: '^[a-f0-9]{64}$'}
+        anomaly_flags: {type: array, items: {type: string}}
+        finalization_outcome: {type: [string, 'null'], enum: [complete, estimated, unbillable, null]}
+        failure_reason: {type: [string, 'null']}
+        cancellation_reason: {type: [string, 'null']}
+        aggregate_version: {type: integer, minimum: 1}
+        commands: {type: array, items: {$ref: '#/components/schemas/ChargerCommand'}}
+        charge_detail_records: {type: array, items: {$ref: '#/components/schemas/ChargeDetailRecord'}}
+    ChargerCommand:
+      type: object
+      additionalProperties: false
+      required: [id, session_id, type, state, correlation_id, expires_at]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        session_id: {$ref: '#/components/schemas/Ulid'}
+        type: {type: string, enum: [remote_start, remote_stop]}
+        state: {type: string, enum: [requested, dispatched, acknowledged, rejected, timed_out, delivery_unknown, expired]}
+        correlation_id: {$ref: '#/components/schemas/Ulid'}
+        expires_at: {type: string, format: date-time}
+        dispatched_at: {type: [string, 'null'], format: date-time}
+        acknowledged_at: {type: [string, 'null'], format: date-time}
+        error_code: {type: [string, 'null']}
+        error_message: {type: [string, 'null']}
+    ChargeDetailRecord:
+      type: object
+      additionalProperties: false
+      required: [id, version, state, energy_wh, duration_seconds]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        version: {type: integer, minimum: 1}
+        state: {type: string, enum: [pending, generating, review_required, finalized, failed, superseded]}
+        currency: {type: [string, 'null'], pattern: '^[A-Z]{3}$'}
+        energy_wh: {type: integer, minimum: 0}
+        duration_seconds: {type: integer, minimum: 0}
+        subtotal_minor: {type: [integer, 'null'], minimum: 0}
+        discount_minor: {type: [integer, 'null'], minimum: 0}
+        tax_minor: {type: [integer, 'null'], minimum: 0}
+        total_minor: {type: [integer, 'null'], minimum: 0}
+        snapshot_hash: {type: [string, 'null'], pattern: '^[a-f0-9]{64}$'}
+        finalized_at: {type: [string, 'null'], format: date-time}
+    RemoteStartRequest:
+      type: object
+      additionalProperties: false
+      required: [connector_id]
+      properties:
+        connector_id: {$ref: '#/components/schemas/Ulid'}
+        tariff_version_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        promotion_code: {type: [string, 'null'], maxLength: 80, pattern: '^[A-Za-z0-9._-]+$'}
+    SessionReviewResolution:
+      type: object
+      additionalProperties: false
+      required: [decision, notes]
+      properties:
+        decision: {type: string, enum: [complete, estimated, unbillable]}
+        notes: {type: string, maxLength: 2000}
+        adjustments:
+          type: object
+          additionalProperties: false
+          properties:
+            energy_wh: {type: integer, minimum: 0}
+            duration_seconds: {type: integer, minimum: 0}
+            parking_seconds: {type: integer, minimum: 0}
+            idle_seconds: {type: integer, minimum: 0}
+    StoreTariff:
+      type: object
+      additionalProperties: false
+      required: [name, currency]
+      properties:
+        name: {type: string, maxLength: 160}
+        description: {type: [string, 'null'], maxLength: 2000}
+        currency: {type: string, pattern: '^[A-Za-z]{3}$'}
+    StoreTariffVersion:
+      type: object
+      additionalProperties: false
+      required: [effective_from, tax_treatment, timezone, components]
+      properties:
+        effective_from: {type: string, format: date-time}
+        effective_to: {type: [string, 'null'], format: date-time}
+        tax_treatment: {type: string, enum: [inclusive, exclusive]}
+        tax_rate_basis_points: {type: [integer, 'null'], minimum: 0, maximum: 10000}
+        minimum_fee_minor: {type: [integer, 'null'], minimum: 0}
+        maximum_fee_minor: {type: [integer, 'null'], minimum: 0}
+        operator_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        site_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        connector_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        timezone: {type: string, description: IANA timezone used for day/time rules}
+        components:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [dimension, price_minor]
+            properties:
+              dimension: {type: string, enum: [energy, time, session, parking, idle]}
+              price_minor: {type: integer, minimum: 0}
+              unit_quantity: {type: integer, minimum: 1}
+              day_of_week_mask: {type: integer, minimum: 1, maximum: 127, default: 127}
+              starts_at_local: {type: [string, 'null'], format: time}
+              ends_at_local: {type: [string, 'null'], format: time}
+              priority: {type: integer, minimum: 0, maximum: 65535, default: 0}
+        discounts:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, kind, value]
+            properties:
+              name: {type: string, maxLength: 160}
+              code: {type: [string, 'null'], maxLength: 80}
+              kind: {type: string, enum: [percentage, fixed]}
+              value: {type: integer, minimum: 0}
+              is_automatic: {type: boolean, default: false}
+              effective_from: {type: [string, 'null'], format: date-time}
+              effective_to: {type: [string, 'null'], format: date-time}
+    AssetLifecycleStatus:
+      type: string
+      enum: [draft, active, maintenance, retired]
+    PublicStation:
+      type: object
+      additionalProperties: false
+      required: [id, site_id, name, site_name, public_slug, latitude, longitude, timezone, site_type, operator_id, operator_name, availability, is_stale, maximum_power_w, connectors, open_now]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        site_id: {$ref: '#/components/schemas/Ulid'}
+        name: {type: string, maxLength: 160}
+        site_name: {type: string, maxLength: 160}
+        public_slug: {type: string, maxLength: 180}
+        address_line_1: {type: [string, 'null'], maxLength: 180}
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        timezone: {type: string, description: IANA timezone}
+        site_type: {type: string}
+        operator_id: {$ref: '#/components/schemas/Ulid'}
+        operator_name: {type: string, maxLength: 160}
+        availability: {type: string, enum: [available, busy, faulted, offline, stale, unknown]}
+        is_stale: {type: boolean}
+        status_observed_at: {type: [string, 'null'], format: date-time}
+        maximum_power_w: {type: integer, minimum: 0}
+        open_now: {type: boolean}
+        connectors:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [standard, name, maximum_power_w]
+            properties:
+              standard: {type: string}
+              name: {type: string}
+              maximum_power_w: {type: integer, minimum: 0}
+        qr_identifier: {type: string, maxLength: 120}
+        distance_m: {type: [number, 'null'], minimum: 0}
+    ChargingStationMutableFields:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string, maxLength: 160}
+        charger_model_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        ocpp_version_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        ocpp_security_profile_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
+        lifecycle_status: {$ref: '#/components/schemas/AssetLifecycleStatus'}
+        is_public: {type: boolean}
+    StoreChargingStation:
+      allOf:
+        - {$ref: '#/components/schemas/ChargingStationMutableFields'}
+        - type: object
+          required: [site_id, name, charge_point_identity, serial_number, qr_identifier]
+          properties:
+            site_id: {$ref: '#/components/schemas/Ulid'}
+            charge_point_identity: {type: string, pattern: '^[A-Za-z0-9._:-]+$', maxLength: 120}
+            serial_number: {type: string, maxLength: 160}
+            qr_identifier: {type: string, pattern: '^[A-Za-z0-9_-]+$', maxLength: 120}
+    HealthStatus:
+      type: string
+      enum: [ok, ready, unavailable]
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - timestamp
+        - request_id
+        - correlation_id
+        - checks
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        service:
+          type: string
+          const: platform
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC instant.
+        request_id:
+          $ref: '#/components/schemas/Ulid'
+        correlation_id:
+          $ref: '#/components/schemas/Ulid'
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+security:
+  - sanctumBearer: []

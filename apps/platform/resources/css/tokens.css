@@ -1,0 +1,224 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+    --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+    --color-canvas: var(--ps-canvas);
+    --color-panel: var(--ps-surface);
+    --color-panel-subtle: var(--ps-surface-subtle);
+    --color-panel-raised: var(--ps-surface-raised);
+    --color-foreground: var(--ps-text);
+    --color-muted: var(--ps-text-muted);
+    --color-border: var(--ps-border);
+    --color-border-strong: var(--ps-border-strong);
+    --color-brand: var(--ps-brand);
+    --color-brand-strong: var(--ps-brand-strong);
+    --color-brand-soft: var(--ps-brand-soft);
+    --color-accent: var(--ps-accent);
+    --color-success: var(--vtsa-success);
+    --color-success-soft: var(--vtsa-success-surface);
+    --color-warning: var(--vtsa-warning);
+    --color-warning-soft: var(--vtsa-warning-surface);
+    --color-danger: var(--vtsa-danger);
+    --color-danger-soft: var(--vtsa-danger-surface);
+    --color-information: var(--vtsa-information);
+    --color-information-soft: var(--vtsa-information-surface);
+    --color-focus: var(--vtsa-focus);
+    --color-state-available: var(--vtsa-state-available);
+    --color-state-preparing: var(--vtsa-state-preparing);
+    --color-state-charging: var(--vtsa-state-charging);
+    --color-state-suspended: var(--vtsa-state-suspended);
+    --color-state-finishing: var(--vtsa-state-finishing);
+    --color-state-reserved: var(--vtsa-state-reserved);
+    --color-state-unavailable: var(--vtsa-state-unavailable);
+    --color-state-faulted: var(--vtsa-state-faulted);
+    --color-state-offline: var(--vtsa-state-offline);
+    --color-state-unknown: var(--vtsa-state-unknown);
+
+    --radius-sm: 0.375rem;
+    --radius-md: 0.625rem;
+    --radius-lg: 0.875rem;
+    --radius-xl: 1.25rem;
+
+    --shadow-elevation-1: var(--vtsa-shadow-1);
+    --shadow-elevation-2: var(--vtsa-shadow-2);
+    --shadow-elevation-3: var(--vtsa-shadow-3);
+}
+
+:root {
+    color-scheme: light;
+    --ps-brand-navy: #12366b;
+    --ps-brand-blue: #2589be;
+    --ps-brand-turquoise: #57ddd2;
+    --ps-brand-cyan: #45cfc7;
+    --ps-brand-dark-navy: #0b2448;
+    --ps-surface-default: #ffffff;
+    --ps-surface-soft-cyan: #e9faf8;
+    --ps-surface-soft-blue: #edf7fc;
+    --ps-surface-muted: #f5f8fb;
+    --ps-surface-dark: #081b35;
+    --ps-text-primary: #17243a;
+    --ps-text-secondary: #66758a;
+    --ps-text-on-primary: #ffffff;
+    --ps-text-link: #1d78ad;
+    --ps-border-default: #d8e4ed;
+    --ps-border-strong-token: #afc6d8;
+    --ps-focus-ring: #45cfc7;
+    --ps-success: #18a978;
+    --ps-warning: #e8a522;
+    --ps-danger: #d64555;
+    --ps-info: #2589be;
+    --ps-primary-default: #12366b;
+    --ps-primary-hover: #0e2b59;
+    --ps-primary-active: #091f43;
+    --ps-primary-disabled: #9cb0c6;
+    --ps-accent-default: #45cfc7;
+    --ps-accent-hover: #32bbb4;
+    --ps-accent-active: #25a49e;
+    --ps-canvas: #f5f8fb;
+    --ps-surface: #ffffff;
+    --ps-surface-subtle: #edf7fc;
+    --ps-surface-raised: #ffffff;
+    --ps-text: #17243a;
+    --ps-text-muted: #66758a;
+    --ps-border: #d8e4ed;
+    --ps-border-strong: #afc6d8;
+    --ps-brand: #12366b;
+    --ps-brand-strong: #0b2448;
+    --ps-brand-soft: #e9faf8;
+    --ps-accent: #45cfc7;
+    --ps-accent-strong: #25a49e;
+    --ps-link: #1d78ad;
+    --vtsa-canvas: var(--ps-canvas);
+    --vtsa-surface: var(--ps-surface);
+    --vtsa-surface-subtle: var(--ps-surface-subtle);
+    --vtsa-surface-raised: var(--ps-surface-raised);
+    --vtsa-text: var(--ps-text);
+    --vtsa-text-muted: var(--ps-text-muted);
+    --vtsa-border: var(--ps-border);
+    --vtsa-border-strong: var(--ps-border-strong);
+    --vtsa-brand: var(--ps-brand);
+    --vtsa-brand-strong: var(--ps-brand-strong);
+    --vtsa-brand-soft: var(--ps-brand-soft);
+    --vtsa-accent: var(--ps-accent);
+    --vtsa-success: #18a978;
+    --vtsa-success-surface: #e2f7ee;
+    --vtsa-warning: #a66400;
+    --vtsa-warning-surface: #fff2cf;
+    --vtsa-danger: #d64555;
+    --vtsa-danger-surface: #fde7ec;
+    --vtsa-information: #2589be;
+    --vtsa-information-surface: #e6f1ff;
+    --vtsa-focus: #1d78ad;
+    --vtsa-state-available: #18a978;
+    --vtsa-state-preparing: #2589be;
+    --vtsa-state-charging: #12366b;
+    --vtsa-state-suspended: #a86600;
+    --vtsa-state-finishing: #2589be;
+    --vtsa-state-reserved: #9747b5;
+    --vtsa-state-unavailable: #697187;
+    --vtsa-state-faulted: #b4233f;
+    --vtsa-state-offline: #4a5164;
+    --vtsa-state-unknown: #8c94a8;
+    --vtsa-shadow-1: 0 1px 2px rgb(23 27 44 / 8%);
+    --vtsa-shadow-2: 0 8px 24px rgb(23 27 44 / 12%);
+    --vtsa-shadow-3: 0 20px 48px rgb(23 27 44 / 18%);
+}
+
+:root.dark,
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --ps-canvas: #07172c;
+    --ps-surface: #0b2448;
+    --ps-surface-subtle: #102f57;
+    --ps-surface-raised: #12366b;
+    --ps-text: #f5fbff;
+    --ps-text-muted: #b9cfdd;
+    --ps-border: #27496f;
+    --ps-border-strong: #4e7194;
+    --ps-brand: #57ddd2;
+    --ps-brand-strong: #82eee6;
+    --ps-brand-soft: #123b4f;
+    --ps-accent: #57ddd2;
+    --ps-accent-strong: #82eee6;
+    --ps-link: #6ecff2;
+    --vtsa-canvas: var(--ps-canvas);
+    --vtsa-surface: var(--ps-surface);
+    --vtsa-surface-subtle: var(--ps-surface-subtle);
+    --vtsa-surface-raised: var(--ps-surface-raised);
+    --vtsa-text: var(--ps-text);
+    --vtsa-text-muted: var(--ps-text-muted);
+    --vtsa-border: var(--ps-border);
+    --vtsa-border-strong: var(--ps-border-strong);
+    --vtsa-brand: var(--ps-brand);
+    --vtsa-brand-strong: var(--ps-brand-strong);
+    --vtsa-brand-soft: var(--ps-brand-soft);
+    --vtsa-accent: var(--ps-accent);
+    --vtsa-success: #55d9a5;
+    --vtsa-success-surface: #12372f;
+    --vtsa-warning: #f6c453;
+    --vtsa-warning-surface: #3a2c12;
+    --vtsa-danger: #ff8094;
+    --vtsa-danger-surface: #421d29;
+    --vtsa-information: #75b8ff;
+    --vtsa-information-surface: #162e4c;
+    --vtsa-focus: #b8afff;
+    --vtsa-state-available: #55d9a5;
+    --vtsa-state-preparing: #6ed4e4;
+    --vtsa-state-charging: #6ecff2;
+    --vtsa-state-suspended: #f6c453;
+    --vtsa-state-finishing: #75b8ff;
+    --vtsa-state-reserved: #e59af2;
+    --vtsa-state-unavailable: #aeb5c7;
+    --vtsa-state-faulted: #ff8094;
+    --vtsa-state-offline: #8c94a8;
+    --vtsa-state-unknown: #b8bece;
+    --vtsa-shadow-1: 0 1px 2px rgb(0 0 0 / 28%);
+    --vtsa-shadow-2: 0 10px 28px rgb(0 0 0 / 36%);
+    --vtsa-shadow-3: 0 24px 56px rgb(0 0 0 / 48%);
+}
+
+@keyframes vtsa-skeleton {
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@layer base {
+    html {
+        background: var(--vtsa-canvas);
+        color: var(--vtsa-text);
+        font-family: var(--font-sans);
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        min-width: 20rem;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--vtsa-focus);
+        outline-offset: 3px;
+    }
+
+    ::selection {
+        background: var(--vtsa-brand-soft);
+        color: var(--vtsa-text);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
