@@ -2,20 +2,25 @@
 set -Eeuo pipefail
 
 repo_dir="${VTSA_REPO_DIR:-/opt/vtsa-csms}"
-env_file="${VTSA_APP_ENV_FILE:-/etc/vtsa-csms/app.env}"
 compose_file="$repo_dir/infra/cluster/compose.app.yaml"
-state_dir="/var/lib/vtsa-csms"
-backup_dir="/var/backups/vtsa-csms"
-state_file="$state_dir/current-app-image-tag"
-release_tag="${1:-}"
-migrate="${2:-}"
+environment="${1:-}"
+release_tag="${2:-}"
+migrate="${3:-}"
 
 fail() {
     printf 'ERROR: %s\n' "$1" >&2
     exit 1
 }
 
-[[ "$release_tag" =~ ^sha-[0-9a-f]{40}$ ]] || fail "Usage: vtsa-deploy-app sha-<40-character-commit> [--migrate]"
+[[ "$environment" == "staging" || "$environment" == "production" ]] || \
+    fail "Usage: vtsa-deploy-app staging|production sha-<40-character-commit> [--migrate]"
+env_file="${VTSA_APP_ENV_FILE:-/etc/vtsa-csms/$environment.env}"
+state_dir="/var/lib/vtsa-csms/$environment"
+backup_dir="/var/backups/vtsa-csms/$environment"
+state_file="$state_dir/current-app-image-tag"
+
+[[ "$release_tag" =~ ^sha-[0-9a-f]{40}$ ]] || \
+    fail "Usage: vtsa-deploy-app staging|production sha-<40-character-commit> [--migrate]"
 [[ -z "$migrate" || "$migrate" == "--migrate" ]] || fail "The only supported option is --migrate."
 [[ -d "$repo_dir/.git" ]] || fail "$repo_dir is not a Git checkout."
 [[ -f "$env_file" ]] || fail "$env_file does not exist."
@@ -23,10 +28,56 @@ command -v docker >/dev/null 2>&1 || fail "Docker is not installed."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is not available."
 
 exec 9>/var/lock/vtsa-csms-app-deploy.lock
-flock -n 9 || fail "Another application deployment is already running."
+flock -n 9 || fail "Another staging or production deployment is already running on this node."
 
 if grep -Eq 'CHANGE_ME|(^|\.)example\.com($|[[:space:]])' "$env_file"; then
     fail "Replace every CHANGE_ME and example.com value in $env_file."
+fi
+grep -qx "DEPLOY_ENVIRONMENT=$environment" "$env_file" || \
+    fail "$env_file must contain DEPLOY_ENVIRONMENT=$environment."
+
+require_setting() {
+    local key="$1"
+    local expected="$2"
+    grep -Fqx "$key=$expected" "$env_file" || \
+        fail "$env_file must contain $key=$expected to preserve environment isolation."
+}
+
+if [[ "$environment" == "staging" ]]; then
+    require_setting COMPOSE_PROJECT_NAME vtsa-csms-staging
+    require_setting APP_HTTP_PORT 8081
+    require_setting OCPP_PUBLIC_PORT 9001
+    require_setting DB_DATABASE vtsa_staging
+    require_setting DB_USERNAME vtsa_staging
+    require_setting REDIS_PORT 6380
+    require_setting REDIS_PREFIX vtsa:staging:
+    require_setting MINIO_BUCKET vtsa-staging
+    other_env_file="/etc/vtsa-csms/production.env"
+else
+    require_setting COMPOSE_PROJECT_NAME vtsa-csms-production
+    require_setting APP_HTTP_PORT 80
+    require_setting OCPP_PUBLIC_PORT 9000
+    require_setting DB_DATABASE vtsa_production
+    require_setting DB_USERNAME vtsa_production
+    require_setting REDIS_PORT 6379
+    require_setting REDIS_PREFIX vtsa:production:
+    require_setting MINIO_BUCKET vtsa-production
+    other_env_file="/etc/vtsa-csms/staging.env"
+fi
+
+setting_value() {
+    local file="$1"
+    local key="$2"
+    sed -n "s/^$key=//p" "$file" | head -n 1
+}
+
+if [[ -f "$other_env_file" ]]; then
+    for secret_key in APP_KEY DB_PASSWORD REDIS_PASSWORD MINIO_ACCESS_KEY GATEWAY_INTERNAL_API_TOKEN; do
+        current_value="$(setting_value "$env_file" "$secret_key")"
+        other_value="$(setting_value "$other_env_file" "$secret_key")"
+        [[ -n "$current_value" && "$current_value" != "$other_value" ]] || \
+            fail "$secret_key must be set and different between staging and production."
+    done
 fi
 
 commit="${release_tag#sha-}"
@@ -40,7 +91,7 @@ git cat-file -e "$commit^{commit}" 2>/dev/null || fail "Commit $commit was not f
 git checkout --quiet --detach "$commit"
 "${compose[@]}" config --quiet
 
-printf 'Pulling release %s...\n' "$release_tag"
+printf 'Pulling %s release %s...\n' "$environment" "$release_tag"
 "${compose[@]}" pull
 
 if [[ "$migrate" == "--migrate" ]]; then
@@ -71,7 +122,7 @@ rollback() {
     fi
 }
 
-printf 'Replacing this node while the other load-balanced node remains online...\n'
+printf 'Replacing this %s node while its peer remains online...\n' "$environment"
 if ! "${compose[@]}" up --detach --remove-orphans --wait --wait-timeout 180; then
     rollback
     fail "Containers did not become healthy."
@@ -101,4 +152,4 @@ mkdir -p "$state_dir"
 printf '%s\n' "$release_tag" > "$state_file"
 chmod 600 "$state_file"
 "${compose[@]}" ps
-printf 'Application node is ready on release %s.\n' "$release_tag"
+printf '%s application node is ready on release %s.\n' "$environment" "$release_tag"

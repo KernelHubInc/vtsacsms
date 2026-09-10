@@ -1,4 +1,4 @@
-name: Deploy production app nodes
+name: Deploy staging and production
 
 on:
   workflow_run:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-deployment
+  group: staging-production-deployment
   cancel-in-progress: false
 
 env:
@@ -56,79 +56,159 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: ghcr.io/kernelhubinc/vtsacsms/${{ matrix.image }}:sha-${{ env.RELEASE_SHA }}
-          cache-from: type=gha,scope=production-${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=production-${{ matrix.image }}
+          cache-from: type=gha,scope=release-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
 
-  deploy:
-    name: Rolling deploy
+  deploy_staging:
+    name: Rolling deploy to staging
     needs: publish
-    if: vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    if: vars.STAGING_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
-      name: production
-      url: ${{ vars.PRODUCTION_URL }}
+      name: staging
+      url: ${{ vars.PUBLIC_URL }}
     steps:
-      - name: Configure deployment SSH key
+      - name: Configure and validate deployment SSH key
         env:
-          DEPLOY_KEY: ${{ secrets.PRODUCTION_DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+          DEPLOY_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
           install -d -m 0700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          printf '%s' "$DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
 
-      - name: Deploy App Server 1 and migrate
+      - name: Drain and deploy staging App Server 1
         id: deploy_app_1
         env:
-          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
           APP_HOST: ${{ vars.APP_NODE_1_HOST }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
             "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
-            "sudo /usr/local/sbin/vtsa-lb-node drain app1"
+            "sudo /usr/local/sbin/vtsa-lb-node staging drain app1"
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
             -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
             "$DEPLOY_USER@$APP_HOST" \
-            "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA' --migrate"
+            "sudo /usr/local/sbin/vtsa-deploy-app staging 'sha-$RELEASE_SHA' --migrate"
 
-      - name: Re-enable App Server 1
+      - name: Re-enable staging App Server 1
         if: always() && steps.deploy_app_1.outcome != 'skipped'
         env:
-          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
         run: >-
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
           "$DEPLOY_USER@$LOAD_BALANCER_HOST"
-          "sudo /usr/local/sbin/vtsa-lb-node enable app1"
+          "sudo /usr/local/sbin/vtsa-lb-node staging enable app1"
 
-      - name: Deploy App Server 2
+      - name: Drain and deploy staging App Server 2
         id: deploy_app_2
         env:
-          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
           APP_HOST: ${{ vars.APP_NODE_2_HOST }}
         run: |
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
             "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
-            "sudo /usr/local/sbin/vtsa-lb-node drain app2"
+            "sudo /usr/local/sbin/vtsa-lb-node staging drain app2"
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
             -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
             "$DEPLOY_USER@$APP_HOST" \
-            "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA'"
+            "sudo /usr/local/sbin/vtsa-deploy-app staging 'sha-$RELEASE_SHA'"
 
-      - name: Re-enable App Server 2
+      - name: Re-enable staging App Server 2
         if: always() && steps.deploy_app_2.outcome != 'skipped'
         env:
-          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
         run: >-
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
           "$DEPLOY_USER@$LOAD_BALANCER_HOST"
-          "sudo /usr/local/sbin/vtsa-lb-node enable app2"
+          "sudo /usr/local/sbin/vtsa-lb-node staging enable app2"
 
-      - name: Verify load-balanced production endpoint
+      - name: Verify staging
         env:
-          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
-        run: curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 5 "$PRODUCTION_URL/health/ready"
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 5 "$PUBLIC_URL/health/ready"
+
+  deploy_production:
+    name: Rolling deploy to production
+    needs: [publish, deploy_staging]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      needs.deploy_staging.result == 'success' &&
+      vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PUBLIC_URL }}
+    steps:
+      - name: Configure and validate deployment SSH key
+        env:
+          DEPLOY_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s' "$DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
+
+      - name: Drain and deploy production App Server 1
+        id: deploy_app_1
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
+          APP_HOST: ${{ vars.APP_NODE_1_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "sudo /usr/local/sbin/vtsa-lb-node production drain app1"
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "$DEPLOY_USER@$APP_HOST" \
+            "sudo /usr/local/sbin/vtsa-deploy-app production 'sha-$RELEASE_SHA' --migrate"
+
+      - name: Re-enable production App Server 1
+        if: always() && steps.deploy_app_1.outcome != 'skipped'
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
+        run: >-
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
+          "$DEPLOY_USER@$LOAD_BALANCER_HOST"
+          "sudo /usr/local/sbin/vtsa-lb-node production enable app1"
+
+      - name: Drain and deploy production App Server 2
+        id: deploy_app_2
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
+          APP_HOST: ${{ vars.APP_NODE_2_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "sudo /usr/local/sbin/vtsa-lb-node production drain app2"
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "$DEPLOY_USER@$APP_HOST" \
+            "sudo /usr/local/sbin/vtsa-deploy-app production 'sha-$RELEASE_SHA'"
+
+      - name: Re-enable production App Server 2
+        if: always() && steps.deploy_app_2.outcome != 'skipped'
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
+        run: >-
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
+          "$DEPLOY_USER@$LOAD_BALANCER_HOST"
+          "sudo /usr/local/sbin/vtsa-lb-node production enable app2"
+
+      - name: Verify production
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: curl --fail --show-error --silent --retry 12 --retry-all-errors --retry-delay 5 "$PUBLIC_URL/health/ready"

@@ -8,7 +8,7 @@ x-logging: &json-logging
 
 x-platform-environment: &platform-environment
   APP_NAME: VTSA CSMS
-  APP_ENV: production
+  APP_ENV: ${DEPLOY_ENVIRONMENT:-production}
   APP_KEY: ${APP_KEY:?APP_KEY is required}
   APP_DEBUG: "false"
   APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
@@ -28,10 +28,16 @@ x-platform-environment: &platform-environment
   SESSION_DRIVER: redis
   SESSION_SECURE_COOKIE: "true"
   SESSION_SAME_SITE: lax
+  SESSION_COOKIE: ${SESSION_COOKIE:?SESSION_COOKIE is required}
   REDIS_CLIENT: phpredis
   REDIS_HOST: ${REDIS_HOST:?REDIS_HOST is required}
   REDIS_PORT: ${REDIS_PORT:-6379}
   REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  REDIS_DB: ${REDIS_DB:?REDIS_DB is required}
+  REDIS_CACHE_DB: ${REDIS_CACHE_DB:?REDIS_CACHE_DB is required}
+  REDIS_PREFIX: ${REDIS_PREFIX:?REDIS_PREFIX is required}
+  OCPP_GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:?GATEWAY_REDIS_URL is required}
+  OCPP_GATEWAY_REDIS_DB: ${OCPP_GATEWAY_REDIS_DB:?OCPP_GATEWAY_REDIS_DB is required}
   MAIL_MAILER: smtp
   MAIL_SCHEME: ${MAIL_SCHEME:?MAIL_SCHEME is required}
   MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
@@ -140,7 +146,7 @@ services:
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: 9000
       GATEWAY_LOG_LEVEL: INFO
-      GATEWAY_ENVIRONMENT: production
+      GATEWAY_ENVIRONMENT: ${DEPLOY_ENVIRONMENT:-production}
       GATEWAY_FORWARDED_ALLOW_IPS: "*"
       GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:?GATEWAY_REDIS_URL is required}
       GATEWAY_REDIS_KEY_PREFIX: ${GATEWAY_REDIS_KEY_PREFIX:-vtsa:production:ocpp}

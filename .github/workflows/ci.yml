@@ -185,3 +185,25 @@ jobs:
           tags: ${{ matrix.image }}:ci
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deployment_configuration:
+    name: Deployment configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
+      - name: Install shell validator
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Validate deployment scripts
+        run: |
+          shellcheck scripts/deploy-app-node.sh scripts/load-balancer-node.sh
+          bash -n scripts/deploy-app-node.sh scripts/load-balancer-node.sh
+      - name: Validate GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+      - name: Validate staging and production Compose projects
+        run: |
+          docker compose --env-file .env.app.staging.example -f infra/cluster/compose.app.yaml config --quiet
+          docker compose --env-file .env.app.production.example -f infra/cluster/compose.app.yaml config --quiet

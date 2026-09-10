@@ -58,7 +58,7 @@ cd /opt/vtsa-csms && sudo git pull --ff-only origin main && sudo bash scripts/de
 
 Do not use the local `infra/compose.yaml` on a public host. Exact first-deployment, TLS, private GitHub deploy-key, secret generation, OCPP enrollment, backup, verification, and rollback instructions are in [docs/runbooks/hostinger-vps-deployment.md](docs/runbooks/hostinger-vps-deployment.md).
 
-For two application servers behind an existing load balancer, use the GHCR-based sequential deployment in [docs/runbooks/two-app-server-deployment.md](docs/runbooks/two-app-server-deployment.md). It deploys one healthy node at a time and runs database migrations only once.
+For isolated staging and production stacks across the same two application servers, use [docs/runbooks/staging-production-deployment.md](docs/runbooks/staging-production-deployment.md). The production-only reference remains in [docs/runbooks/two-app-server-deployment.md](docs/runbooks/two-app-server-deployment.md).
 
 ## Supported toolchain
 

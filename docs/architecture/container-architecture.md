@@ -191,7 +191,11 @@ The phase-six implementation uses asynchronous Python, FastAPI/Uvicorn, the main
 
 ## 7. Deployment Units and Environments
 
-Minimum independently deployable units are the Laravel artifact (run as web, worker, and scheduler roles), OCPP gateway, and Flutter app. Database migrations and contract compatibility are coordinated but must permit rolling deployment. Environment count, cloud, cluster, regions, network topology, CI/CD product, domains, certificates, and credentials remain undecided.
+Minimum independently deployable units are the Laravel artifact (run as web, worker, and scheduler roles), OCPP gateway, and Flutter app. Database migrations and contract compatibility are coordinated and must permit rolling deployment.
+
+The initial VPS topology runs isolated staging and production Docker Compose projects on each of two application nodes behind Nginx. Staging deploys first; the same commit-addressed images are promoted to an approval-gated production environment. Nginx drains and verifies one node at a time. Each environment owns separate PostgreSQL credentials/database, Redis service and namespaces, object-storage credentials/bucket, application key, gateway token, session cookie, deployment state, and backups. Production data must not be copied into staging without an approved sanitization process.
+
+See [`staging-production-deployment.md`](../runbooks/staging-production-deployment.md). Domains, certificates, private network addresses, secret-manager product, regions, and disaster-recovery targets remain deployment decisions.
 
 ## 8. Architecture Fitness Checks
 
@@ -213,4 +217,4 @@ Future CI should prove:
 - Queue topology and whether Redis transport is sufficient for accepted scale/recovery needs.
 - Physical database/schema isolation, RLS rollout, read replicas, partitioning, and archive.
 - Object storage, file scanning, CDN/WAF, maps, identity, notifications, and observability providers.
-- Deployment topology, service identity, secret manager, regions, SLOs, and disaster recovery.
+- Production domains/certificates, service identity, secret-manager product, private network topology, regions, SLOs, and disaster recovery.

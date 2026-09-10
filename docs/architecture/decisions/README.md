@@ -18,6 +18,7 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0012](0012-use-an-immutable-stock-movement-ledger.md) | Use an immutable stock movement ledger | Accepted |
 | [0013](0013-use-append-only-maintenance-evidence-and-owner-contracts.md) | Use append-only maintenance evidence and owner-context contracts | Accepted |
 | [0014](0014-use-configurable-map-provider-adapters.md) | Use configurable OpenStreetMap and Google adapters across web and Flutter | Accepted |
+| [0015](0015-promote-isolated-staging-and-production-stacks.md) | Promote isolated staging and production stacks across two app nodes | Accepted |
 
 ## ADR Template
 
