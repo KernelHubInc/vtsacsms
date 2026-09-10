@@ -30,7 +30,7 @@ Permit only these paths:
 
 ## 2. Generate repository keys directly on the servers
 
-Run on App Server 1, App Server 2, and the load balancer. Use a distinct comment on each server. Never paste a repository private key into a terminal or GitHub:
+Run on App Server 1, App Server 2, the load balancer, and the data server. Use a distinct comment and a distinct deploy key on each server. Never paste a repository private key into a terminal or GitHub:
 
 ```bash
 sudo install -d -m 0700 /root/.ssh
@@ -108,6 +108,18 @@ permitopen="APP_SERVER_1_IP:22",permitopen="APP_SERVER_2_IP:22",no-agent-forward
 
 ## 4. Prepare both application servers
 
+If either server already has the repository, update it without discarding local work. `git status --short` must be empty before continuing:
+
+```bash
+sudo git -C /opt/vtsa-csms status --short
+sudo env GIT_SSH_COMMAND='ssh -i /root/.ssh/vtsa_repository_read -o IdentitiesOnly=yes' \
+  git -C /opt/vtsa-csms fetch origin main
+sudo git -C /opt/vtsa-csms switch main
+sudo git -C /opt/vtsa-csms merge --ff-only origin/main
+sudo test -f /opt/vtsa-csms/.env.app.staging.example
+sudo test -f /opt/vtsa-csms/.env.app.production.example
+```
+
 Run on both app servers:
 
 ```bash
@@ -173,33 +185,274 @@ unset CR_PAT
 
 ## 5. Prepare the data server
 
-Create separate PostgreSQL users and databases. Use PostgreSQL's interactive password command so passwords do not enter shell history:
+The fourth VPS owns PostgreSQL/PostGIS, two isolated Redis instances, and two isolated MinIO instances. The checked-in stack creates the databases, enables PostGIS, creates private buckets, and gives each application environment a bucket-limited storage user.
+
+### 5.1 Choose and protect the data network
+
+Use an IP address on an **encrypted private/VPN interface** shared with both app servers. Do not bind these services to `0.0.0.0` or expose them to the public Internet. A provider-private network must not be assumed to be encrypted; confirm that property with the provider or use a VPN such as WireGuard.
+
+Record these values before continuing:
+
+```text
+DATA_SERVER_ENCRYPTED_IP=the data server's private/VPN address
+APP_SERVER_1_ENCRYPTED_IP=App Server 1's private/VPN address
+APP_SERVER_2_ENCRYPTED_IP=App Server 2's private/VPN address
+```
+
+At the Hostinger firewall, allow only:
+
+| Port | Source | Purpose |
+| --- | --- | --- |
+| `22/tcp` | your administration IP | SSH |
+| `5432/tcp` | both app-server encrypted IPs | PostgreSQL/PostGIS |
+| `6379/tcp` | both app-server encrypted IPs | production Redis |
+| `6380/tcp` | both app-server encrypted IPs | staging Redis |
+| `9000/tcp` | both app-server encrypted IPs | production MinIO API |
+| `9100/tcp` | both app-server encrypted IPs | staging MinIO API |
+
+Do not open MinIO console ports `9001` or `9101`; the Compose file binds them to data-server localhost only. Docker-published ports can bypass ordinary UFW rules, so keep the provider firewall restrictions and the non-public bind address even if UFW is enabled.
+
+From each app server, confirm the encrypted route is reachable before starting the stack:
 
 ```bash
-sudo -u postgres psql
+ping -c 3 DATA_SERVER_ENCRYPTED_IP
 ```
 
-Inside `psql`:
+Stop here if the encrypted/private route is not ready. Firewall allow-listing over a public network does not encrypt database, Redis, or object-storage traffic.
 
-```sql
-CREATE ROLE vtsa_staging LOGIN;
-\password vtsa_staging
-CREATE DATABASE vtsa_staging OWNER vtsa_staging;
+### 5.2 Install Docker on the data server
 
-CREATE ROLE vtsa_production LOGIN;
-\password vtsa_production
-CREATE DATABASE vtsa_production OWNER vtsa_production;
+Connect to the data server and set its timezone to UTC:
 
-\connect vtsa_staging
-CREATE EXTENSION IF NOT EXISTS postgis;
+```bash
+ssh root@DATA_SERVER_PUBLIC_IP
+sudo hostnamectl set-hostname vtsa-data-01
+sudo timedatectl set-timezone UTC
+sudo apt update
+sudo apt install -y ca-certificates curl git iproute2 openssl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-\connect vtsa_production
-CREATE EXTENSION IF NOT EXISTS postgis;
+. /etc/os-release
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
 
-\quit
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+sudo docker version
+sudo docker compose version
 ```
 
-Run separate production and staging Redis instances with separate passwords. The templates expect production on `6379` and staging on `6380`. Create separate MinIO credentials and buckets named `vtsa-production` and `vtsa-staging`. Never copy production data to staging unless it has been explicitly sanitized.
+The last two commands must succeed. These commands use Docker's official Ubuntu repository rather than Ubuntu's older compatibility package.
+
+### 5.3 Clone or update the repository
+
+Complete Step 2 on the data server first, using a new data-server deploy key. Then clone:
+
+```bash
+sudo install -d -m 0755 /opt
+sudo rmdir /opt/vtsa-csms 2>/dev/null || true
+sudo env GIT_SSH_COMMAND='ssh -i /root/.ssh/vtsa_repository_read -o IdentitiesOnly=yes' \
+  git clone git@github.com:KernelHubInc/vtsacsms.git /opt/vtsa-csms
+sudo test -f /opt/vtsa-csms/.env.data.example
+sudo test -f /opt/vtsa-csms/infra/cluster/compose.data.yaml
+```
+
+If `/opt/vtsa-csms` is already a clone, use the safe fetch and `merge --ff-only` commands from Step 4 instead. Do not use `git reset --hard` on a server with unknown local changes.
+
+### 5.4 Create the protected data-server environment
+
+Create the configuration and backup directories:
+
+```bash
+sudo install -d -m 0700 /etc/vtsa-csms /var/backups/vtsa-data
+sudo cp /opt/vtsa-csms/.env.data.example /etc/vtsa-csms/data.env
+sudo chmod 600 /etc/vtsa-csms/data.env
+```
+
+Generate independent secrets. Hex output is used so the Redis URLs on the app servers do not need percent-encoding. Save the values in a password manager; do not paste them into GitHub, chat, tickets, or source control:
+
+```bash
+for name in \
+  POSTGRES_SUPERUSER_PASSWORD \
+  POSTGRES_PRODUCTION_PASSWORD \
+  POSTGRES_STAGING_PASSWORD \
+  REDIS_PRODUCTION_PASSWORD \
+  REDIS_STAGING_PASSWORD \
+  MINIO_PRODUCTION_ROOT_PASSWORD \
+  MINIO_PRODUCTION_APP_PASSWORD \
+  MINIO_STAGING_ROOT_PASSWORD \
+  MINIO_STAGING_APP_PASSWORD
+do
+  printf '%s=' "$name"
+  openssl rand -hex 32
+done
+```
+
+Edit the file:
+
+```bash
+sudo nano /etc/vtsa-csms/data.env
+```
+
+Set `DATA_BIND_ADDRESS` to the data server's encrypted/private interface IP, paste each generated value into its matching field, and use non-secret service usernames such as:
+
+```dotenv
+MINIO_PRODUCTION_ROOT_USER=vtsa-production-root
+MINIO_PRODUCTION_APP_USER=vtsa-production-app
+MINIO_STAGING_ROOT_USER=vtsa-staging-root
+MINIO_STAGING_APP_USER=vtsa-staging-app
+```
+
+Every `CHANGE_ME` value must be removed. Check without displaying any secrets:
+
+```bash
+if sudo grep -q CHANGE_ME /etc/vtsa-csms/data.env; then
+  echo 'ERROR: unresolved placeholders remain'
+else
+  echo 'Environment file is complete'
+fi
+sudo stat -c '%a %U:%G %n' /etc/vtsa-csms/data.env
+```
+
+The expected permission is `600 root:root`.
+
+### 5.5 Start and validate all data services
+
+Install and run the checked-in preparation command:
+
+```bash
+sudo install -m 0755 /opt/vtsa-csms/scripts/prepare-data-server.sh \
+  /usr/local/sbin/vtsa-prepare-data
+sudo /usr/local/sbin/vtsa-prepare-data
+```
+
+On first start this command:
+
+1. validates the protected environment and refuses a wildcard/public bind address;
+2. starts PostgreSQL 18 with PostGIS, production Redis, staging Redis, and two MinIO instances;
+3. creates `vtsa_production` and `vtsa_staging` with different owners and passwords;
+4. enables PostGIS in both databases;
+5. creates private `vtsa-production` and `vtsa-staging` buckets;
+6. creates separate bucket-limited MinIO application users;
+7. verifies PostgreSQL/PostGIS and both Redis instances.
+
+Inspect health and recent logs:
+
+```bash
+sudo docker compose --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml ps
+sudo docker compose --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml logs --tail=100
+```
+
+The five long-running services must be `Up` and healthy. The two `minio-*-init` services are one-shot provisioning jobs and are not expected to remain running.
+
+### 5.6 Configure both application servers
+
+Use the exact same values on App Server 1 and App Server 2 for a given environment. Do not copy production secrets into staging.
+
+Set these values in `/etc/vtsa-csms/production.env`:
+
+```dotenv
+DB_HOST=DATA_SERVER_ENCRYPTED_IP
+DB_PORT=5432
+DB_DATABASE=vtsa_production
+DB_USERNAME=vtsa_production
+DB_PASSWORD=the POSTGRES_PRODUCTION_PASSWORD value
+DB_SSLMODE=disable
+
+REDIS_HOST=DATA_SERVER_ENCRYPTED_IP
+REDIS_PORT=6379
+REDIS_PASSWORD=the REDIS_PRODUCTION_PASSWORD value
+GATEWAY_REDIS_URL=redis://:the_REDIS_PRODUCTION_PASSWORD_value@DATA_SERVER_ENCRYPTED_IP:6379/2
+
+MINIO_ACCESS_KEY=the MINIO_PRODUCTION_APP_USER value
+MINIO_SECRET_KEY=the MINIO_PRODUCTION_APP_PASSWORD value
+MINIO_BUCKET=vtsa-production
+MINIO_ENDPOINT=http://DATA_SERVER_ENCRYPTED_IP:9000
+```
+
+Set these values in `/etc/vtsa-csms/staging.env`:
+
+```dotenv
+DB_HOST=DATA_SERVER_ENCRYPTED_IP
+DB_PORT=5432
+DB_DATABASE=vtsa_staging
+DB_USERNAME=vtsa_staging
+DB_PASSWORD=the POSTGRES_STAGING_PASSWORD value
+DB_SSLMODE=disable
+
+REDIS_HOST=DATA_SERVER_ENCRYPTED_IP
+REDIS_PORT=6380
+REDIS_PASSWORD=the REDIS_STAGING_PASSWORD value
+GATEWAY_REDIS_URL=redis://:the_REDIS_STAGING_PASSWORD_value@DATA_SERVER_ENCRYPTED_IP:6380/2
+
+MINIO_ACCESS_KEY=the MINIO_STAGING_APP_USER value
+MINIO_SECRET_KEY=the MINIO_STAGING_APP_PASSWORD value
+MINIO_BUCKET=vtsa-staging
+MINIO_ENDPOINT=http://DATA_SERVER_ENCRYPTED_IP:9100
+```
+
+`DB_SSLMODE=disable` and the `http://` MinIO endpoints are permitted here **only because Step 5.1 requires an encrypted tunnel/interface**. If the transport is not encrypted, configure native PostgreSQL and MinIO TLS first, change the modes/URLs accordingly, and distribute the trusted CA; do not weaken transport security to make a connection work.
+
+`MINIO_PUBLIC_URL` is separate from the internal endpoint. Set it to each environment's TLS-protected public storage hostname after the load balancer is configured to proxy that hostname to the correct MinIO API. Never expose the MinIO admin console publicly.
+
+From each app server, verify that only the intended data ports are reachable:
+
+```bash
+DATA_HOST=DATA_SERVER_ENCRYPTED_IP
+for port in 5432 6379 6380 9000 9100; do
+  timeout 3 bash -c "</dev/tcp/$DATA_HOST/$port" \
+    && echo "reachable: $DATA_HOST:$port" \
+    || echo "blocked: $DATA_HOST:$port"
+done
+```
+
+All five checks must report `reachable`. A timeout normally means the bind address, encrypted route, or Hostinger firewall rule is wrong.
+
+### 5.7 Make a first backup before migrations
+
+The application deployment command creates a database dump before a migration, but the data server still needs its own off-server backup policy. Create an initial PostgreSQL backup:
+
+```bash
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup_dir="/var/backups/vtsa-data/$stamp"
+sudo install -d -m 0700 "$backup_dir"
+
+sudo docker compose --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml \
+  exec -T postgres pg_dumpall -U vtsa_admin --globals-only \
+  | sudo tee "$backup_dir/postgres-globals.sql" >/dev/null
+sudo docker compose --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml \
+  exec -T postgres pg_dump -U vtsa_admin -Fc vtsa_production \
+  | sudo tee "$backup_dir/vtsa-production.dump" >/dev/null
+sudo docker compose --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml \
+  exec -T postgres pg_dump -U vtsa_admin -Fc vtsa_staging \
+  | sudo tee "$backup_dir/vtsa-staging.dump" >/dev/null
+
+sudo env BACKUP_SET="$stamp" docker compose \
+  --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml \
+  --profile backup run --rm minio-production-backup
+sudo env BACKUP_SET="$stamp" docker compose \
+  --env-file /etc/vtsa-csms/data.env \
+  -f /opt/vtsa-csms/infra/cluster/compose.data.yaml \
+  --profile backup run --rm minio-staging-backup
+
+sudo find "$backup_dir" -type f ! -name SHA256SUMS -print0 \
+  | sudo xargs -0 sha256sum \
+  | sudo tee "$backup_dir/SHA256SUMS" >/dev/null
+sudo ls -lh "$backup_dir"
+```
+
+Copy encrypted database backups and MinIO object backups to storage outside this VPS, define retention, and perform a restore test before enabling production. A backup kept only on the data server does not protect against server or disk loss. Redis is not the system of record and does not replace PostgreSQL or MinIO backups.
 
 ## 6. Configure both load-balancer pools
 

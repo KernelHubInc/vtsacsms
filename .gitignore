@@ -6,6 +6,9 @@
 !/.env.app.example
 !/.env.app.production.example
 !/.env.app.staging.example
+/.env.data
+/.env.data.*
+!/.env.data.example
 /.env.load-balancer
 /.env.load-balancer.*
 !/.env.load-balancer.example

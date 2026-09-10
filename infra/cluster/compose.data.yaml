@@ -1,0 +1,236 @@
+name: ${COMPOSE_PROJECT_NAME:-vtsa-csms-data}
+
+x-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: vtsa_admin
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD is required}
+      VTSA_PRODUCTION_DB_PASSWORD: ${POSTGRES_PRODUCTION_PASSWORD:?POSTGRES_PRODUCTION_PASSWORD is required}
+      VTSA_STAGING_DB_PASSWORD: ${POSTGRES_STAGING_PASSWORD:?POSTGRES_STAGING_PASSWORD is required}
+      TZ: UTC
+    ports:
+      - "${DATA_BIND_ADDRESS:?DATA_BIND_ADDRESS is required}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./data/postgres/10-create-vtsa-databases.sh:/docker-entrypoint-initdb.d/10-create-vtsa-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vtsa_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    networks: [data]
+    logging: *json-logging
+
+  redis-production:
+    image: redis:8.2-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${REDIS_PRODUCTION_PASSWORD:?REDIS_PRODUCTION_PASSWORD is required}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PRODUCTION_PASSWORD:?REDIS_PRODUCTION_PASSWORD is required}
+      TZ: UTC
+    ports:
+      - "${DATA_BIND_ADDRESS:?DATA_BIND_ADDRESS is required}:${REDIS_PRODUCTION_PORT:-6379}:6379"
+    volumes:
+      - redis-production-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [data]
+    logging: *json-logging
+
+  redis-staging:
+    image: redis:8.2-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --requirepass
+      - ${REDIS_STAGING_PASSWORD:?REDIS_STAGING_PASSWORD is required}
+    environment:
+      REDIS_PASSWORD: ${REDIS_STAGING_PASSWORD:?REDIS_STAGING_PASSWORD is required}
+      TZ: UTC
+    ports:
+      - "${DATA_BIND_ADDRESS:?DATA_BIND_ADDRESS is required}:${REDIS_STAGING_PORT:-6380}:6379"
+    volumes:
+      - redis-staging-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [data]
+    logging: *json-logging
+
+  minio-production:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_PRODUCTION_ROOT_USER:?MINIO_PRODUCTION_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_PRODUCTION_ROOT_PASSWORD:?MINIO_PRODUCTION_ROOT_PASSWORD is required}
+      TZ: UTC
+    ports:
+      - "${DATA_BIND_ADDRESS:?DATA_BIND_ADDRESS is required}:${MINIO_PRODUCTION_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_PRODUCTION_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-production-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [data]
+    logging: *json-logging
+
+  minio-staging:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_STAGING_ROOT_USER:?MINIO_STAGING_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_STAGING_ROOT_PASSWORD:?MINIO_STAGING_ROOT_PASSWORD is required}
+      TZ: UTC
+    ports:
+      - "${DATA_BIND_ADDRESS:?DATA_BIND_ADDRESS is required}:${MINIO_STAGING_API_PORT:-9100}:9000"
+      - "127.0.0.1:${MINIO_STAGING_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - minio-staging-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [data]
+    logging: *json-logging
+
+  minio-production-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [init]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_PRODUCTION_ROOT_USER:?MINIO_PRODUCTION_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_PRODUCTION_ROOT_PASSWORD:?MINIO_PRODUCTION_ROOT_PASSWORD is required}
+      MINIO_APP_USER: ${MINIO_PRODUCTION_APP_USER:?MINIO_PRODUCTION_APP_USER is required}
+      MINIO_APP_PASSWORD: ${MINIO_PRODUCTION_APP_PASSWORD:?MINIO_PRODUCTION_APP_PASSWORD is required}
+    volumes:
+      - ./data/minio/production-app-policy.json:/config/app-policy.json:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio-production:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing local/vtsa-production
+        mc anonymous set none local/vtsa-production
+        mc admin user add local "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mc admin policy info local vtsa-production-app >/dev/null 2>&1 || \
+          mc admin policy create local vtsa-production-app /config/app-policy.json
+        mc admin policy attach local vtsa-production-app --user "$${MINIO_APP_USER}"
+        mc alias set application http://minio-production:9000 "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mc stat application/vtsa-production >/dev/null
+    depends_on:
+      minio-production:
+        condition: service_healthy
+    networks: [data]
+    logging: *json-logging
+
+  minio-staging-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [init]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_STAGING_ROOT_USER:?MINIO_STAGING_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_STAGING_ROOT_PASSWORD:?MINIO_STAGING_ROOT_PASSWORD is required}
+      MINIO_APP_USER: ${MINIO_STAGING_APP_USER:?MINIO_STAGING_APP_USER is required}
+      MINIO_APP_PASSWORD: ${MINIO_STAGING_APP_PASSWORD:?MINIO_STAGING_APP_PASSWORD is required}
+    volumes:
+      - ./data/minio/staging-app-policy.json:/config/app-policy.json:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mc alias set local http://minio-staging:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing local/vtsa-staging
+        mc anonymous set none local/vtsa-staging
+        mc admin user add local "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mc admin policy info local vtsa-staging-app >/dev/null 2>&1 || \
+          mc admin policy create local vtsa-staging-app /config/app-policy.json
+        mc admin policy attach local vtsa-staging-app --user "$${MINIO_APP_USER}"
+        mc alias set application http://minio-staging:9000 "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mc stat application/vtsa-staging >/dev/null
+    depends_on:
+      minio-staging:
+        condition: service_healthy
+    networks: [data]
+    logging: *json-logging
+
+  minio-production-backup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [backup]
+    environment:
+      MINIO_APP_USER: ${MINIO_PRODUCTION_APP_USER:?MINIO_PRODUCTION_APP_USER is required}
+      MINIO_APP_PASSWORD: ${MINIO_PRODUCTION_APP_PASSWORD:?MINIO_PRODUCTION_APP_PASSWORD is required}
+      BACKUP_SET: ${BACKUP_SET:-}
+    volumes:
+      - ${DATA_BACKUP_PATH:-/var/backups/vtsa-data}:/backup
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        : "$${BACKUP_SET:?BACKUP_SET is required}"
+        mc alias set source http://minio-production:9000 "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mkdir -p "/backup/$${BACKUP_SET}/minio-production"
+        mc mirror --overwrite source/vtsa-production "/backup/$${BACKUP_SET}/minio-production"
+    depends_on:
+      minio-production:
+        condition: service_healthy
+    networks: [data]
+    logging: *json-logging
+
+  minio-staging-backup:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [backup]
+    environment:
+      MINIO_APP_USER: ${MINIO_STAGING_APP_USER:?MINIO_STAGING_APP_USER is required}
+      MINIO_APP_PASSWORD: ${MINIO_STAGING_APP_PASSWORD:?MINIO_STAGING_APP_PASSWORD is required}
+      BACKUP_SET: ${BACKUP_SET:-}
+    volumes:
+      - ${DATA_BACKUP_PATH:-/var/backups/vtsa-data}:/backup
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        : "$${BACKUP_SET:?BACKUP_SET is required}"
+        mc alias set source http://minio-staging:9000 "$${MINIO_APP_USER}" "$${MINIO_APP_PASSWORD}"
+        mkdir -p "/backup/$${BACKUP_SET}/minio-staging"
+        mc mirror --overwrite source/vtsa-staging "/backup/$${BACKUP_SET}/minio-staging"
+    depends_on:
+      minio-staging:
+        condition: service_healthy
+    networks: [data]
+    logging: *json-logging
+
+volumes:
+  postgres-data:
+  redis-production-data:
+  redis-staging-data:
+  minio-production-data:
+  minio-staging-data:
+
+networks:
+  data:

@@ -199,11 +199,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: Validate deployment scripts
         run: |
-          shellcheck scripts/deploy-app-node.sh scripts/load-balancer-node.sh
-          bash -n scripts/deploy-app-node.sh scripts/load-balancer-node.sh
+          shellcheck scripts/deploy-app-node.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
+          bash -n scripts/deploy-app-node.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
       - name: Validate GitHub Actions workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
-      - name: Validate staging and production Compose projects
+      - name: Validate staging, production, and data Compose projects
         run: |
           docker compose --env-file .env.app.staging.example -f infra/cluster/compose.app.yaml config --quiet
           docker compose --env-file .env.app.production.example -f infra/cluster/compose.app.yaml config --quiet
+          DATA_BIND_ADDRESS=127.0.0.1 docker compose --env-file .env.data.example -f infra/cluster/compose.data.yaml config --quiet
