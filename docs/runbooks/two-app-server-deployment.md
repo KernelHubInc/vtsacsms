@@ -14,16 +14,15 @@ infra/cluster/nginx-load-balancer.conf.example
 
 Only the load balancer should reach application ports `80` and `9000`. Database, Redis, and MinIO must allow only the two application-server addresses over an encrypted private link or their own TLS configuration.
 
-## 1. Create the two SSH keys
+## 1. Create the GitHub Actions SSH key
 
-On a trusted administration computer, create one key for GitHub Actions deployment and another read-only key for the servers to fetch this repository:
+On a trusted administration computer, create the key that GitHub Actions will use to reach the servers:
 
 ```bash
 ssh-keygen -t ed25519 -f vtsa_actions_deploy -C vtsa-actions-deploy
-ssh-keygen -t ed25519 -f vtsa_repository_read -C vtsa-repository-read
 ```
 
-Add `vtsa_repository_read.pub` to GitHub repository **Settings → Deploy keys** without write access. Keep both private keys out of Git and chat.
+Keep the private key out of Git and chat. Each server creates its own read-only repository deploy key in the next step, so repository private keys never need to be copied or pasted.
 
 ## 2. Prepare each application server
 
@@ -45,14 +44,21 @@ Append the contents of `vtsa_actions_deploy.pub` to `/home/deploy/.ssh/authorize
 restrict ssh-ed25519 REPLACE_WITH_PUBLIC_KEY vtsa-actions-deploy
 ```
 
-Then run:
+Generate the repository key directly on the server. Use a distinct comment such as `vtsa-app1-repository-read` or `vtsa-app2-repository-read` on each node:
 
 ```bash
 sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
 sudo chmod 600 /home/deploy/.ssh/authorized_keys
 
 sudo install -d -m 0700 /root/.ssh
-sudo install -m 0600 vtsa_repository_read /root/.ssh/vtsa_repository_read
+sudo ssh-keygen -t ed25519 -N '' -f /root/.ssh/vtsa_repository_read -C vtsa-app1-repository-read
+sudo chmod 600 /root/.ssh/vtsa_repository_read
+sudo cat /root/.ssh/vtsa_repository_read.pub
+```
+
+Add only the displayed `.pub` value to GitHub repository **Settings → Deploy keys** without write access. Give each server key a distinct title. Then continue:
+
+```bash
 sudo ssh-keyscan -t ed25519 github.com | sudo tee -a /root/.ssh/known_hosts >/dev/null
 sudo tee /root/.ssh/config >/dev/null <<'EOF'
 Host github-vtsa
@@ -140,7 +146,7 @@ Create the same `deploy` user on the load balancer and install `vtsa_actions_dep
 permitopen="APP_SERVER_1_IP:22",permitopen="APP_SERVER_2_IP:22",no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 REPLACE_WITH_PUBLIC_KEY vtsa-actions-deploy
 ```
 
-Repeat the root GitHub read-key and `github-vtsa` SSH configuration from step 2 on the load balancer. Clone the repository read-only, then install the root-owned drain controller:
+Generate another dedicated root GitHub read key on the load balancer and add only its public key to the repository's read-only deploy keys. Repeat the `github-vtsa` SSH configuration from step 2. Clone the repository read-only, then install the root-owned drain controller:
 
 ```bash
 sudo git clone git@github-vtsa:KernelHubInc/vtsacsms.git /opt/vtsa-csms
