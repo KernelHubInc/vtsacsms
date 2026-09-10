@@ -4,17 +4,12 @@ This runbook installs the same immutable GitHub release on two application serve
 
 ## Required load-balancer behavior
 
-Both backends must point to port `80` and check `GET /health/ready`. A backend must be removed while that check fails, and an upstream failure must be retried against the other server. Without this behavior, a rolling deployment cannot guarantee uninterrupted requests.
+Both backends must point to port `80`. The deployment workflow uses a root-owned Nginx include to mark one backend `down`, reloads Nginx gracefully, deploys and verifies that node, and then re-enables it. It never drains a node unless the other node passes `GET /health/ready`.
 
-For Caddy, the backend block is:
+The repository provides the required Nginx configuration:
 
-```caddyfile
-reverse_proxy APP_SERVER_1_IP:80 APP_SERVER_2_IP:80 {
-    health_uri /health/ready
-    health_interval 5s
-    health_timeout 2s
-    lb_try_duration 5s
-}
+```text
+infra/cluster/nginx-load-balancer.conf.example
 ```
 
 Only the load balancer should reach application ports `80` and `9000`. Database, Redis, and MinIO must allow only the two application-server addresses over an encrypted private link or their own TLS configuration.
@@ -108,7 +103,36 @@ printf '%s' "$CR_PAT" | sudo docker login ghcr.io --username GITHUB_MACHINE_USER
 unset CR_PAT
 ```
 
-## 4. Configure the load balancer as an SSH bastion
+## 4. Perform the first app-node deployment
+
+Wait for the **Deploy production app nodes** workflow's `publish` job to create the three GHCR images. Keep `PRODUCTION_DEPLOY_ENABLED` unset. Obtain and deploy the full commit independently on each checkout:
+
+```bash
+cd /opt/vtsa-csms
+sudo git fetch origin main
+RELEASE_TAG="sha-$(sudo git rev-parse origin/main)"
+echo "$RELEASE_TAG"
+```
+
+On App Server 1:
+
+```bash
+sudo /usr/local/sbin/vtsa-deploy-app "$RELEASE_TAG" --migrate
+```
+
+On App Server 2:
+
+```bash
+sudo /usr/local/sbin/vtsa-deploy-app "$RELEASE_TAG"
+```
+
+Both must return a ready response before changing the load balancer:
+
+```bash
+curl --fail http://127.0.0.1/health/ready
+```
+
+## 5. Configure the load balancer as an SSH bastion and drain controller
 
 Create the same `deploy` user on the load balancer and install `vtsa_actions_deploy.pub` in its `authorized_keys`. Limit that key to forwarding SSH only to the two app servers:
 
@@ -116,9 +140,39 @@ Create the same `deploy` user on the load balancer and install `vtsa_actions_dep
 permitopen="APP_SERVER_1_IP:22",permitopen="APP_SERVER_2_IP:22",no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 REPLACE_WITH_PUBLIC_KEY vtsa-actions-deploy
 ```
 
-At the firewall, allow app-server SSH only from the load balancer. GitHub Actions then reaches both nodes through `ProxyJump`; it does not need direct app-server SSH exposure.
+Repeat the root GitHub read-key and `github-vtsa` SSH configuration from step 2 on the load balancer. Clone the repository read-only, then install the root-owned drain controller:
 
-## 5. Configure the GitHub production environment
+```bash
+sudo git clone git@github-vtsa:KernelHubInc/vtsacsms.git /opt/vtsa-csms
+sudo install -m 0755 /opt/vtsa-csms/scripts/load-balancer-node.sh /usr/local/sbin/vtsa-lb-node
+sudo install -d -m 0700 /etc/vtsa-csms /var/lib/vtsa-csms/load-balancer
+sudo cp /opt/vtsa-csms/.env.load-balancer.example /etc/vtsa-csms/load-balancer.env
+sudo chmod 600 /etc/vtsa-csms/load-balancer.env
+sudo nano /etc/vtsa-csms/load-balancer.env
+```
+
+Back up the active Nginx virtual host. Replace its existing upstream and HTTP server block with `infra/cluster/nginx-load-balancer.conf.example`; do not enable it alongside a duplicate port-80 virtual host. Initialize `/etc/nginx/vtsa-upstreams/http.conf` with the same two app addresses, then validate and reload:
+
+```bash
+sudo install -d -m 0755 /etc/nginx/vtsa-upstreams
+printf 'server APP_SERVER_1_IP:80 max_fails=1 fail_timeout=5s;\nserver APP_SERVER_2_IP:80 max_fails=1 fail_timeout=5s;\n' | sudo tee /etc/nginx/vtsa-upstreams/http.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Permit the deployment user to run only the root-owned drain controller:
+
+```bash
+echo 'deploy ALL=(root) NOPASSWD: /usr/local/sbin/vtsa-lb-node *' | sudo tee /etc/sudoers.d/vtsa-load-balancer
+sudo chmod 440 /etc/sudoers.d/vtsa-load-balancer
+sudo visudo -cf /etc/sudoers.d/vtsa-load-balancer
+sudo /usr/local/sbin/vtsa-lb-node status app1
+sudo /usr/local/sbin/vtsa-lb-node status app2
+```
+
+At the firewall, allow app-server SSH only from the load balancer. GitHub Actions reaches both nodes through `ProxyJump`; it does not need direct app-server SSH exposure.
+
+## 6. Configure the GitHub production environment
 
 Create repository environment `production`. Add:
 
@@ -134,11 +188,11 @@ Variables:
 - `APP_NODE_1_HOST`: App Server 1 address as reachable from the load balancer.
 - `APP_NODE_2_HOST`: App Server 2 address as reachable from the load balancer.
 - `PRODUCTION_URL`: public HTTPS URL without a trailing slash.
-- `PRODUCTION_DEPLOY_ENABLED=true` — add this last.
+- Repository Actions variable `PRODUCTION_DEPLOY_ENABLED=true` — add this last, after both nodes and Nginx are verified.
 
 Verify every SSH host fingerprint through the Hostinger console before placing it in `PRODUCTION_KNOWN_HOSTS`.
 
-## 6. Deploy
+## 7. Deploy
 
 Every successful `main` CI run publishes commit-addressed images and starts the sequential deployment automatically. To trigger the first deployment after configuration, rerun the latest **Deploy production app nodes** workflow or push a reviewed commit to `main`.
 

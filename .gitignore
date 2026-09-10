@@ -4,6 +4,9 @@
 /.env.app
 /.env.app.*
 !/.env.app.example
+/.env.load-balancer
+/.env.load-balancer.*
+!/.env.load-balancer.example
 /.env.production
 /.env.production.*
 !/.env.production.example

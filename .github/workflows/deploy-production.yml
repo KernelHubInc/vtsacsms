@@ -79,26 +79,54 @@ jobs:
           chmod 0600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
 
       - name: Deploy App Server 1 and migrate
+        id: deploy_app_1
         env:
           DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
           APP_HOST: ${{ vars.APP_NODE_1_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "sudo /usr/local/sbin/vtsa-lb-node drain app1"
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "$DEPLOY_USER@$APP_HOST" \
+            "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA' --migrate"
+
+      - name: Re-enable App Server 1
+        if: always() && steps.deploy_app_1.outcome != 'skipped'
+        env:
+          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
         run: >-
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
-          -J "$DEPLOY_USER@$LOAD_BALANCER_HOST"
-          "$DEPLOY_USER@$APP_HOST"
-          "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA' --migrate"
+          "$DEPLOY_USER@$LOAD_BALANCER_HOST"
+          "sudo /usr/local/sbin/vtsa-lb-node enable app1"
 
       - name: Deploy App Server 2
+        id: deploy_app_2
         env:
           DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
           LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
           APP_HOST: ${{ vars.APP_NODE_2_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "sudo /usr/local/sbin/vtsa-lb-node drain app2"
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes \
+            -J "$DEPLOY_USER@$LOAD_BALANCER_HOST" \
+            "$DEPLOY_USER@$APP_HOST" \
+            "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA'"
+
+      - name: Re-enable App Server 2
+        if: always() && steps.deploy_app_2.outcome != 'skipped'
+        env:
+          DEPLOY_USER: ${{ vars.PRODUCTION_DEPLOY_USER }}
+          LOAD_BALANCER_HOST: ${{ vars.LOAD_BALANCER_HOST }}
         run: >-
           ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes
-          -J "$DEPLOY_USER@$LOAD_BALANCER_HOST"
-          "$DEPLOY_USER@$APP_HOST"
-          "sudo /usr/local/sbin/vtsa-deploy-app 'sha-$RELEASE_SHA'"
+          "$DEPLOY_USER@$LOAD_BALANCER_HOST"
+          "sudo /usr/local/sbin/vtsa-lb-node enable app2"
 
       - name: Verify load-balanced production endpoint
         env:
