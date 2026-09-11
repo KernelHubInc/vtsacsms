@@ -191,6 +191,16 @@ The fourth VPS owns PostgreSQL/PostGIS, two isolated Redis instances, and two is
 
 Use an IP address on an **encrypted private/VPN interface** shared with both app servers. Do not bind these services to `0.0.0.0` or expose them to the public Internet. A provider-private network must not be assumed to be encrypted; confirm that property with the provider or use a VPN such as WireGuard.
 
+For this four-server deployment, configure WireGuard first using [WireGuard network for the VTSA data server](wireguard-data-network.md). That runbook assigns:
+
+```text
+DATA_SERVER_ENCRYPTED_IP=10.77.0.1
+APP_SERVER_1_ENCRYPTED_IP=10.77.0.2
+APP_SERVER_2_ENCRYPTED_IP=10.77.0.3
+```
+
+The addresses are valid only after the WireGuard interface reports successful handshakes. Confirm that `10.77.0.0/24` does not conflict with any existing network before adopting it.
+
 Record these values before continuing:
 
 ```text
@@ -212,13 +222,14 @@ At the Hostinger firewall, allow only:
 
 Do not open MinIO console ports `9001` or `9101`; the Compose file binds them to data-server localhost only. Docker-published ports can bypass ordinary UFW rules, so keep the provider firewall restrictions and the non-public bind address even if UFW is enabled.
 
-From each app server, confirm the encrypted route is reachable before starting the stack:
+From each app server, confirm that the encrypted route uses WireGuard and has a recent handshake before starting the stack:
 
 ```bash
-ping -c 3 DATA_SERVER_ENCRYPTED_IP
+ip route get DATA_SERVER_ENCRYPTED_IP
+sudo wg show wg0
 ```
 
-Stop here if the encrypted/private route is not ready. Firewall allow-listing over a public network does not encrypt database, Redis, or object-storage traffic.
+The route must include `dev wg0`, and `latest handshake` must not be `never`. Stop here if the encrypted/private route is not ready. Firewall allow-listing over a public network does not encrypt database, Redis, or object-storage traffic.
 
 ### 5.2 Install Docker on the data server
 

@@ -131,7 +131,7 @@ The controls in [`tenancy-model.md`](tenancy-model.md) apply at database, applic
 
 ## 10. Data, Cryptography, and Secrets
 
-- Use current supported TLS for data in transit and platform-managed encryption for disks/databases/object storage/backups. Field-level encryption is evaluated for high-risk fields once data inventory is approved.
+- Use current supported TLS for external data in transit and platform-managed encryption for disks/databases/object storage/backups. In the initial Hostinger topology, application-to-data traffic uses the narrow WireGuard overlay defined by ADR 0016; native service TLS remains a valid defense-in-depth addition. Field-level encryption is evaluated for high-risk fields once data inventory is approved.
 - Cryptographic choices use maintained framework/platform libraries; no custom cryptography.
 - Secret references, not values, appear in configuration. Startup validates required secrets without printing them.
 - Keys/secrets have named owner, purpose, environment, creation, rotation, revocation, and incident procedure.
@@ -184,7 +184,7 @@ Mandatory audit categories include authentication/recovery, membership/role, pri
 
 Assumptions: tokenized payment collection, no raw card storage; authenticated TLS external connections; least privilege; synthetic lower-environment data; individual charger enrollment.
 
-Open decisions: target ASVS level and regulatory regimes; identity provider/realms/MFA; required OCPP security profiles, CA and charger certificate enrollment/overlap; secret manager/KMS/service identity; WAF/CDN/SIEM/file scanner; data residency/retention; penetration-test cadence; emergency access; PCI validation scope; mobile attestation/pinning posture; and production network topology.
+Open decisions: target ASVS level and regulatory regimes; identity provider/realms/MFA; required OCPP security profiles, CA and charger certificate enrollment/overlap; secret manager/KMS/service identity; WAF/CDN/SIEM/file scanner; data residency/retention; penetration-test cadence; emergency access; PCI validation scope; mobile attestation/pinning posture; and public-edge network topology.
 
 ## 16. Phase 3 Implementation Status
 
