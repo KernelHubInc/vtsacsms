@@ -11,8 +11,8 @@ x-platform-environment: &platform-environment
   APP_ENV: ${DEPLOY_ENVIRONMENT:-production}
   APP_KEY: ${APP_KEY:?APP_KEY is required}
   APP_DEBUG: "false"
-  APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
-  ASSET_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}
+  APP_URL: ${APP_SCHEME:-https}://${APP_DOMAIN:?APP_DOMAIN is required}
+  ASSET_URL: ${APP_SCHEME:-https}://${APP_DOMAIN:?APP_DOMAIN is required}
   TRUSTED_PROXIES: "*"
   LOG_CHANNEL: stderr-json
   LOG_LEVEL: info
@@ -26,7 +26,7 @@ x-platform-environment: &platform-environment
   CACHE_STORE: redis
   QUEUE_CONNECTION: redis
   SESSION_DRIVER: redis
-  SESSION_SECURE_COOKIE: "true"
+  SESSION_SECURE_COOKIE: "${SESSION_SECURE_COOKIE:-true}"
   SESSION_SAME_SITE: lax
   SESSION_COOKIE: ${SESSION_COOKIE:?SESSION_COOKIE is required}
   REDIS_CLIENT: phpredis

@@ -71,6 +71,22 @@ setting_value() {
     sed -n "s/^$key=//p" "$file" | head -n 1
 }
 
+app_domain="$(setting_value "$env_file" APP_DOMAIN)"
+app_scheme="$(setting_value "$env_file" APP_SCHEME)"
+session_secure_cookie="$(setting_value "$env_file" SESSION_SECURE_COOKIE)"
+[[ "$app_scheme" == "http" || "$app_scheme" == "https" ]] || \
+    fail "$env_file must set APP_SCHEME=http or APP_SCHEME=https."
+if [[ "$app_scheme" == "http" ]]; then
+    [[ "$app_domain" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]+)?$ ]] || \
+        fail "Temporary HTTP bootstrap mode is permitted only for a literal IPv4 address."
+    [[ "$session_secure_cookie" == "false" ]] || \
+        fail "SESSION_SECURE_COOKIE=false is required for temporary HTTP bootstrap mode."
+    printf 'WARNING: deploying temporary HTTP bootstrap mode; do not use real credentials, payments, or chargers.\n' >&2
+else
+    [[ "$session_secure_cookie" == "true" ]] || \
+        fail "SESSION_SECURE_COOKIE=true is required when APP_SCHEME=https."
+fi
+
 if [[ -f "$other_env_file" ]]; then
     for secret_key in APP_KEY DB_PASSWORD REDIS_PASSWORD MINIO_ACCESS_KEY GATEWAY_INTERNAL_API_TOKEN; do
         current_value="$(setting_value "$env_file" "$secret_key")"

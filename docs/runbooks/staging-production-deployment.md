@@ -467,6 +467,46 @@ Copy encrypted database backups and MinIO object backups to storage outside this
 
 ## 6. Configure both load-balancer pools
 
+### Temporary production-IP bootstrap
+
+If the existing load balancer already distributes `http://187.53.134.115` to App Server 1 and App Server 2 on port `80`, it may remain unchanged for the first application smoke test. This temporary path does not provide staging routing, OCPP WebSocket routing, automated node draining, or transport security.
+
+On both app servers, set these exact values in `/etc/vtsa-csms/production.env`:
+
+```dotenv
+APP_DOMAIN=187.53.134.115
+APP_SCHEME=http
+APP_HTTP_PORT=80
+SESSION_SECURE_COOKIE=false
+
+FEATURE_OCPP=false
+FEATURE_REMOTE_CHARGING=false
+FEATURE_REAL_PAYMENTS=false
+FEATURE_SETTLEMENTS=false
+```
+
+Keep `APP_DEBUG=false`. Use synthetic test accounts and data only. Passwords, session cookies, payment operations, and real charger connections must not be used over raw HTTP.
+
+Before deploying, check which process currently owns port `80` on each app server:
+
+```bash
+sudo ss -ltnp | grep -E '(^|:)80[[:space:]]' || true
+sudo systemctl status nginx --no-pager || true
+```
+
+The application container cannot bind port `80` while a host-level Hello World service owns it. Confirm that the reported service is only the disposable Hello World application before stopping it, and replace one app node at a time so the other remains available.
+
+After the production containers are healthy on both nodes, the existing load balancer should serve the application at `http://187.53.134.115`. Verify:
+
+```bash
+curl --fail --show-error http://187.53.134.115/health/ready
+curl --head http://187.53.134.115/
+```
+
+This is a bootstrap exception only. Before UAT or any real account is used, assign production and staging DNS names, install valid TLS certificates on the load balancer, set `APP_SCHEME=https` and `SESSION_SECURE_COOKIE=true`, and complete the environment-specific pool integration below.
+
+### Complete staging, production, and OCPP pool integration
+
 Run on the load balancer after cloning:
 
 ```bash
