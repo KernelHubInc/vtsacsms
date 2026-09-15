@@ -30,7 +30,7 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is not availab
 exec 9>/var/lock/vtsa-csms-app-deploy.lock
 flock -n 9 || fail "Another staging or production deployment is already running on this node."
 
-if grep -Eq 'CHANGE_ME|(^|\.)example\.com($|[[:space:]])' "$env_file"; then
+if grep -Eq '^[A-Z][A-Z0-9_]*=.*(CHANGE_ME|example\.com)' "$env_file"; then
     fail "Replace every CHANGE_ME and example.com value in $env_file."
 fi
 grep -qx "DEPLOY_ENVIRONMENT=$environment" "$env_file" || \

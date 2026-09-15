@@ -487,6 +487,15 @@ FEATURE_SETTLEMENTS=false
 
 Keep `APP_DEBUG=false`. Use synthetic test accounts and data only. Passwords, session cookies, payment operations, and real charger connections must not be used over raw HTTP.
 
+List unresolved assignment names without displaying secret values:
+
+```bash
+sudo awk -F= '/^[A-Z][A-Z0-9_]*=/ && ($0 ~ /CHANGE_ME|example\.com/) { print NR ": " $1 }' \
+  /etc/vtsa-csms/production.env
+```
+
+The command must return no output before deployment. Instructional comments containing `CHANGE_ME` are ignored by the deployment validator.
+
 Before deploying, check which process currently owns port `80` on each app server:
 
 ```bash
