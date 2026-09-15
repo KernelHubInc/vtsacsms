@@ -483,9 +483,17 @@ FEATURE_OCPP=false
 FEATURE_REMOTE_CHARGING=false
 FEATURE_REAL_PAYMENTS=false
 FEATURE_SETTLEMENTS=false
+
+MAIL_MAILER=log
+MAIL_SCHEME=
+MAIL_HOST=
+MAIL_PORT=587
+MAIL_USERNAME=
+MAIL_PASSWORD=
+MAIL_FROM_ADDRESS=no-reply@vtsa.invalid
 ```
 
-Keep `APP_DEBUG=false`. Use synthetic test accounts and data only. Passwords, session cookies, payment operations, and real charger connections must not be used over raw HTTP.
+Keep `APP_DEBUG=false`. The reserved `.invalid` address deliberately prevents delivery; verification and password-reset email workflows are unavailable in this mode. Use synthetic test accounts and data only. Passwords, session cookies, payment operations, and real charger connections must not be used over raw HTTP.
 
 List unresolved assignment names without displaying secret values:
 

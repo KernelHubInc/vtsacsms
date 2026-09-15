@@ -87,6 +87,16 @@ else
         fail "SESSION_SECURE_COOKIE=true is required when APP_SCHEME=https."
 fi
 
+mail_mailer="$(setting_value "$env_file" MAIL_MAILER)"
+[[ "$mail_mailer" == "smtp" || "$mail_mailer" == "log" ]] || \
+    fail "$env_file must set MAIL_MAILER=smtp or MAIL_MAILER=log."
+if [[ "$mail_mailer" == "smtp" ]]; then
+    for mail_key in MAIL_SCHEME MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_ADDRESS; do
+        [[ -n "$(setting_value "$env_file" "$mail_key")" ]] || \
+            fail "$mail_key is required when MAIL_MAILER=smtp."
+    done
+fi
+
 if [[ -f "$other_env_file" ]]; then
     for secret_key in APP_KEY DB_PASSWORD REDIS_PASSWORD MINIO_ACCESS_KEY GATEWAY_INTERNAL_API_TOKEN; do
         current_value="$(setting_value "$env_file" "$secret_key")"
