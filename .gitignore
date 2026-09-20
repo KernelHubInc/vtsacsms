@@ -9,6 +9,12 @@
 /.env.data
 /.env.data.*
 !/.env.data.example
+/.env.database
+/.env.database.*
+!/.env.database.example
+/.env.local-environments
+/.env.local-environments.*
+!/.env.local-environments.example
 /.env.load-balancer
 /.env.load-balancer.*
 !/.env.load-balancer.example

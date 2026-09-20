@@ -28,6 +28,40 @@ void main() {
     },
   );
 
+  test(
+    'staging and production permit HTTP only for local loopback testing',
+    () {
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.staging,
+          Uri.parse('http://localhost:8001'),
+        ),
+        isTrue,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('http://127.0.0.1:8000'),
+        ),
+        isTrue,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('http://api.example.test'),
+        ),
+        isFalse,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('https://api.example.test'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('ULID generator produces sortable public identifier shape', () {
     final ids = UlidGenerator(now: () => DateTime.utc(2026, 7, 23));
     final value = ids.next();

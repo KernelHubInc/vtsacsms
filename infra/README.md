@@ -5,3 +5,9 @@
 Application containers run immutable images rather than host source bind mounts. This avoids severe cross-platform filesystem behavior and makes the local topology match CI. Rebuild `platform` and `worker` after source changes, or use the host-native Laravel development command for a hot-reload loop.
 
 `compose.production.yaml` is the single-VPS production-mode baseline. It uses PHP-FPM behind Nginx and Caddy, automatic TLS, non-public PostgreSQL/Redis/MinIO services, production feature guards, bounded container logs, and persistent volumes. Follow [the Hostinger deployment runbook](../docs/runbooks/hostinger-vps-deployment.md); its documented sizing, monitoring, off-host backup, and high-availability decisions remain open.
+
+`database/compose.yaml` is the PostgreSQL/PostGIS-only stack for the dedicated
+data server. It provisions `vtsa_production` and `vtsa_staging` for the shared
+`vtsa_app` login. `local/compose.environments.yaml` connects to that database
+network and exposes isolated local production and staging web/mobile surfaces.
+Follow [the PostgreSQL environments runbook](../docs/runbooks/postgresql-environments.md).

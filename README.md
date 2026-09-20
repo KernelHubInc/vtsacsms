@@ -16,6 +16,18 @@ powershell -ExecutionPolicy Bypass -File scripts/demo-up.ps1
 
 Then open <http://localhost:8000/charging-map>, <http://localhost:8000/admin>, <http://localhost:8000/operator>, or <http://localhost:3000>. All local demo accounts use `VstaDemo!2026`; see [docs/local/DEMO-CREDENTIALS.md](docs/local/DEMO-CREDENTIALS.md).
 
+To run isolated local production and staging databases plus separate Laravel and
+Flutter Web surfaces, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/local-environments-up.ps1 -Seed
+```
+
+Production uses web/mobile ports `8000`/`3000`; staging uses `8001`/`3001`.
+The shared local Adminer database UI is available at <http://localhost:8081>.
+Dedicated database-server deployment is documented in
+[docs/runbooks/postgresql-environments.md](docs/runbooks/postgresql-environments.md).
+
 ```bash
 make demo-status
 make demo-verify

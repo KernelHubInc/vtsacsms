@@ -42,7 +42,7 @@ final class AppEnvironment {
     if (baseUri == null || !baseUri.hasScheme || !baseUri.hasAuthority) {
       throw StateError('API_BASE_URL must be an absolute URL.');
     }
-    if (name != AppEnvironmentName.local && baseUri.scheme != 'https') {
+    if (!allowsApiUri(name, baseUri)) {
       throw StateError('Non-local API_BASE_URL values must use HTTPS.');
     }
 
@@ -71,6 +71,18 @@ final class AppEnvironment {
     }
 
     return isWeb ? 'http://localhost:8000' : 'http://10.0.2.2:8000';
+  }
+
+  @visibleForTesting
+  static bool allowsApiUri(AppEnvironmentName environment, Uri uri) {
+    if (uri.scheme == 'https' || environment == AppEnvironmentName.local) {
+      return true;
+    }
+
+    return uri.scheme == 'http' &&
+        (uri.host == 'localhost' ||
+            uri.host == '127.0.0.1' ||
+            uri.host == '::1');
   }
 
   AppEnvironment withMaps(MapConfiguration configuration) => AppEnvironment(

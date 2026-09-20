@@ -655,6 +655,22 @@ The scripts reject concurrent deployments, placeholders, incorrect environment f
 
 ## 10. Verification and recovery
 
+If a deployment stops at `Permission denied (publickey)`, validate the server's
+repository deploy key and configure the existing checkout once:
+
+```bash
+sudo ssh-keygen -y -f /root/.ssh/vtsa_repository_read >/dev/null
+sudo env GIT_SSH_COMMAND='ssh -i /root/.ssh/vtsa_repository_read -o IdentitiesOnly=yes -o BatchMode=yes' \
+  git ls-remote git@github.com:KernelHubInc/vtsacsms.git HEAD
+sudo git -C /opt/vtsa-csms config core.sshCommand \
+  'ssh -i /root/.ssh/vtsa_repository_read -o IdentitiesOnly=yes -o BatchMode=yes'
+```
+
+The `ls-remote` command must print a commit hash. If it does not, add the contents
+of `/root/.ssh/vtsa_repository_read.pub` as a read-only deploy key in the GitHub
+repository before retrying. Current deployment scripts set this SSH command
+themselves; the checkout configuration also repairs older installed script versions.
+
 ```bash
 sudo docker compose --env-file /etc/vtsa-csms/staging.env \
   -f /opt/vtsa-csms/infra/cluster/compose.app.yaml ps

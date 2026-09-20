@@ -5,11 +5,12 @@ COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 COPY . .
 ARG API_BASE_URL=http://localhost:8000
+ARG APP_ENVIRONMENT=local
 ARG DEFAULT_TENANT_ID=01J0000000VTSADEMA00000000
 ARG MAP_PROVIDER=openstreetmap
 RUN flutter build web --release \
     --no-web-resources-cdn \
-    --dart-define=APP_ENVIRONMENT=local \
+    --dart-define=APP_ENVIRONMENT=${APP_ENVIRONMENT} \
     --dart-define=API_BASE_URL=${API_BASE_URL} \
     --dart-define=DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID} \
     --dart-define=MAP_PROVIDER=${MAP_PROVIDER}
