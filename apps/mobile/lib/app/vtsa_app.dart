@@ -38,7 +38,10 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed &&
+        !widget.dependencies.auth.needsEmailVerification &&
+        (widget.dependencies.featureFlags.remoteCharging ||
+            widget.dependencies.featureFlags.simulatedCharging)) {
       unawaited(widget.dependencies.charging.onResumed());
     }
   }

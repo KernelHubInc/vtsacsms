@@ -1,3 +1,4 @@
+# Select the deployment values with --env-file .env or --env-file .env.staging.
 name: ${COMPOSE_PROJECT_NAME:-vtsa-csms}
 
 services:
@@ -19,6 +20,8 @@ services:
 
   redis:
     image: redis:8.2-alpine
+    ports:
+      - "${REDIS_BIND_ADDRESS:-127.0.0.1}:${REDIS_PUBLIC_PORT:-6379}:6379"
     command:
       - redis-server
       - --appendonly
@@ -27,6 +30,8 @@ services:
       - ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
     healthcheck:
       test:
        - CMD-SHELL
@@ -95,7 +100,7 @@ services:
       APP_DEBUG: "${APP_DEBUG:-true}"
       APP_URL: ${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}
       ASSET_URL: ${ASSET_URL:-${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-*}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
       LOG_CHANNEL: ${LOG_CHANNEL:-stderr-json}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       DB_CONNECTION: ${DB_CONNECTION:-pgsql}
@@ -119,6 +124,7 @@ services:
       REDIS_CACHE_DB: ${REDIS_CACHE_DB:-1}
       REDIS_PREFIX: ${REDIS_PREFIX:-vtsa:local:}
       MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_URL: ${MAIL_URL:-}
       MAIL_SCHEME: ${MAIL_SCHEME:-}
       MAIL_HOST: ${MAIL_HOST:-mailpit}
       MAIL_PORT: ${MAIL_PORT:-1025}
@@ -173,6 +179,10 @@ services:
     ports:
       - "${APP_HTTP_BIND_ADDRESS:-0.0.0.0}:${APP_HTTP_PORT:-8000}:8000"
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
       mailpit:
@@ -273,7 +283,7 @@ services:
       context: ../apps/mobile
       dockerfile: Dockerfile.web
       args:
-        API_BASE_URL: ${MOBILE_API_BASE_URL:-${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}/api}
+        API_BASE_URL: ${MOBILE_API_BASE_URL:-${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}}
         APP_ENVIRONMENT: ${MOBILE_APP_ENVIRONMENT:-${APP_ENV:-${DEPLOY_ENVIRONMENT:-local}}}
         DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-01J0000000VTSADEMA00000000}
         MAP_PROVIDER: ${MAP_PROVIDER_MOBILE:-openstreetmap}

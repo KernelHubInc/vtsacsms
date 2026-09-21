@@ -42,9 +42,8 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     if (protected && dependencies.auth.status == AuthStatus.guest) {
       return '/login';
     }
-    if (state.matchedLocation == '/login' &&
-        dependencies.auth.status == AuthStatus.authenticated) {
-      return '/account';
+    if (protected && dependencies.auth.needsEmailVerification) {
+      return '/verify-email';
     }
     return null;
   },

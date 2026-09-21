@@ -7,6 +7,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -21,6 +22,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (InvalidSignatureException $exception, Request $request) {
+            if (! $request->routeIs('api.v1.auth.email.verify')) {
+                return null;
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['error' => [
+                    'code' => 'invalid_verification_link',
+                    'message' => 'The verification link is invalid or has expired.',
+                    'correlation_id' => $request->attributes->get('correlation_id'),
+                ]], 403);
+            }
+
+            return response()->view('auth.email-verification', ['verified' => false], 403)
+                ->header('Cache-Control', 'no-store')->header('Referrer-Policy', 'no-referrer');
+        });
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
             if ($request->attributes->has('request_id')) {
                 $response->headers->set('X-Request-ID', (string) $request->attributes->get('request_id'));

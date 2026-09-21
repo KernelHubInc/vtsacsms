@@ -1,0 +1,10 @@
+{
+  "APP_ENVIRONMENT": "staging",
+  "API_BASE_URL": "https://staging.evcspowersolutions.com",
+  "DEFAULT_TENANT_ID": "01J0000000VTSADEMA00000000",
+  "FEATURE_DEMO_MODE": "true",
+  "FEATURE_REMOTE_CHARGING": "false",
+  "FEATURE_REAL_PAYMENTS": "false",
+  "FEATURE_SIMULATED_CHARGING": "false",
+  "FEATURE_SIMULATED_PAYMENTS": "false"
+}

@@ -160,11 +160,13 @@ final class AppDependencies {
     ]);
     await auth.restore();
     await favorites.load();
-    if (auth.status == AuthStatus.authenticated) {
+    if (auth.status == AuthStatus.authenticated &&
+        !auth.needsEmailVerification) {
       await Future.wait([
         vehicles.load(),
         pushRegistration.register(),
-        charging.restoreAuthoritativeSession(),
+        if (featureFlags.remoteCharging || featureFlags.simulatedCharging)
+          charging.restoreAuthoritativeSession(),
       ]);
     }
   }

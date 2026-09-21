@@ -1,6 +1,9 @@
 /.cache/
 /backups/
 /.env
+/.env.staging
+/.env.staging.*
+!/.env.staging.example
 /.env.app
 /.env.app.*
 !/.env.app.example

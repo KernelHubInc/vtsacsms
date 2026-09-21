@@ -4,6 +4,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.dependencies, super.key});
@@ -109,11 +110,17 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted || !signedIn) {
       return;
     }
+    if (widget.dependencies.auth.needsEmailVerification) {
+      context.go('/verify-email');
+      return;
+    }
     await Future.wait([
       widget.dependencies.favorites.load(),
       widget.dependencies.vehicles.load(),
       widget.dependencies.pushRegistration.register(),
-      widget.dependencies.charging.restoreAuthoritativeSession(),
+      if (widget.dependencies.featureFlags.remoteCharging ||
+          widget.dependencies.featureFlags.simulatedCharging)
+        widget.dependencies.charging.restoreAuthoritativeSession(),
     ]);
     if (mounted) {
       context.go('/account');
@@ -303,26 +310,65 @@ class EmailVerificationScreen extends StatelessWidget {
     title: 'One tap from verified.',
     intro:
         'Open the signed link sent to ${email ?? dependencies.auth.user?.email ?? 'your email address'}. Return here when verification is complete.',
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (dependencies.auth.status.name == 'authenticated')
-          VtsaButton(
-            label: 'Resend verification email',
-            onPressed: () async {
-              final sent = await dependencies.auth.resendVerification();
-              if (context.mounted && sent) {
-                showVtsaToast(context, message: 'Verification email sent.');
-              }
-            },
-          ),
-        const SizedBox(height: VtsaSpacing.sm),
-        VtsaButton(
-          label: 'Continue',
-          variant: VtsaButtonVariant.secondary,
-          onPressed: () => context.go('/explore'),
-        ),
-      ],
+    child: AnimatedBuilder(
+      animation: dependencies.auth,
+      builder: (context, _) {
+        final auth = dependencies.auth;
+        final signedIn = auth.status == AuthStatus.authenticated;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (auth.failure != null) ...[
+              VtsaErrorState(
+                title: 'Verification needed',
+                description: auth.failure!.message,
+                correlationId: auth.failure!.correlationId,
+              ),
+              const SizedBox(height: VtsaSpacing.md),
+            ],
+            if (signedIn) ...[
+              VtsaButton(
+                label: "I've verified my email",
+                loading: auth.isBusy,
+                onPressed: () async {
+                  final verified = await auth.refreshVerification();
+                  if (!verified || !context.mounted) return;
+                  await Future.wait([
+                    dependencies.favorites.load(),
+                    dependencies.vehicles.load(),
+                  ]);
+                  if (context.mounted) context.go('/account');
+                },
+              ),
+              const SizedBox(height: VtsaSpacing.sm),
+              VtsaButton(
+                label: 'Resend verification email',
+                variant: VtsaButtonVariant.secondary,
+                onPressed: auth.isBusy
+                    ? null
+                    : () async {
+                        final sent = await auth.resendVerification();
+                        if (context.mounted && sent) {
+                          showVtsaToast(
+                            context,
+                            message: 'Verification email sent.',
+                          );
+                        }
+                      },
+              ),
+            ] else ...[
+              const Text(
+                'Sign in after verifying your email. You can also sign in to request a new link.',
+              ),
+              const SizedBox(height: VtsaSpacing.md),
+              VtsaButton(
+                label: 'Sign in to continue',
+                onPressed: () => context.go('/login'),
+              ),
+            ],
+          ],
+        );
+      },
     ),
   );
 }

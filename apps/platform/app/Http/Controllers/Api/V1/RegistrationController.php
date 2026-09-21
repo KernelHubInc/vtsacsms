@@ -19,7 +19,7 @@ final class RegistrationController extends Controller
     public function __invoke(RegisterRequest $request, FeatureFlags $flags): JsonResponse
     {
         abort_unless(
-            app()->environment(['local', 'development', 'testing', 'staging', 'demo'])
+            app()->environment(['local', 'development', 'testing', 'demo', 'staging'])
             && $flags->enabled(Feature::DemoMode)
             && $request->validated('tenant_id') === DemoEnvironment::TENANT_ID,
             404,
@@ -66,7 +66,7 @@ final class RegistrationController extends Controller
         $user->sendEmailVerificationNotification();
 
         return response()->json(['data' => [
-            'message' => 'Registration complete. Check Mailpit to verify the local demo account.',
+            'message' => 'Registration complete. Check your email to verify your account.',
         ]], 201);
     }
 }

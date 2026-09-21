@@ -55,12 +55,23 @@ final class MobileRegistrationTest extends TestCase
         ]);
         Notification::assertSentTo($user, VerifyEmailNotification::class);
 
+        $login = $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email, 'password' => 'SafePassword!2026',
+            'tenant_id' => DemoEnvironment::TENANT_ID, 'device_name' => 'Staging flow test',
+        ])->assertOk()->assertJsonPath('data.user.email_verified', false);
+        $token = (string) $login->json('data.token');
+        $this->withToken($token)->getJson('/api/v1/me')->assertForbidden()
+            ->assertJsonPath('error.code', 'email_unverified');
+        $this->postJson('/api/v1/auth/email/verification-notification')->assertAccepted();
+        $this->flushHeaders();
+
         $verificationUrl = URL::temporarySignedRoute(
             'api.v1.auth.email.verify',
             now('UTC')->addMinutes(10),
             ['user' => $user->public_id, 'hash' => sha1($user->email)],
         );
-        $this->getJson($verificationUrl)->assertOk()->assertJsonPath('data.email_verified', true);
+        $this->get($verificationUrl, ['Accept' => 'text/html'])->assertOk()->assertSee('Email verified');
+        $this->withToken($token)->getJson('/api/v1/me')->assertOk();
 
         $this->assertNotNull($user->fresh()?->email_verified_at);
         $this->assertDatabaseHas('audit_events', [

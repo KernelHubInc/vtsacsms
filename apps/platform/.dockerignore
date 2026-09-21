@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+bootstrap/cache/*.php
 .git
 node_modules
 storage/logs/*
