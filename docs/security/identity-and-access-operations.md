@@ -11,6 +11,14 @@ Tenant operators suspend memberships. Platform-authorized workflows may suspend 
 
 Email verification URLs are signed, expire after 60 minutes, and identify users by public ULID rather than the internal numeric key. Password-reset responses never disclose whether an email exists.
 
+Email links may be opened in a logged-out browser: signature validation and
+throttling protect the GET route, while resend requires a tenant-bound Sanctum
+token. Identity verifies the email hash, enabled account and an active membership
+in an active tenant. Verification and its audit commit together; repeat clicks
+are idempotent. Browser requests receive a confirmation page, while JSON clients
+retain `data.email_verified`. Expired or altered links return 403. See the
+[mobile staging runbook](../runbooks/mobile-staging-demo.md) for proxy and deployment checks.
+
 ## Mobile Number Verification
 
 `MobileVerificationSender` is the provider boundary. Local and test environments bind `FakeLocalMobileVerificationSender`, which performs no external I/O and never logs numbers or codes. The fake verification code is `000000`; it must not be enabled in production. Challenges expire in ten minutes, allow at most five attempts, and store only hashes of the code and normalized E.164 number. The number itself uses Laravel's encrypted cast.

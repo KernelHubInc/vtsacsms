@@ -20,11 +20,14 @@ final class AuthController extends ChangeNotifier {
   UserProfile? _user;
   AppFailure? _failure;
   bool _busy = false;
+  bool _verificationRequired = false;
 
   AuthStatus get status => _status;
   UserProfile? get user => _user;
   AppFailure? get failure => _failure;
   bool get isBusy => _busy;
+  bool get needsEmailVerification =>
+      _user?.emailVerified == false || _verificationRequired;
 
   Future<void> restore() async {
     if (await _tokens.read() == null) {
@@ -34,9 +37,14 @@ final class AuthController extends ChangeNotifier {
     }
     try {
       _user = await _repository.currentUser();
+      _verificationRequired = !_user!.emailVerified;
       _status = AuthStatus.authenticated;
     } on AppFailure catch (failure) {
-      if (failure.kind == FailureKind.offline ||
+      if (failure.code == 'email_unverified') {
+        _verificationRequired = true;
+        _failure = failure;
+        _status = AuthStatus.authenticated;
+      } else if (failure.kind == FailureKind.offline ||
           failure.kind == FailureKind.timeout) {
         _status = AuthStatus.authenticated;
       } else {
@@ -53,6 +61,7 @@ final class AuthController extends ChangeNotifier {
       final result = await _repository.login(email: email, password: password);
       await _tokens.write(result.tokens);
       _user = result.user;
+      _verificationRequired = !_user!.emailVerified;
       _status = AuthStatus.authenticated;
       return true;
     } on AppFailure catch (failure) {
@@ -109,6 +118,34 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<bool> refreshVerification() async {
+    _setBusy(true);
+    try {
+      _user = await _repository.currentUser();
+      _verificationRequired = !_user!.emailVerified;
+      if (_verificationRequired) {
+        _failure = const AppFailure(
+          kind: FailureKind.forbidden,
+          code: 'email_unverified',
+          message: 'Email verification is required.',
+        );
+      }
+      return _user!.emailVerified;
+    } on AppFailure catch (failure) {
+      _failure = failure;
+      if (failure.code == 'email_unverified') _verificationRequired = true;
+      if (failure.kind == FailureKind.unauthenticated) {
+        await _tokens.clear();
+        _user = null;
+        _verificationRequired = false;
+        _status = AuthStatus.guest;
+      }
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   Future<void> logout() async {
     _setBusy(true);
     try {
@@ -116,6 +153,7 @@ final class AuthController extends ChangeNotifier {
     } finally {
       await _tokens.clear();
       _user = null;
+      _verificationRequired = false;
       _status = AuthStatus.guest;
       _setBusy(false);
     }

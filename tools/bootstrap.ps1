@@ -57,7 +57,7 @@ if ($Force -or -not (Test-Path $platformEnvironment)) {
     Copy-Item $platformTemplate $platformEnvironment -Force
 }
 
-foreach ($optionalName in @('GOOGLE_MAPS_BROWSER_API_KEY', 'GOOGLE_MAPS_MAP_ID', 'GOOGLE_MAPS_MOBILE_READY')) {
+foreach ($optionalName in @('GOOGLE_MAPS_BROWSER_API_KEY', 'GOOGLE_MAPS_MAP_ID', 'GOOGLE_MAPS_MOBILE_READY', 'REDIS_PASSWORD')) {
     $rootContent = [IO.File]::ReadAllText($rootEnvironment)
     if (-not [regex]::IsMatch($rootContent, "(?m)^$([regex]::Escape($optionalName))=")) {
         Set-EnvironmentValue $rootEnvironment $optionalName ''
@@ -67,6 +67,7 @@ foreach ($optionalName in @('GOOGLE_MAPS_BROWSER_API_KEY', 'GOOGLE_MAPS_MAP_ID',
 $generated = [ordered]@{
     APP_KEY = "base64:$(New-RandomValue)"
     POSTGRES_PASSWORD = New-RandomValue
+    REDIS_PASSWORD = New-RandomValue
     MINIO_ROOT_PASSWORD = New-RandomValue
 }
 
@@ -81,6 +82,7 @@ $rootAppKey = Get-EnvironmentValue $rootEnvironment 'APP_KEY'
 $postgresDatabase = Get-EnvironmentValue $rootEnvironment 'POSTGRES_DB'
 $postgresUser = Get-EnvironmentValue $rootEnvironment 'POSTGRES_USER'
 $postgresPassword = Get-EnvironmentValue $rootEnvironment 'POSTGRES_PASSWORD'
+$redisPassword = Get-EnvironmentValue $rootEnvironment 'REDIS_PASSWORD'
 $minioUser = Get-EnvironmentValue $rootEnvironment 'MINIO_ROOT_USER'
 $minioPassword = Get-EnvironmentValue $rootEnvironment 'MINIO_ROOT_PASSWORD'
 $minioBucket = Get-EnvironmentValue $rootEnvironment 'MINIO_BUCKET'
@@ -95,6 +97,7 @@ Set-EnvironmentValue $platformEnvironment 'DB_DATABASE' $postgresDatabase
 Set-EnvironmentValue $platformEnvironment 'DB_USERNAME' $postgresUser
 Set-EnvironmentValue $platformEnvironment 'DB_PASSWORD' $postgresPassword
 Set-EnvironmentValue $platformEnvironment 'REDIS_HOST' '127.0.0.1'
+Set-EnvironmentValue $platformEnvironment 'REDIS_PASSWORD' $redisPassword
 Set-EnvironmentValue $platformEnvironment 'MAIL_HOST' '127.0.0.1'
 Set-EnvironmentValue $platformEnvironment 'AWS_ACCESS_KEY_ID' $minioUser
 Set-EnvironmentValue $platformEnvironment 'AWS_SECRET_ACCESS_KEY' $minioPassword

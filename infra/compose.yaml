@@ -1,14 +1,15 @@
+# Select the deployment values with --env-file .env or --env-file .env.staging.
 name: ${COMPOSE_PROJECT_NAME:-vtsa-csms}
 
 services:
   postgres:
     image: postgis/postgis:18-3.6
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Run tools/bootstrap.ps1}
-      POSTGRES_USER: ${POSTGRES_USER:?Run tools/bootstrap.ps1}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run tools/bootstrap.ps1}
+      POSTGRES_DB: ${POSTGRES_DB:-${DB_DATABASE:-vtsa}}
+      POSTGRES_USER: ${POSTGRES_USER:-${DB_USERNAME:-vtsa}}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-${DB_PASSWORD:?Set POSTGRES_PASSWORD or DB_PASSWORD}}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLIC_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -19,26 +20,35 @@ services:
 
   redis:
     image: redis:8.2-alpine
-    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "${REDIS_BIND_ADDRESS:-127.0.0.1}:${REDIS_PUBLIC_PORT:-6379}:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+       - CMD-SHELL
+       - redis-cli -a "$$REDIS_PASSWORD" ping
       interval: 5s
       timeout: 3s
       retries: 10
 
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:?Set MINIO_ROOT_USER or MINIO_ACCESS_KEY}}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:?Set MINIO_ROOT_PASSWORD or MINIO_SECRET_KEY}}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_BIND_ADDRESS:-127.0.0.1}:${MINIO_API_PUBLIC_PORT:-9000}:9000"
+      - "${MINIO_BIND_ADDRESS:-127.0.0.1}:${MINIO_CONSOLE_PUBLIC_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -48,14 +58,14 @@ services:
       retries: 10
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
-      MINIO_BUCKET: ${MINIO_BUCKET:?Run tools/bootstrap.ps1}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:?Set MINIO_ROOT_USER or MINIO_ACCESS_KEY}}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:?Set MINIO_ROOT_PASSWORD or MINIO_SECRET_KEY}}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Set MINIO_BUCKET}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -69,8 +79,8 @@ services:
     environment:
       MP_DATABASE: /data/mailpit.db
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_SMTP_PUBLIC_PORT:-1025}:1025"
+      - "${MAILPIT_BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PUBLIC_PORT:-8025}:8025"
     volumes:
       - mailpit_data:/data
     healthcheck:
@@ -84,34 +94,52 @@ services:
       context: ../apps/platform
       target: development
     environment: &platform-environment
-      APP_NAME: Power Solutions
-      APP_ENV: local
-      APP_KEY: ${APP_KEY:?Run tools/bootstrap.ps1}
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      LOG_CHANNEL: stderr-json
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: ${POSTGRES_DB:?Run tools/bootstrap.ps1}
-      DB_USERNAME: ${POSTGRES_USER:?Run tools/bootstrap.ps1}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Run tools/bootstrap.ps1}
-      DB_SSLMODE: disable
-      CACHE_STORE: redis
-      QUEUE_CONNECTION: redis
-      SESSION_DRIVER: redis
-      REDIS_CLIENT: phpredis
-      REDIS_HOST: redis
-      MAIL_MAILER: smtp
-      MAIL_HOST: mailpit
-      MAIL_PORT: 1025
-      FILESYSTEM_DISK: s3
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Run tools/bootstrap.ps1}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Run tools/bootstrap.ps1}
-      AWS_DEFAULT_REGION: us-east-1
-      AWS_BUCKET: ${MINIO_BUCKET:?Run tools/bootstrap.ps1}
-      AWS_ENDPOINT: http://minio:9000
-      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      APP_NAME: ${APP_NAME:-Power Solutions}
+      APP_ENV: ${APP_ENV:-${DEPLOY_ENVIRONMENT:-local}}
+      APP_KEY: ${APP_KEY:?Set APP_KEY}
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}
+      ASSET_URL: ${ASSET_URL:-${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr-json}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-${POSTGRES_DB:-vtsa}}
+      DB_USERNAME: ${DB_USERNAME:-${POSTGRES_USER:-vtsa}}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:?Set DB_PASSWORD or POSTGRES_PASSWORD}}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      SESSION_COOKIE: ${SESSION_COOKIE:-vtsa_session}
+      SESSION_SECURE_COOKIE: "${SESSION_SECURE_COOKIE:-false}"
+      SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
+      REDIS_CLIENT: ${REDIS_CLIENT:-phpredis}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_CACHE_DB: ${REDIS_CACHE_DB:-1}
+      REDIS_PREFIX: ${REDIS_PREFIX:-vtsa:local:}
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_URL: ${MAIL_URL:-}
+      MAIL_SCHEME: ${MAIL_SCHEME:-}
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@vtsa.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-VTSA CSMS}
+      FILESYSTEM_DISK: ${FILESYSTEM_DISK:-s3}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-${MINIO_ACCESS_KEY:-${MINIO_ROOT_USER:?Set AWS_ACCESS_KEY_ID, MINIO_ACCESS_KEY, or MINIO_ROOT_USER}}}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:?Set AWS_SECRET_ACCESS_KEY, MINIO_SECRET_KEY, or MINIO_ROOT_PASSWORD}}}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_BUCKET: ${AWS_BUCKET:-${MINIO_BUCKET:?Set AWS_BUCKET or MINIO_BUCKET}}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-${MINIO_ENDPOINT:-http://minio:9000}}
+      AWS_URL: ${AWS_URL:-${MINIO_PUBLIC_URL:-}}
+      AWS_USE_PATH_STYLE_ENDPOINT: "${AWS_USE_PATH_STYLE_ENDPOINT:-true}"
       GOOGLE_MAPS_BROWSER_API_KEY: ${GOOGLE_MAPS_BROWSER_API_KEY:-}
       GOOGLE_MAPS_MAP_ID: ${GOOGLE_MAPS_MAP_ID:-}
       GOOGLE_MAPS_MOBILE_READY: ${GOOGLE_MAPS_MOBILE_READY:-false}
@@ -140,16 +168,16 @@ services:
       FEATURE_INVENTORY: ${FEATURE_INVENTORY:-true}
       FEATURE_MAINTENANCE: ${FEATURE_MAINTENANCE:-true}
       FEATURE_PROCUREMENT: ${FEATURE_PROCUREMENT:-true}
-      FEATURE_DEMO_MODE: ${FEATURE_DEMO_MODE:-true}
+      FEATURE_DEMO_MODE: ${FEATURE_DEMO_MODE:-false}
       FEATURE_SIMULATED_CHARGING: ${FEATURE_SIMULATED_CHARGING:-false}
       FEATURE_SIMULATED_PAYMENTS: ${FEATURE_SIMULATED_PAYMENTS:-false}
-      OCPP_GATEWAY_INTERNAL_URL: http://ocpp-gateway:9000
+      OCPP_GATEWAY_INTERNAL_URL: ${OCPP_GATEWAY_INTERNAL_URL:-http://ocpp-gateway:9000}
       OCPP_GATEWAY_INTERNAL_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:-}
-      OCPP_GATEWAY_COMMAND_TIMEOUT_SECONDS: 20
-      CHARGING_START_EXPIRY_SECONDS: 120
+      OCPP_GATEWAY_COMMAND_TIMEOUT_SECONDS: ${OCPP_GATEWAY_COMMAND_TIMEOUT_SECONDS:-20}
+      CHARGING_START_EXPIRY_SECONDS: ${CHARGING_START_EXPIRY_SECONDS:-120}
       INTEGRATION_EVENT_STREAM: ${INTEGRATION_EVENT_STREAM:-vtsa:local:platform:events:v1}
     ports:
-      - "8000:8000"
+      - "${APP_HTTP_BIND_ADDRESS:-0.0.0.0}:${APP_HTTP_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,20 +259,20 @@ services:
     build:
       context: ../services/ocpp-gateway
     environment:
-      GATEWAY_HOST: 0.0.0.0
-      GATEWAY_PORT: 9000
-      GATEWAY_LOG_LEVEL: INFO
-      GATEWAY_ENVIRONMENT: local
-      GATEWAY_SUPPORTED_SUBPROTOCOLS: ocpp2.0.1,ocpp1.6
-      GATEWAY_REDIS_URL: redis://redis:6379/0
+      GATEWAY_HOST: ${GATEWAY_HOST:-0.0.0.0}
+      GATEWAY_PORT: ${GATEWAY_PORT:-9000}
+      GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-INFO}
+      GATEWAY_ENVIRONMENT: ${GATEWAY_ENVIRONMENT:-${APP_ENV:-${DEPLOY_ENVIRONMENT:-local}}}
+      GATEWAY_SUPPORTED_SUBPROTOCOLS: ${GATEWAY_SUPPORTED_SUBPROTOCOLS:-ocpp2.0.1,ocpp1.6}
+      GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:-redis://redis:6379/0}
       GATEWAY_INTERNAL_API_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:-}
-      OCPP_CHARGER_REGISTRY_JSON: "{}"
+      OCPP_CHARGER_REGISTRY_JSON: ${OCPP_CHARGER_REGISTRY_JSON:-{}}
       OCPP_ALLOWED_COMMANDS: ${OCPP_ALLOWED_COMMANDS:-TriggerMessage,RemoteStartTransaction,RemoteStopTransaction,RequestStartTransaction,RequestStopTransaction}
       OCPP_DATA_TRANSFER_ALLOWLIST: ${OCPP_DATA_TRANSFER_ALLOWLIST:-}
-      OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "true"
-      OCPP_REQUIRE_TLS: "false"
+      OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "${OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED:-true}"
+      OCPP_REQUIRE_TLS: "${OCPP_REQUIRE_TLS:-false}"
     ports:
-      - "9002:9000"
+      - "${OCPP_PUBLIC_BIND_ADDRESS:-0.0.0.0}:${OCPP_PUBLIC_PORT:-9002}:${GATEWAY_PORT:-9000}"
     depends_on:
       redis:
         condition: service_healthy
@@ -255,11 +283,12 @@ services:
       context: ../apps/mobile
       dockerfile: Dockerfile.web
       args:
-        API_BASE_URL: http://localhost:8000
-        DEFAULT_TENANT_ID: 01J0000000VTSADEMA00000000
+        API_BASE_URL: ${MOBILE_API_BASE_URL:-${APP_URL:-${APP_SCHEME:-http}://${APP_DOMAIN:-localhost:8000}}}
+        APP_ENVIRONMENT: ${MOBILE_APP_ENVIRONMENT:-${APP_ENV:-${DEPLOY_ENVIRONMENT:-local}}}
+        DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-01J0000000VTSADEMA00000000}
         MAP_PROVIDER: ${MAP_PROVIDER_MOBILE:-openstreetmap}
     ports:
-      - "3000:80"
+      - "${MOBILE_WEB_BIND_ADDRESS:-0.0.0.0}:${MOBILE_WEB_PORT:-3000}:80"
 
   flutter-check:
     profiles: ["quality"]
