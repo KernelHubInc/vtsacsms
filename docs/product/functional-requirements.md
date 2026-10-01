@@ -238,4 +238,21 @@
 
 ## 23. Traceability and Deferred Requirements
 
+### KYC increment (2026-09-23)
+
+- **KYC-001:** Collect versioned explicit consent before identity evidence; support cancellation and finite configurable erasure.
+- **KYC-002:** Expose authenticated tenant/subject-owned KYC start, upload, submit, status and resubmission APIs.
+- **KYC-003:** Process validated private images asynchronously in the isolated Python service; OCR alone must never approve.
+- **KYC-004:** Authenticate internal requests/callbacks with directional signatures, timestamps and replay protection; deduplicate jobs/events and reconcile missed delivery.
+- **KYC-005:** Integrate Power Solutions Flutter consent/capture/preview/status flows with restart, upload failure and permission-denial handling.
+- **KYC-006:** Restrict admin review and sensitive access through tenant-wide permissions, mask identity numbers and audit access/decisions.
+- **KYC-007:** Preserve existing features by default; enforce explicitly enabled KYC policies in owning server workflows.
+- **KYC-008:** Fail closed on production mocks/unconfigured assurance; provide synthetic tests, Docker isolation and reviewed staging configuration.
+- **KYC-009:** Provide separate private production/staging deployment commands, environment-specific durable stores and credentials, and read-only preflight checks. See [Hostinger KYC deployment](../runbooks/kyc-hostinger.md).
+- **KYC-010:** Allow authorized tenant administrators to select manual or automatic review for new attempts, recording and auditing the chosen policy. Automatic approval requires all mandatory assurance checks and an accepted deployment; unavailable checks must not approve.
+- **KYC-011:** Keep face comparison and presentation-attack inference self-hosted with pinned model artifacts and no persisted face templates. The owner-selected `optical_v1` profile uses PH National ID, driver's license and passport optical checks, matching personal details, face comparison and live camera challenges; it does not authenticate government issuance. Existing issuer-profile attempts retain their stronger requirement. See ADR 0019.
+- **KYC-012:** Bind live camera challenges to the tenant/subject/attempt, issue expiring single-use server prompts, reject frame replay and changed identities, handle interruption/retry safely, and erase temporary capture state. Automatic production approval requires supported-device and spoof evaluation with reviewed thresholds, separate from synthetic protocol tests.
+
+Implementation/test mapping and operational constraints: [KYC runbook](../runbooks/kyc.md). No legal compliance or certified liveness claim is implied.
+
 Before implementation, each delivery increment must map applicable `FR-*` requirements to user stories, authorization rules, API/event schemas, migrations, threat cases, automated tests, operational dashboards, and an acceptance owner. Deferred/open items remain non-requirements until approved in the PRD or an ADR.

@@ -20,6 +20,9 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0014](0014-use-configurable-map-provider-adapters.md) | Use configurable OpenStreetMap and Google adapters across web and Flutter | Accepted |
 | [0015](0015-promote-isolated-staging-and-production-stacks.md) | Promote isolated staging and production stacks across two app nodes | Accepted |
 | [0016](0016-use-wireguard-for-app-to-data-transport.md) | Use WireGuard for application-to-data transport | Accepted |
+| [0017](0017-isolate-kyc-evidence-processing.md) | Isolate private KYC evidence processing; Identity owns status | Accepted for development |
+| [0018](0018-private-kyc-deployment-and-review-policy.md) | Private KYC deployments and explicit review policy | Assurance choice superseded by 0019 |
+| [0019](0019-optical-kyc-and-live-capture.md) | Optical KYC and a self-hosted live camera challenge | Accepted; production acceptance gated |
 
 ## ADR Template
 

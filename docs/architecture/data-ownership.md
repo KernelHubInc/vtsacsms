@@ -76,6 +76,7 @@
 ### Identity, Organizations, and Tenancy
 
 - Identity proves who/what authenticated.
+- Identity also owns tenant-scoped KYC lifecycle, consent, review and eligibility through `KycService` / `KycEligibility`. The isolated Python processor owns encrypted evidence and processing/outbox records, never core status tables (ADR 0017). Charging and Payments use the eligibility contract; the future wallet workflow must do the same.
 - Organizations determines what a tenant member may do and where, using Identity subject IDs.
 - Tenancy determines whether the tenant/capability is active. Neither Organizations nor Tenancy stores passwords/authenticators.
 
@@ -168,3 +169,7 @@ Cross-context references use tenant-owned ULIDs and are revalidated inside the t
 - Maintenance dashboard queries combine owned evidence and read-only Inventory movements. They do not become an authoritative stock, asset, or Charging projection.
 
 ADR 0013 makes these directions durable. Cross-context calls stay narrow and local in the modular monolith; no external network call occurs inside their database transaction.
+
+## KYC review policy
+
+Identity owns tenant-scoped `kyc_settings` and the immutable-per-attempt `kyc_verifications.review_mode` and `assurance_profile` snapshots. The processor owns evidence, encrypted expiring live-challenge state and computed checks; it cannot change administrative review policy or core identity eligibility. Only the reference selfie is retained; other camera frames and face features are transient processing data, not a biometric-template database. See [ADR 0019](decisions/0019-optical-kyc-and-live-capture.md).

@@ -1,0 +1,91 @@
+name: vtsa-kyc-local
+
+x-kyc: &kyc
+  build:
+    context: .
+    target: runtime
+  image: vtsa-kyc:local
+  env_file: ${KYC_ENV_FILE:-.env}
+  restart: unless-stopped
+  volumes:
+    - kyc_evidence:/data/private
+  depends_on:
+    kyc-postgres:
+      condition: service_healthy
+    kyc-redis:
+      condition: service_healthy
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  networks: [private]
+
+services:
+  kyc-migrate:
+    <<: *kyc
+    command: [alembic, upgrade, head]
+    restart: 'no'
+    healthcheck:
+      disable: true
+  kyc-api:
+    <<: *kyc
+    ports: ['127.0.0.1:8090:8090']
+    depends_on:
+      kyc-migrate:
+        condition: service_completed_successfully
+  kyc-worker:
+    <<: *kyc
+    command: [celery, -A, app.worker.celery, worker, --loglevel=WARNING, --concurrency=2, --hostname=kyc@worker]
+    depends_on:
+      kyc-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, celery, -A, app.worker.celery, inspect, ping, --destination=kyc@worker, --timeout=5]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  kyc-beat:
+    <<: *kyc
+    command: [celery, -A, app.worker.celery, beat, --loglevel=WARNING, --schedule=/tmp/kyc-beat]
+    depends_on:
+      kyc-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import os; os.kill(1, 0)"]
+      interval: 30s
+  kyc-postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: kyc
+      POSTGRES_USER: kyc
+      POSTGRES_PASSWORD: ${KYC_POSTGRES_PASSWORD:?Generate the ignored .env first}
+    volumes: [kyc_database:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U kyc -d kyc']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+    networks: [private]
+  kyc-redis:
+    image: redis:8.2-alpine
+    command: [redis-server, --save, '', --appendonly, 'no']
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+    networks: [private]
+  kyc-test:
+    profiles: [quality]
+    build:
+      context: .
+      target: test
+    command: [pytest, -q]
+    networks: [private]
+
+networks:
+  private:
+
+volumes:
+  kyc_evidence:
+  kyc_database:

@@ -6,6 +6,8 @@ namespace Tests\Feature\Portal;
 
 use App\Filament\Auth\Login as PanelLogin;
 use App\Filament\Operator\Resources\SupportTickets\SupportTicketResource;
+use App\Filament\Platform\Pages\KycSettings;
+use App\Filament\Platform\Pages\KycVerifications;
 use App\Filament\Platform\Pages\MasterData;
 use App\Foundation\Audit\Models\AuditEvent;
 use App\Modules\Identity\Application\AccountLifecycleService;
@@ -36,7 +38,9 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
 
         $this->assertCount(47, $panel->getResources());
         $this->assertContains(SupportTicketResource::class, $panel->getResources());
-        $this->assertCount(7, $panel->getPages());
+        $this->assertCount(9, $panel->getPages());
+        $this->assertContains(KycSettings::class, $panel->getPages());
+        $this->assertContains(KycVerifications::class, $panel->getPages());
         $this->assertContains(MasterData::class, $panel->getPages());
     }
 

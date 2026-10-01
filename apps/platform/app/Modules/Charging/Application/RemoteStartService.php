@@ -18,6 +18,7 @@ use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ConnectorReservation;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Jobs\DispatchChargerCommand;
+use App\Modules\Identity\Application\Kyc\KycEligibility;
 use App\Modules\Integrations\Application\OutboxRecorder;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Application\Queue\TenantJobEnvelope;
@@ -46,6 +47,7 @@ final readonly class RemoteStartService
         ?string $tariffVersionId = null,
         ?string $promotionCode = null,
     ): RemoteCommandResult {
+        app(KycEligibility::class)->assertAllowed($this->tenant->get()->actorId, 'charging');
         $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existing !== null) {
             $this->assertSameIntent($existing, $connectorId, $tariffVersionId, $promotionCode);

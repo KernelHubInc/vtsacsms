@@ -7,6 +7,7 @@ namespace App\Modules\Payments\Application;
 use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
+use App\Modules\Identity\Application\Kyc\KycEligibility;
 use App\Modules\Integrations\Application\OutboxRecorder;
 use App\Modules\Payments\Application\Providers\PaymentProvider;
 use App\Modules\Payments\Application\Providers\PaymentProviderRegistry;
@@ -48,6 +49,7 @@ final readonly class PaymentIntentService
         ?string $paymentMethodId = null,
         bool $preauthorizationRequired = false,
     ): PaymentIntent {
+        app(KycEligibility::class)->assertAllowed($userId, 'payment');
         $currency = strtoupper($currency);
         if ($amountMinor <= 0 || preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
             throw new InvalidArgumentException('A positive minor-unit amount and ISO currency are required.');

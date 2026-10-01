@@ -227,3 +227,9 @@ A command includes the requesting actor/service, tenant, target, reason, idempot
 - Meter sample event granularity versus aggregation at expected scale.
 - Consumer compatibility window and deprecation policy.
 - Whether external partner events reuse internal schemas or use separately curated webhook schemas.
+
+## KYC processing callback v1
+
+The optional `result.checks.document_data` check reports text consistency and `optical_document` reports recognized optical structure, separately from `document` issuer authenticity. Self-hosted optical `liveness` requires server-recorded challenge completion, not a client assertion. No live frames, tokens, hashes or biometric scores enter the event. Deploy the expanded Laravel validator to all app nodes before enabling new processor checks. The event schema already permits string check keys; older Laravel releases used a narrower allowlist. During rollback, stop new self-hosted processing before restoring an older core image, retaining outbox rows for reconciliation after recovery. Core may record `NEEDS_REVIEW` for a processor `APPROVED` result according to the attempt's recorded review/assurance policy; processor status never overrides it.
+
+`identity.kyc.processed.v1` is a dedicated internal processor-to-Identity integration event, published from the Python PostgreSQL callback outbox. It carries the common event envelope plus a typed safe snapshot (`id`, `tenant_id`, `subject_id`, enum `status`, monotonic `version`, document dimensions/quality, assurance check codes, duration and evidence-deletion flag). It contains no image bytes, OCR text, identity numbers or personal fields. Laravel deduplicates by tenant/event ID and applies only newer versions without overwriting manual decisions. See [the signed contract and failure behavior](../runbooks/kyc.md).

@@ -1,0 +1,7 @@
+https://{$KYC_INTERNAL_HOST}:8443 {
+    tls /run/tls/cert.pem /run/tls/key.pem
+    request_body {
+        max_size 9MB
+    }
+    reverse_proxy kyc-api:8090
+}

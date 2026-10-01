@@ -7,6 +7,10 @@ namespace App\Modules\Organizations\Domain;
 enum PermissionKey: string
 {
     case IdentityContextView = 'identity.context.view';
+    case KycView = 'identity.kyc.view';
+    case KycReview = 'identity.kyc.review';
+    case KycSensitiveView = 'identity.kyc.sensitive_view';
+    case KycSettingsManage = 'identity.kyc.settings.manage';
     case PlatformPanelAccess = 'identity.panels.platform.access';
     case OperatorPanelAccess = 'identity.panels.operator.access';
     case MembershipView = 'identity.memberships.view';

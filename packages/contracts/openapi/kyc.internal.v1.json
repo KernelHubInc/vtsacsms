@@ -1,0 +1,1200 @@
+{
+  "components": {
+    "schemas": {
+      "CreateVerification": {
+        "additionalProperties": false,
+        "properties": {
+          "assurance_profile": {
+            "default": "issuer_v1",
+            "enum": [
+              "issuer_v1",
+              "optical_v1"
+            ],
+            "title": "Assurance Profile",
+            "type": "string"
+          },
+          "consent_version": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Consent Version",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "personal": {
+            "$ref": "#/components/schemas/PersonalInfo"
+          },
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id",
+          "document",
+          "personal",
+          "consent_version"
+        ],
+        "title": "CreateVerification",
+        "type": "object"
+      },
+      "Details": {
+        "additionalProperties": false,
+        "properties": {
+          "extracted": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Extracted",
+            "type": "object"
+          },
+          "personal": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Personal",
+            "type": "object"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/Snapshot"
+          }
+        },
+        "required": [
+          "snapshot",
+          "personal",
+          "extracted"
+        ],
+        "title": "Details",
+        "type": "object"
+      },
+      "DocumentType": {
+        "additionalProperties": false,
+        "properties": {
+          "back": {
+            "default": false,
+            "title": "Back",
+            "type": "boolean"
+          },
+          "birth_date": {
+            "default": true,
+            "title": "Birth Date",
+            "type": "boolean"
+          },
+          "document_number": {
+            "default": false,
+            "title": "Document Number",
+            "type": "boolean"
+          },
+          "expiration_date": {
+            "default": false,
+            "title": "Expiration Date",
+            "type": "boolean"
+          },
+          "front": {
+            "default": true,
+            "title": "Front",
+            "type": "boolean"
+          },
+          "issuing_country": {
+            "default": true,
+            "title": "Issuing Country",
+            "type": "boolean"
+          },
+          "key": {
+            "pattern": "^[a-z0-9_]{2,40}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "nationality": {
+            "default": false,
+            "title": "Nationality",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "DocumentType",
+        "type": "object"
+      },
+      "Evidence": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "front",
+              "back",
+              "selfie"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "sharpness": {
+            "title": "Sharpness",
+            "type": "number"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "width",
+          "height",
+          "bytes",
+          "sharpness"
+        ],
+        "title": "Evidence",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "LiveChallenge": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "center",
+              "left",
+              "right",
+              "complete"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "feedback": {
+            "enum": [
+              "follow_prompt",
+              "hold_still",
+              "face_not_clear",
+              "complete"
+            ],
+            "title": "Feedback",
+            "type": "string"
+          },
+          "step": {
+            "maximum": 9.0,
+            "minimum": 0.0,
+            "title": "Step",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "total_steps": {
+            "const": 9,
+            "default": 9,
+            "title": "Total Steps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token",
+          "action",
+          "step",
+          "expires_at",
+          "complete",
+          "feedback"
+        ],
+        "title": "LiveChallenge",
+        "type": "object"
+      },
+      "LiveFrame": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 3145728,
+            "minLength": 4,
+            "title": "Content",
+            "type": "string"
+          },
+          "mime": {
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "title": "Mime",
+            "type": "string"
+          },
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "token": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id",
+          "token",
+          "mime",
+          "content"
+        ],
+        "title": "LiveFrame",
+        "type": "object"
+      },
+      "PersonalInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "birth_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Birth Date"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "expiration_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiration Date"
+          },
+          "full_name": {
+            "maxLength": 180,
+            "minLength": 2,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "issuing_country": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Country"
+          },
+          "nationality": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nationality"
+          }
+        },
+        "required": [
+          "full_name"
+        ],
+        "title": "PersonalInfo",
+        "type": "object"
+      },
+      "PrivateImage": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "mime": {
+            "const": "image/jpeg",
+            "default": "image/jpeg",
+            "title": "Mime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "PrivateImage",
+        "type": "object"
+      },
+      "ReadImage": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "front",
+              "back",
+              "selfie"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id",
+          "kind"
+        ],
+        "title": "ReadImage",
+        "type": "object"
+      },
+      "Result": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "enum": [
+                "passed",
+                "failed",
+                "unavailable",
+                "mock"
+              ],
+              "type": "string"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "duration_ms": {
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "provider": {
+            "maxLength": 80,
+            "title": "Provider",
+            "type": "string"
+          },
+          "reason_code": {
+            "pattern": "^[A-Z0-9_]{1,80}$",
+            "title": "Reason Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "reason_code",
+          "checks",
+          "duration_ms"
+        ],
+        "title": "Result",
+        "type": "object"
+      },
+      "Scope": {
+        "additionalProperties": false,
+        "properties": {
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id"
+        ],
+        "title": "Scope",
+        "type": "object"
+      },
+      "Snapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "evidence_deleted": {
+            "title": "Evidence Deleted",
+            "type": "boolean"
+          },
+          "id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Result"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          },
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "subject_id",
+          "status",
+          "version",
+          "evidence",
+          "evidence_deleted"
+        ],
+        "title": "Snapshot",
+        "type": "object"
+      },
+      "Status": {
+        "enum": [
+          "NOT_STARTED",
+          "IN_PROGRESS",
+          "PENDING_UPLOAD",
+          "SUBMITTED",
+          "PROCESSING",
+          "NEEDS_REVIEW",
+          "ACTION_REQUIRED",
+          "APPROVED",
+          "REJECTED",
+          "EXPIRED",
+          "CANCELLED"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "Upload": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 14680064,
+            "minLength": 4,
+            "title": "Content",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "front",
+              "back",
+              "selfie"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "mime": {
+            "enum": [
+              "image/jpeg",
+              "image/png"
+            ],
+            "title": "Mime",
+            "type": "string"
+          },
+          "subject_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject_id",
+          "kind",
+          "mime",
+          "content"
+        ],
+        "title": "Upload",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "InternalHMAC": {
+        "description": "HMAC-SHA256 over method, path, timestamp, nonce and body digest. Also send X-KYC-Timestamp and a fresh X-KYC-Nonce; see the integration runbook.",
+        "in": "header",
+        "name": "X-KYC-Signature",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "Power Solutions KYC internal API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/verifications/{id}": {
+      "put": {
+        "operationId": "create_api_v1_verifications__id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVerification"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Create"
+      }
+    },
+    "/api/v1/verifications/{id}/details": {
+      "post": {
+        "operationId": "details_api_v1_verifications__id__details_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Details"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Details"
+      }
+    },
+    "/api/v1/verifications/{id}/erase": {
+      "post": {
+        "operationId": "erase_api_v1_verifications__id__erase_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Erase"
+      }
+    },
+    "/api/v1/verifications/{id}/evidence": {
+      "post": {
+        "operationId": "upload_api_v1_verifications__id__evidence_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Upload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Upload"
+      }
+    },
+    "/api/v1/verifications/{id}/image": {
+      "post": {
+        "operationId": "image_api_v1_verifications__id__image_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadImage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivateImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Image"
+      }
+    },
+    "/api/v1/verifications/{id}/live/frame": {
+      "post": {
+        "operationId": "live_frame_api_v1_verifications__id__live_frame_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveFrame"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChallenge"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Live Frame"
+      }
+    },
+    "/api/v1/verifications/{id}/live/start": {
+      "post": {
+        "operationId": "live_start_api_v1_verifications__id__live_start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChallenge"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Live Start"
+      }
+    },
+    "/api/v1/verifications/{id}/snapshot": {
+      "post": {
+        "operationId": "read_api_v1_verifications__id__snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Read"
+      }
+    },
+    "/api/v1/verifications/{id}/submit": {
+      "post": {
+        "operationId": "submit_api_v1_verifications__id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "InternalHMAC": []
+          }
+        ],
+        "summary": "Submit"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "health_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
+      }
+    }
+  }
+}
