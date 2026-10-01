@@ -1,0 +1,18 @@
+{
+	admin off
+	auto_https off
+}
+
+https://{$KYC_INTERNAL_HOST}:8443 {
+	tls /run/tls/cert.pem /run/tls/key.pem
+	@allowed remote_ip {$KYC_ALLOWED_CIDRS}
+	handle @allowed {
+		request_body {
+			max_size 9MB
+		}
+		reverse_proxy kyc-api:8090
+	}
+	handle {
+		respond 403
+	}
+}

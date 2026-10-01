@@ -72,6 +72,12 @@ class AccountScreen extends StatelessWidget {
               ),
               const SizedBox(height: VtsaSpacing.md),
               _AccountTile(
+                icon: Icons.verified_user_outlined,
+                title: 'Identity verification',
+                subtitle: 'Check your status or complete verification',
+                onTap: () => context.push('/kyc'),
+              ),
+              _AccountTile(
                 icon: Icons.directions_car_outlined,
                 title: 'My vehicles',
                 subtitle: 'Connector standards and compatibility',
@@ -133,6 +139,12 @@ class ProfileScreen extends StatelessWidget {
       body: ListView(
         children: [
           _ReadOnlyField(label: 'Name', value: user?.name ?? 'Unavailable'),
+          const SizedBox(height: VtsaSpacing.md),
+          VtsaButton(
+            label: 'Identity verification',
+            onPressed: () => context.push('/kyc'),
+            variant: VtsaButtonVariant.secondary,
+          ),
           const SizedBox(height: VtsaSpacing.md),
           _ReadOnlyField(label: 'Email', value: user?.email ?? 'Unavailable'),
           const SizedBox(height: VtsaSpacing.md),

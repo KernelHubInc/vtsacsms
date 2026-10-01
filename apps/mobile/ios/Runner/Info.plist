@@ -20,7 +20,9 @@
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Power Solutions uses the camera only when you scan a charger QR code. You can enter the charger code manually instead.</string>
+	<string>Power Solutions uses the camera to scan charger QR codes and, with your consent, capture identity documents and a selfie for verification.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Power Solutions can access a selected photo only when you choose it for identity verification.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Power Solutions uses your location only when you ask to find your position on the charging map.</string>
 	<key>CFBundleExecutable</key>

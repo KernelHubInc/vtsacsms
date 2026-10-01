@@ -9,6 +9,7 @@ import 'package:vtsa_mobile/features/charging/presentation/charging_start_screen
 import 'package:vtsa_mobile/features/charging/presentation/live_charging_screen.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/discovery_screen.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_detail_screen.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/kyc_screen.dart';
 import 'package:vtsa_mobile/features/onboarding/presentation/onboarding_screens.dart';
 import 'package:vtsa_mobile/features/profile/presentation/account_screens.dart';
 import 'package:vtsa_mobile/features/vehicles/presentation/vehicle_screens.dart';
@@ -35,6 +36,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     final protected =
         state.matchedLocation == '/profile' ||
         state.matchedLocation.startsWith('/vehicles') ||
+        state.matchedLocation == '/kyc' ||
         state.matchedLocation == '/charge' ||
         state.matchedLocation.startsWith('/charging/') ||
         (state.matchedLocation.startsWith('/activity/') &&
@@ -160,6 +162,13 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     GoRoute(
       path: '/profile',
       builder: (context, state) => ProfileScreen(dependencies: dependencies),
+    ),
+    GoRoute(
+      path: '/kyc',
+      builder: (context, state) => KycScreen(
+        repository: dependencies.kycRepository,
+        name: dependencies.auth.user?.name ?? '',
+      ),
     ),
     GoRoute(
       path: '/vehicles',

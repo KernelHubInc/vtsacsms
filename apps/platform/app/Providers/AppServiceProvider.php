@@ -101,6 +101,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         app(FeatureFlags::class)->assertProductionSafe();
+        if (config('kyc.enabled') && ! app()->environment(['local', 'testing'])) {
+            foreach (['request_secret', 'callback_secret'] as $key) {
+                if (strlen((string) config('kyc.'.$key)) < 32) {
+                    throw new \LogicException('KYC requires separately provisioned service secrets.');
+                }
+            }
+            foreach (['url', 'privacy_url', 'terms_url', 'consent_url'] as $key) {
+                if (! str_starts_with((string) config('kyc.'.$key), 'https://')) {
+                    throw new \LogicException('KYC requires HTTPS service and reviewed policy URLs.');
+                }
+            }
+            if (config('kyc.consent_version') === 'development-v1') {
+                throw new \LogicException('KYC requires a reviewed consent version outside development.');
+            }
+        }
         Sanctum::usePersonalAccessTokenModel(MobileAccessToken::class);
         Gate::policy(Site::class, SitePolicy::class);
         Gate::policy(ChargingStation::class, ChargingStationPolicy::class);
@@ -123,6 +138,8 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(5)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perHour(30)->by((string) $request->ip()),
         ]);
+        RateLimiter::for('kyc.live.start', static fn (Request $request): Limit => Limit::perMinute(5)->by((string) $request->user()?->getAuthIdentifier()));
+        RateLimiter::for('kyc.live.frame', static fn (Request $request): Limit => Limit::perMinute(90)->by((string) $request->user()?->getAuthIdentifier()));
         RateLimiter::for('auth.recovery', static fn (Request $request): array => [
             Limit::perMinute(3)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perHour(20)->by((string) $request->ip()),

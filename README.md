@@ -60,6 +60,10 @@ Do not use the local `infra/compose.yaml` on a public host. Exact first-deployme
 
 For isolated staging and production stacks across the same two application servers, use [docs/runbooks/staging-production-deployment.md](docs/runbooks/staging-production-deployment.md). The production-only reference remains in [docs/runbooks/two-app-server-deployment.md](docs/runbooks/two-app-server-deployment.md).
 
+## Identity verification (KYC)
+
+The optional Identity KYC module adds Flutter document capture and live camera challenges, tenant-scoped Laravel APIs and Filament review backed by the isolated [Python KYC service](services/kyc-service/README.md). The selected self-hosted assurance uses optical ID checks, face matching and PAD; it does not verify government issuance. Existing features remain available with enforcement disabled. Follow the [Hostinger deployment runbook](docs/runbooks/kyc-hostinger.md) and [ADR 0019](docs/architecture/decisions/0019-optical-kyc-and-live-capture.md); production requires reviewed privacy policy, device/spoof evaluation, thresholds and operational acceptance.
+
 ## Supported toolchain
 
 - PHP 8.4 and Composer 2.8

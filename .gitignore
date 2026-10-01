@@ -1,4 +1,6 @@
 /.cache/
+/scripts/__pycache__/
+/tests/infra/__pycache__/
 /backups/
 /.env
 /.env.app

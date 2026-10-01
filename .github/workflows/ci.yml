@@ -165,6 +165,47 @@ jobs:
         working-directory: .
         run: git diff --exit-code -- packages/contracts/generated
 
+  kyc:
+    name: KYC processing and security
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/kyc-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/kyc-service/requirements.lock
+      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+      - run: pip install -r requirements.lock && pip install -e '.[dev]'
+      - run: ruff format --check app tests scripts migrations
+      - run: ruff check app tests scripts migrations
+      - run: mypy app
+      - run: pytest -q
+      - name: Verify pinned self-hosted face model loading
+        run: |
+          python scripts/install_face_models.py "$RUNNER_TEMP/kyc-models"
+          python scripts/check_face_models.py "$RUNNER_TEMP/kyc-models"
+          python scripts/install_liveness_model.py "$RUNNER_TEMP/kyc-models"
+          python scripts/check_liveness_model.py "$RUNNER_TEMP/kyc-models"
+      - run: pip-audit -r requirements.lock
+      - run: python scripts/export_openapi.py
+      - run: git diff --exit-code -- ../../packages/contracts/openapi/kyc.internal.v1.json
+      - run: docker build --target test -t vtsa-kyc-test . && docker run --rm vtsa-kyc-test
+      - name: Exercise real KYC gateway, worker, callback and manual review
+        run: |
+          python scripts/setup_local.py
+          python scripts/prepare_integration.py
+          docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml up -d --build kyc-platform kyc-worker kyc-beat
+          docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php artisan migrate --force
+          docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php tests/kyc-smoke.php seed
+          python scripts/integration_smoke.py
+      - name: Stop isolated KYC integration services
+        if: always()
+        run: docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml down --remove-orphans
+
   containers:
     name: Container images
     runs-on: ubuntu-latest
@@ -175,6 +216,8 @@ jobs:
             image: vtsa-platform
           - context: services/ocpp-gateway
             image: vtsa-ocpp-gateway
+          - context: services/kyc-service
+            image: vtsa-kyc
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -199,8 +242,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: Validate deployment scripts
         run: |
-          shellcheck scripts/deploy-app-node.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
-          bash -n scripts/deploy-app-node.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
+          shellcheck scripts/deploy-app-node.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
+          bash -n scripts/deploy-app-node.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
       - name: Validate GitHub Actions workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
       - name: Validate staging, production, and data Compose projects
@@ -208,3 +251,5 @@ jobs:
           docker compose --env-file .env.app.staging.example -f infra/cluster/compose.app.yaml config --quiet
           docker compose --env-file .env.app.production.example -f infra/cluster/compose.app.yaml config --quiet
           DATA_BIND_ADDRESS=127.0.0.1 docker compose --env-file .env.data.example -f infra/cluster/compose.data.yaml config --quiet
+      - name: Validate private KYC deployment isolation
+        run: sudo python3 -m unittest discover -s tests/infra -p 'test_kyc*.py'

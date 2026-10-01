@@ -1,0 +1,111 @@
+name: vtsa-kyc-${KYC_ENVIRONMENT:?Set the KYC environment}
+
+x-kyc: &kyc
+  image: ghcr.io/kernelhubinc/vtsacsms/kyc:${KYC_IMAGE_TAG:?Use an immutable release tag}
+  env_file: ${KYC_ENV_FILE:?Set the protected environment file}
+  environment:
+    KYC_REDIS_URL: redis://kyc-redis:6379/0
+    SSL_CERT_FILE: /run/kyc/ca.pem
+    AWS_CA_BUNDLE: /run/kyc/ca.pem
+  volumes:
+    - ${KYC_CA_BUNDLE:?Supply the trusted CA bundle}:/run/kyc/ca.pem:ro
+    - ${KYC_MODEL_DIRECTORY:?Supply the model directory}:/models:ro
+  networks: [backend, egress]
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp:size=128m,mode=1777]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
+
+services:
+  kyc-api:
+    <<: *kyc
+    depends_on:
+      kyc-redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/readyz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  kyc-worker:
+    <<: *kyc
+    command: [celery, -A, app.worker.celery, worker, --loglevel=WARNING, --concurrency=2, --hostname=kyc@worker]
+    depends_on:
+      kyc-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, celery, -A, app.worker.celery, inspect, ping, --destination=kyc@worker, --timeout=5]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  kyc-beat:
+    <<: *kyc
+    command: [celery, -A, app.worker.celery, beat, --loglevel=WARNING, --schedule=/tmp/kyc-beat]
+    depends_on:
+      kyc-api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import os; os.kill(1, 0)"]
+  kyc-migrate:
+    <<: *kyc
+    profiles: [tools]
+    command: [alembic, upgrade, head]
+    restart: 'no'
+    healthcheck:
+      disable: true
+  kyc-backup:
+    image: postgres:18-alpine
+    profiles: [tools]
+    environment:
+      KYC_DATABASE_URL: ${KYC_DATABASE_URL:?Supply the dedicated KYC database URL}
+    entrypoint: [/bin/sh, -ec]
+    command: ['exec pg_dump --format=custom --no-owner --no-privileges --dbname="postgresql://$${KYC_DATABASE_URL#postgresql+psycopg://}"']
+    volumes:
+      - ${KYC_CA_BUNDLE:?Supply the trusted CA bundle}:/run/kyc/ca.pem:ro
+    networks: [egress]
+    restart: 'no'
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+  kyc-redis:
+    image: redis:8.2-alpine
+    command: [redis-server, --save, '', --appendonly, 'no']
+    networks: [backend]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    security_opt: [no-new-privileges:true]
+  kyc-ingress:
+    image: caddy:2-alpine
+    environment:
+      KYC_INTERNAL_HOST: ${KYC_INTERNAL_HOST:?Supply the private DNS name}
+      KYC_ALLOWED_CIDRS: ${KYC_ALLOWED_CIDRS:?Allow only the application clients}
+    volumes:
+      - ./kyc.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${KYC_TLS_CERT:?Supply the TLS certificate}:/run/tls/cert.pem:ro
+      - ${KYC_TLS_KEY:?Supply the TLS private key}:/run/tls/key.pem:ro
+    ports:
+      - '${KYC_PRIVATE_BIND:?Bind only to the private VPN address}:${KYC_PRIVATE_PORT:-8443}:8443'
+    networks: [backend, ingress]
+    depends_on:
+      kyc-api:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/config, /data]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+networks:
+  backend:
+    internal: true
+  ingress: {}
+  egress: {}

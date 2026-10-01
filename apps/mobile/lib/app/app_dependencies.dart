@@ -23,6 +23,8 @@ import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/application/favorites_controller.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
 import 'package:vtsa_mobile/features/favorites/domain/favorites_repository.dart';
+import 'package:vtsa_mobile/features/kyc/data/api_kyc_repository.dart';
+import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/application/vehicles_controller.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle_repository.dart';
@@ -44,6 +46,7 @@ final class AppDependencies {
     required this.crashReporting,
     required this.pushRegistration,
     required this.featureFlags,
+    this.kycRepository,
   });
 
   factory AppDependencies.fromParts({
@@ -60,6 +63,7 @@ final class AppDependencies {
     DirectionsService directions = const _UnavailableDirectionsService(),
     DeviceLocationService location = const UnavailableDeviceLocationService(),
     FeatureFlags featureFlags = const FeatureFlags.fromDefines(),
+    KycRepository? kycRepository,
   }) {
     late final AuthController auth;
     String ownerId() =>
@@ -99,6 +103,7 @@ final class AppDependencies {
       crashReporting: const NoopCrashReportingService(),
       pushRegistration: push,
       featureFlags: featureFlags,
+      kycRepository: kycRepository,
     );
   }
 
@@ -131,6 +136,7 @@ final class AppDependencies {
       vehicleRepository: LocalVehicleRepository(preferences),
       favoritesRepository: LocalFavoritesRepository(preferences),
       chargingRepository: ApiChargingRepository(client),
+      kycRepository: ApiKycRepository(client),
       directions: ExternalDirectionsService(),
       location: GeolocatorDeviceLocationService(),
     );
@@ -151,6 +157,7 @@ final class AppDependencies {
   final CrashReportingService crashReporting;
   final PushRegistrationService pushRegistration;
   final FeatureFlags featureFlags;
+  final KycRepository? kycRepository;
 
   Future<void> initialize() async {
     await Future.wait([

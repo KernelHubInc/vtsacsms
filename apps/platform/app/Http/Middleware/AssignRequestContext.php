@@ -32,6 +32,10 @@ final class AssignRequestContext
             $response = $next($request);
             $response->headers->set('X-Request-ID', $requestId);
             $response->headers->set('X-Correlation-ID', $correlationId);
+            if ($request->attributes->get('kyc_sensitive_response') === true) {
+                $response->headers->set('Cache-Control', 'private, no-store');
+                $response->headers->set('Pragma', 'no-cache');
+            }
 
             Log::info('http_request_completed', [
                 'http' => [

@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\IdentityContextController;
 use App\Http\Controllers\Api\V1\InventoryAdjustmentController;
 use App\Http\Controllers\Api\V1\InventoryCatalogController;
 use App\Http\Controllers\Api\V1\InvitationController;
+use App\Http\Controllers\Api\V1\KycCallbackController;
+use App\Http\Controllers\Api\V1\KycController;
 use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\MembershipLifecycleController;
 use App\Http\Controllers\Api\V1\MobileAuthController;
@@ -39,6 +41,7 @@ use App\Http\Controllers\Api\V1\TariffVersionController;
 use App\Http\Controllers\Api\V1\VendorInvoiceController;
 use App\Http\Controllers\Api\V1\WorkOrderPartsController;
 use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\EnsureKycEnabled;
 use App\Http\Middleware\EnsureVerifiedIdentity;
 use App\Http\Middleware\EstablishSanctumTenantContext;
 use App\Http\Middleware\EstablishTenantContext;
@@ -53,6 +56,26 @@ Route::get('/v1/public/stations', PublicStationSearchController::class)
 
 Route::get('/v1/app/config', AppConfigurationController::class)
     ->middleware('throttle:60,1')->name('api.v1.app.config');
+
+Route::post('/v1/webhooks/kyc', KycCallbackController::class)
+    ->middleware('throttle:120,1')->name('api.v1.webhooks.kyc');
+
+Route::prefix('v1/kyc')->name('api.v1.kyc.')->middleware([
+    'auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class,
+    EnsureKycEnabled::class, 'throttle:30,1',
+])->group(function (): void {
+    $controller = KycController::class;
+    Route::get('/status', [$controller, 'status'])->name('status');
+    Route::post('/start', [$controller, 'start'])->name('start');
+    Route::post('/resubmit', [$controller, 'start'])->name('resubmit');
+    Route::get('/verification/{verification}', [$controller, 'show'])->whereUlid('verification')->name('show');
+    Route::post('/verification/{verification}/document', [$controller, 'upload'])->whereUlid('verification')->name('document');
+    Route::post('/verification/{verification}/selfie', [$controller, 'upload'])->whereUlid('verification')->name('selfie');
+    Route::post('/verification/{verification}/live/start', [$controller, 'liveStart'])->whereUlid('verification')->middleware('throttle:kyc.live.start')->name('live.start');
+    Route::post('/verification/{verification}/live/frame', [$controller, 'liveFrame'])->whereUlid('verification')->withoutMiddleware('throttle:30,1')->middleware('throttle:kyc.live.frame')->name('live.frame');
+    Route::post('/verification/{verification}/submit', [$controller, 'submit'])->whereUlid('verification')->name('submit');
+    Route::post('/verification/{verification}/cancel', [$controller, 'cancel'])->whereUlid('verification')->name('cancel');
+});
 
 Route::post('/v1/webhooks/payments/{tenant}/{configuration}', PaymentWebhookController::class)
     ->whereUlid('tenant')->whereUlid('configuration')
