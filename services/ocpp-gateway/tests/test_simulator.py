@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from vtsa_ocpp_gateway.simulator import ChargerSimulator
+from unittest.mock import AsyncMock
+
+import pytest
+
+from vtsa_ocpp_gateway.simulator import ChargerSimulator, build_parser, run_scenario
 
 
 def test_simulator_builds_version_specific_command_responses() -> None:
@@ -26,3 +30,29 @@ def test_simulator_transaction_sequence_is_monotonic() -> None:
     assert (
         started["transactionInfo"]["transactionId"] == updated["transactionInfo"]["transactionId"]
     )
+
+
+@pytest.mark.parametrize("boot_status", ["Pending", "Rejected"])
+async def test_connectivity_stops_before_heartbeat_if_boot_is_not_accepted(
+    monkeypatch: pytest.MonkeyPatch, boot_status: str
+) -> None:
+    simulator = AsyncMock(spec=ChargerSimulator)
+    simulator.boot.return_value = {"status": boot_status, "interval": 30}
+    monkeypatch.setattr("vtsa_ocpp_gateway.simulator.ChargerSimulator", lambda *a, **kw: simulator)
+    monkeypatch.setenv("SIMULATOR_BASIC_PASSWORD", "synthetic-test-password")
+    arguments = build_parser().parse_args(["--scenario", "connectivity", "--heartbeats", "1"])
+
+    with pytest.raises(RuntimeError, match="not Accepted"):
+        await run_scenario(arguments)
+
+    simulator.heartbeat.assert_not_awaited()
+    simulator.start_session.assert_not_awaited()
+    simulator.close.assert_awaited_once()
+
+
+async def test_connectivity_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SIMULATOR_BASIC_PASSWORD", raising=False)
+    arguments = build_parser().parse_args(["--scenario", "connectivity"])
+
+    with pytest.raises(ValueError, match="require an enrolled"):
+        await run_scenario(arguments)

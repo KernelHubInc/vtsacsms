@@ -11,6 +11,18 @@ Tenant operators suspend memberships. Platform-authorized workflows may suspend 
 
 Email verification URLs are signed, expire after 60 minutes, and identify users by public ULID rather than the internal numeric key. Password-reset responses never disclose whether an email exists.
 
+The signed GET verification link works in a browser without an API token. Signature
+and expiry middleware remain mandatory; resend still requires an authenticated
+tenant session. Identity verifies the current email hash and enabled account, then
+derives active, unexpired memberships from stored records. Verification and audit
+entries for those tenants commit together under a user row lock. Repeated valid
+links succeed without duplicate audit entries. No tenant scope is accepted from
+the URL, and verification does not issue a login session or grant memberships.
+The Organizations-owned `ActiveMembershipTenants::forUser` read contract returns
+only tenant ULIDs for a stored user ID. Its projection combines membership status
+and expiry with Tenancy's active status; Identity never writes either context's
+records during verification.
+
 ## Mobile Number Verification
 
 `MobileVerificationSender` is the provider boundary. Local and test environments bind `FakeLocalMobileVerificationSender`, which performs no external I/O and never logs numbers or codes. The fake verification code is `000000`; it must not be enabled in production. Challenges expire in ten minutes, allow at most five attempts, and store only hashes of the code and normalized E.164 number. The number itself uses Laravel's encrypted cast.

@@ -21,7 +21,7 @@ final class RegistrationController extends Controller
     public function __invoke(RegisterRequest $request, FeatureFlags $flags): JsonResponse
     {
         abort_unless(
-            app()->environment(['local', 'development', 'testing', 'demo'])
+            app()->environment(['local', 'development', 'testing', 'demo', 'staging'])
             && $flags->enabled(Feature::DemoMode)
             && $request->validated('tenant_id') === DemoEnvironment::TENANT_ID,
             404,

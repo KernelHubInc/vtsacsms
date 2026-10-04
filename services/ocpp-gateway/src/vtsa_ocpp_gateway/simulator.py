@@ -3,16 +3,18 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import getpass
 import json
 import os
 import ssl
+import sys
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import quote
 
 from websockets.asyncio.client import ClientConnection, connect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.typing import Subprotocol
 
 from vtsa_ocpp_gateway.ids import new_ulid
@@ -69,6 +71,9 @@ class ChargerSimulator:
             ping_interval=20,
             ping_timeout=20,
         )
+        if self.connection.subprotocol != self.protocol:
+            await self.close()
+            raise RuntimeError("The server did not negotiate the requested OCPP subprotocol")
         self.reader_task = asyncio.create_task(self._read_messages(), name="simulator-reader")
 
     async def close(self) -> None:
@@ -399,18 +404,41 @@ class ChargerSimulator:
 
 
 async def run_scenario(arguments: argparse.Namespace) -> None:
+    password = os.getenv("SIMULATOR_BASIC_PASSWORD")
+    if arguments.password_prompt:
+        password = getpass.getpass("Enrolled simulator OCPP password (hidden): ")
+        if not password:
+            raise ValueError("The enrolled simulator password is required")
+    if arguments.scenario == "connectivity" and not password and not arguments.certificate_file:
+        raise ValueError("Connectivity checks require an enrolled password or client certificate")
     simulator = ChargerSimulator(
         arguments.url,
         arguments.identity,
         cast(Protocol, arguments.protocol),
-        password=os.getenv("SIMULATOR_BASIC_PASSWORD"),
+        password=password,
         ca_file=arguments.ca_file,
         certificate_file=arguments.certificate_file,
         private_key_file=arguments.private_key_file,
     )
     await simulator.connect()
     try:
-        await simulator.boot()
+        boot = await simulator.boot()
+        if arguments.scenario == "connectivity":
+            if boot.get("status") != "Accepted":
+                raise RuntimeError("BootNotification was not Accepted")
+            interval = boot.get("interval")
+            if isinstance(interval, bool) or not isinstance(interval, int) or interval <= 0:
+                raise RuntimeError("BootNotification returned an invalid heartbeat interval")
+            print(f"BootNotification: Accepted; heartbeat interval: {interval}s", flush=True)
+            for index in range(arguments.heartbeats):
+                if index:
+                    await asyncio.sleep(interval)
+                heartbeat = await simulator.heartbeat()
+                if not isinstance(heartbeat.get("currentTime"), str):
+                    raise RuntimeError("Heartbeat response is missing currentTime")
+                print(f"Heartbeat {index + 1}/{arguments.heartbeats}: accepted", flush=True)
+            print("PASS: authenticated OCPP connectivity. No charging transaction was started.")
+            return
         await simulator.change_status("Available")
         if arguments.scenario == "duplicate":
             await simulator.replay_duplicate("Heartbeat", {})
@@ -436,17 +464,54 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--protocol", choices=("ocpp1.6", "ocpp2.0.1"), default="ocpp1.6")
     parser.add_argument(
         "--scenario",
-        choices=("standard", "duplicate", "fault", "reboot-during-charging"),
+        choices=("connectivity", "standard", "duplicate", "fault", "reboot-during-charging"),
         default="standard",
     )
     parser.add_argument("--ca-file", type=Path)
     parser.add_argument("--certificate-file", type=Path)
     parser.add_argument("--private-key-file", type=Path)
+    parser.add_argument(
+        "--password-prompt", action="store_true", help="Read the enrolled password without echo"
+    )
+    parser.add_argument(
+        "--heartbeats",
+        type=int,
+        choices=range(1, 61),
+        default=6,
+        metavar="1-60",
+        help="Heartbeat count for the connectivity scenario (default: 6)",
+    )
     return parser
 
 
 def main() -> None:
-    asyncio.run(run_scenario(build_parser().parse_args()))
+    try:
+        asyncio.run(run_scenario(build_parser().parse_args()))
+    except InvalidStatus as error:
+        code = error.response.status_code
+        advice = {
+            404: "The public /ocpp/ route is missing or points to the wrong upstream.",
+            502: "The reverse proxy cannot reach the gateway.",
+            403: "Check enrollment, the password, TLS forwarding and the OCPP subprotocol.",
+            401: "The endpoint requires valid authentication.",
+        }.get(code, "Check the gateway and reverse-proxy status.")
+        print(f"FAIL: WebSocket HTTP {code}. {advice}", file=sys.stderr)
+        raise SystemExit(1) from None
+    except (
+        OSError,
+        TimeoutError,
+        RuntimeError,
+        ValueError,
+        InvalidHandshake,
+        ConnectionClosed,
+    ) as error:
+        # Exception details can include peer-supplied content or connection credentials.
+        print(
+            f"FAIL: {type(error).__name__}; check connectivity and gateway logs.", file=sys.stderr
+        )
+        raise SystemExit(1) from None
+    except KeyboardInterrupt:
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

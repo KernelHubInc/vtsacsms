@@ -85,10 +85,10 @@ services:
       target: development
     environment: &platform-environment
       APP_NAME: Power Solutions
-      APP_ENV: local
+      APP_ENV: ${APP_ENV:-${DEPLOY_ENVIRONMENT:-local}}
       APP_KEY: ${APP_KEY:?Run tools/bootstrap.ps1}
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-http://localhost:8000}
       LOG_CHANNEL: stderr-json
       DB_CONNECTION: pgsql
       DB_HOST: postgres
@@ -101,7 +101,9 @@ services:
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
       REDIS_CLIENT: phpredis
-      REDIS_HOST: redis
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       MAIL_MAILER: smtp
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
@@ -149,7 +151,7 @@ services:
       CHARGING_START_EXPIRY_SECONDS: 120
       INTEGRATION_EVENT_STREAM: ${INTEGRATION_EVENT_STREAM:-vtsa:local:platform:events:v1}
     ports:
-      - "8000:8000"
+      - "${APP_HTTP_BIND_ADDRESS:-0.0.0.0}:${APP_HTTP_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy

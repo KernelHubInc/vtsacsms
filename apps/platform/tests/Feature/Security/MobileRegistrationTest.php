@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
@@ -61,6 +62,7 @@ final class MobileRegistrationTest extends TestCase
 
     public function test_staging_mobile_registration_creates_a_scoped_consumer_account(): void
     {
+        $this->withoutVite();
         Notification::fake();
         config()->set('features.demo_mode', true);
         $this->seedRegistrationScope();
@@ -145,6 +147,42 @@ final class MobileRegistrationTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'blocked.driver@example.test']);
         Notification::assertNothingSent();
+    }
+
+    #[DataProvider('blockedStagingRegistrations')]
+    public function test_staging_registration_requires_demo_mode_and_the_demo_tenant(bool $demoMode, string $tenantId): void
+    {
+        Notification::fake();
+        config()->set('features.demo_mode', $demoMode);
+        $this->seedRegistrationScope();
+        $originalEnvironment = app()->environment();
+        app()->detectEnvironment(static fn (): string => 'staging');
+
+        try {
+            $this->postJson('/api/v1/auth/register', [
+                'name' => 'Blocked Staging Driver',
+                'email' => 'blocked.staging@example.test',
+                'password' => 'SafePassword!2026',
+                'password_confirmation' => 'SafePassword!2026',
+                'tenant_id' => $tenantId,
+            ])->assertNotFound();
+        } finally {
+            app()->detectEnvironment(static fn (): string => $originalEnvironment);
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('memberships', 0);
+        $this->assertDatabaseCount('role_assignments', 0);
+        Notification::assertNothingSent();
+    }
+
+    /** @return array<string, array{bool, string}> */
+    public static function blockedStagingRegistrations(): array
+    {
+        return [
+            'demo mode disabled' => [false, DemoEnvironment::TENANT_ID],
+            'another tenant' => [true, '01J00000000000000000000001'],
+        ];
     }
 
     private string $fleetOrganizationId;

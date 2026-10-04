@@ -18,6 +18,7 @@ CORE = ["platform", "worker", "scheduler"]
 ULID = re.compile(r"[0-7][0-9A-HJKMNP-TV-Z]{25}")
 # ':' is valid in a gateway path but cannot be a Basic authentication username.
 IDENTITY = re.compile(r"[A-Za-z0-9._-]{1,120}")
+EXTRA_COMPOSE_FILES = []
 
 
 def compose(overlay=True):
@@ -26,6 +27,8 @@ def compose(overlay=True):
         command += ["--env-file", str(PRIVATE)]
     command += ["-f", str(ROOT / "infra/compose.yaml")]
     command += ["-f", str(ROOT / "infra/compose.kyc.yaml")]
+    for path in EXTRA_COMPOSE_FILES:
+        command += ["-f", str(path)]
     if overlay:
         command += ["-f", str(ROOT / "infra/compose.ocpp-staging.yaml")]
     return command
@@ -420,7 +423,18 @@ def main():
             "logs",
         ],
     )
-    action = parser.parse_args().action
+    parser.add_argument(
+        "--compose-override",
+        action="append",
+        default=[],
+        type=Path,
+        help="Retain an existing deployment override; repeat for multiple files",
+    )
+    arguments = parser.parse_args()
+    EXTRA_COMPOSE_FILES[:] = [
+        path.resolve(strict=True) for path in arguments.compose_override
+    ]
+    action = arguments.action
     if action == "prepare":
         prepare()
         return
@@ -465,6 +479,7 @@ def main():
                 "compose.ocpp-staging.yaml",
             )
         }
+        allowed_files.update(str(path) for path in EXTRA_COMPOSE_FILES)
         active_files = set(
             labels.get("com.docker.compose.project.config_files", "").split(",")
         )

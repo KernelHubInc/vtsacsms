@@ -4,6 +4,13 @@ This runbook uses `infra/compose.yaml` and a private root `.env.staging` on the
 existing staging host. It is separate from the cluster Compose deployment.
 No database migration is introduced by the verification fix.
 
+If `MobileRegistrationTest::test_staging_mobile_registration_creates_a_scoped_consumer_account`
+returns 404 instead of 201, ensure the deployed registration controller includes
+`staging` in its environment allowlist. Keep `APP_ENV=staging`: registration still
+requires `FEATURE_DEMO_MODE=true` and the demo tenant ID. Regression tests cover
+successful scoped registration, disabled demo mode, a different tenant, and denied
+production registration.
+
 ## Configuration
 
 Use `.env.staging.example` as a checklist. For an existing deployment, merge

@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Foundation\Audit\AuditEntry;
-use App\Foundation\Audit\AuditRecorder;
-use App\Foundation\Audit\AuditResult;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Auth\Events\Verified;
+use App\Modules\Identity\Application\EmailVerificationService;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,16 +30,9 @@ final class EmailVerificationController extends Controller
         Request $request,
         string $user,
         string $hash,
-        AuditRecorder $audit,
-    ): JsonResponse {
-        $subject = $request->user();
-
-        if (
-            ! $subject instanceof User
-            || $subject->public_id === null
-            || ! hash_equals($subject->public_id, $user)
-            || ! hash_equals(sha1($subject->getEmailForVerification()), $hash)
-        ) {
+        EmailVerificationService $verification,
+    ): JsonResponse|View {
+        if (! $verification->verify($user, $hash, (string) $request->attributes->get('correlation_id'))) {
             return response()->json(['error' => [
                 'code' => 'invalid_verification_link',
                 'message' => 'The verification link is invalid.',
@@ -49,16 +40,8 @@ final class EmailVerificationController extends Controller
             ]], 403);
         }
 
-        if ($subject->markEmailAsVerified()) {
-            event(new Verified($subject));
-            $audit->record(new AuditEntry(
-                action: 'identity.email.verified',
-                targetType: 'identity',
-                targetId: $subject->public_id,
-                result: AuditResult::Succeeded,
-                before: ['email_verified_at' => null],
-                after: ['email_verified_at' => now('UTC')->toIso8601String()],
-            ));
+        if (! $request->expectsJson()) {
+            return view('auth.email-verified');
         }
 
         return response()->json(['data' => ['email_verified' => true]]);

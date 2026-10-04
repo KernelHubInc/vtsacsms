@@ -23,12 +23,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
  * @property string|null $public_id
  * @property int $security_version
+ * @property Carbon|null $email_verified_at
  * @property CarbonImmutable|null $disabled_at
  * @property CarbonImmutable|null $activated_at
  * @property CarbonImmutable|null $mobile_verified_at

@@ -4,6 +4,27 @@ This procedure extends the existing `/opt/vtsa-csms/.env.staging` + `infra/compo
 
 Scope: authenticated connectivity, boot, heartbeat, status and protocol evidence into Laravel. Remote commands remain disabled. This is a single-gateway staging topology, not the separate multi-node cluster runbook. No database migration or reset is required. The gateway never writes core tables.
 
+## Verified simulator deployment — 2026-10-04
+
+`wss://staging.evcspowersolutions.com/ocpp/DEMO-CP-023` passed an authenticated
+OCPP 1.6J BootNotification, six heartbeats over 150 seconds, and a fresh reconnect
+from the Windows simulator. Missing credentials, an incorrect password, and an
+unknown identity each returned HTTP 403. The gateway, both consumers, platform,
+worker, and scheduler were healthy after deployment; Laravel liveness returned
+200. No charging transaction or physical-device test was performed.
+
+The station's previously empty OCPP version was set to the existing `1.6J`
+catalog entry through the platform's Assets model with an audit record. Events
+received before that correction were quarantined and retained. Subsequent
+heartbeats, reconnect boot, and disconnect events were processed successfully.
+
+The platform's original PHP server command is explicit in the OCPP overlay:
+Compose otherwise clears the image CMD when an entrypoint is supplied. The
+existing KYC DNS override is retained using `--compose-override`. The public
+Nginx configuration was backed up before installing the include. The deployment
+package does not replace the VPS's existing base Compose file or private env
+files; retain its SMTP, storage, Redis authentication, and port configuration.
+
 ## 1. Confirm the current deployment and asset
 
 Run on the staging VPS (`187.53.134.122` in the previous staging task):
@@ -79,6 +100,35 @@ This prints service status and Redis-backed gateway readiness, then performs a T
 Keep the existing `/` application location, certificate, API, KYC and APK-download routes. Do not create a duplicate server or add the include to port 80. The snippet preserves `/ocpp/<id>`, passes Upgrade and Authorization headers, overwrites the forwarded protocol, and extends the idle timeout to 120 seconds. Public `/internal/` routing is not added. TLS must terminate at this host Nginx; an upstream CDN's TLS alone is insufficient for this configuration.
 
 ## 5. Configure the physical charger
+
+For simulator-first validation, a new, unique simulator password can be enrolled
+before configuring any physical device. Do not use the charger's settings PIN.
+This workstation's `scripts/test-ocpp-staging.ps1` loads its ignored, Windows
+DPAPI-encrypted credential and tests `DEMO-CP-023` on the public WSS endpoint:
+
+```powershell
+.\scripts\test-ocpp-staging.ps1
+```
+
+The default six heartbeats span 150 seconds at the gateway's 30-second interval.
+The credential is tied to the enrolling Windows account, is never printed, and
+is injected only into the simulator process environment. The command restores
+any pre-existing password environment variable when it finishes. On another
+machine, use the simulator's `--password-prompt` with the enrolled password.
+Only one peer should use a charge-point identity at a time; stop the simulator
+before later connecting the physical device. This test proves protocol
+connectivity, not physical charging or downstream core event processing.
+
+If the running platform includes an additional Compose override, supply it on
+every helper command, for example on this VPS:
+
+```bash
+python3 scripts/ocpp-staging.py status --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml
+```
+
+`--compose-override` is repeatable. These files load before the OCPP security
+overlay and remain subject to the staging validation checks. Preserve the
+existing KYC DNS mapping when recreating the platform or operating this stack.
 
 | Device field | Value |
 | --- | --- |

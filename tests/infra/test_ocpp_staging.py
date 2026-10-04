@@ -23,6 +23,17 @@ HASH = "$argon2id$v=19$m=65536,t=3,p=4$c3ludGhldGlj$aGFzaA"
 
 
 class OcppStagingTest(unittest.TestCase):
+    def test_existing_override_is_preserved_before_the_security_overlay(self):
+        override = Path("/etc/vtsa-csms/compose.staging-kyc-dns.yaml")
+        with patch.object(setup, "EXTRA_COMPOSE_FILES", [override]):
+            command = setup.compose()
+            self.assertIn(str(override), command)
+            self.assertLess(
+                command.index(str(override)),
+                command.index(str(ROOT / "infra/compose.ocpp-staging.yaml")),
+            )
+            self.assertIn(str(override), setup.compose(False))
+
     def setUp(self):
         self.values = {
             "COMPOSE_PROJECT_NAME": "vtsa-ocpp-test",
@@ -31,6 +42,8 @@ class OcppStagingTest(unittest.TestCase):
             "APP_URL": "https://staging.example.test",
             "APP_KEY": "synthetic",
             "POSTGRES_PASSWORD": "synthetic",
+            "POSTGRES_DB": "vtsa_test",
+            "POSTGRES_USER": "vtsa_test",
             "REDIS_PASSWORD": "synthetic:@/with$special%characters",
             "MINIO_ROOT_USER": "synthetic",
             "MINIO_ROOT_PASSWORD": "synthetic",
@@ -110,6 +123,10 @@ class OcppStagingTest(unittest.TestCase):
         )
         self.assertIn("health/ready", gateway["healthcheck"]["test"][-1])
         self.assertEqual(gateway["restart"], "unless-stopped")
+        self.assertEqual(
+            config["services"]["platform"]["command"],
+            ["php", "-S", "0.0.0.0:8000", "-t", "public", "server.php"],
+        )
         registry = json.loads(gateway["environment"]["OCPP_CHARGER_REGISTRY_JSON"])
         self.assertEqual(registry["CP-STAGING"]["basic_password_hash"], HASH)
         for name in setup.SERVICES[1:]:

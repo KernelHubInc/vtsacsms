@@ -32,7 +32,14 @@ With the Compose gateway running:
 
 Available scenarios are `standard`, `duplicate`, `fault`, and `reboot-during-charging`. The simulator can also be imported to drive boot, heartbeat loops, status changes, authorization/start/stop flows, meter values, DataTransfer, diagnostics, firmware/security statuses, abrupt disconnects, reconnects, duplicate replay, faults, and reboot-during-charge cases.
 
-For enrolled Basic authentication, put the password in `SIMULATOR_BASIC_PASSWORD`; do not pass it on the command line or commit it. For mTLS, use `--ca-file`, `--certificate-file`, and `--private-key-file` with local certificate paths.
+For enrolled Basic authentication, use `--password-prompt` or put the password in `SIMULATOR_BASIC_PASSWORD`; do not pass it on the command line or commit it. For mTLS, use `--ca-file`, `--certificate-file`, and `--private-key-file` with local certificate paths.
+
+Use `--scenario connectivity --heartbeats 6` for initial staging verification. It
+requires enrollment credentials, checks BootNotification is Accepted, and sends
+heartbeats at the server-provided interval. It never sends Authorize,
+StartTransaction, meter values, or connector status changes. HTTP 404/502/403
+failures produce a diagnostic and nonzero exit status. The simulator verifies TLS
+certificates for WSS and requires the requested OCPP subprotocol.
 
 ## Internal interfaces
 

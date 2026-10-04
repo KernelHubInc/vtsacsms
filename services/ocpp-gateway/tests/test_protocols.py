@@ -20,9 +20,49 @@ from vtsa_ocpp_gateway.app import create_app
 from vtsa_ocpp_gateway.config import Settings
 from vtsa_ocpp_gateway.models import AuthorizationDecision, ChargerIdentity, JsonObject
 from vtsa_ocpp_gateway.runtime import GatewayRuntime
-from vtsa_ocpp_gateway.simulator import ChargerSimulator
+from vtsa_ocpp_gateway.simulator import ChargerSimulator, build_parser, run_scenario
 from vtsa_ocpp_gateway.store import MemoryGatewayStore
 from vtsa_ocpp_gateway.telemetry import EventPublisher, GatewayMetrics
+
+
+async def test_connectivity_scenario_uses_enrollment_and_never_starts_charging(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    password = "synthetic-connectivity-password"
+    registry = {
+        "SIM-CONNECTIVITY": {
+            "tenant_id": "01J00000000000000000000001",
+            "charger_id": "01J00000000000000000000002",
+            "enabled": True,
+            "basic_password_hash": PasswordHasher().hash(password),
+        }
+    }
+    settings = Settings(
+        require_tls=False, charger_registry_json=json.dumps(registry), raw_message_logging=False
+    )
+    store = MemoryGatewayStore()
+    runtime = GatewayRuntime(settings, store=store)
+    monkeypatch.setenv("SIMULATOR_BASIC_PASSWORD", password)
+    async with _live_gateway(settings, runtime) as endpoint:
+        arguments = build_parser().parse_args(
+            [
+                "--url",
+                endpoint + "/ocpp",
+                "--identity",
+                "SIM-CONNECTIVITY",
+                "--scenario",
+                "connectivity",
+                "--heartbeats",
+                "1",
+            ]
+        )
+        await run_scenario(arguments)
+    events = store.streams[settings.event_stream]
+    event_types = {event["event_type"] for event in events}
+    assert "gateway.ocpp.heartbeat.received.v1" in event_types
+    assert not any("transaction" in str(event_type) for event_type in event_types)
+    assert all(event["tenant_id"] == registry["SIM-CONNECTIVITY"]["tenant_id"] for event in events)
+    assert "PASS: authenticated OCPP connectivity" in capsys.readouterr().out
 
 
 class HangingConnection:

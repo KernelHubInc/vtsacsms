@@ -19,6 +19,7 @@ x-ocpp-logging: &ocpp-logging
 services:
   platform:
     environment: *ocpp-core
+    command: ["php", "-S", "0.0.0.0:8000", "-t", "public", "server.php"]
     entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
   worker:
     environment: *ocpp-core
