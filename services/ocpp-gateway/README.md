@@ -4,6 +4,10 @@ The gateway is VTSA CSMS's separately deployable asynchronous protocol edge. It 
 
 ## Local setup
 
+For the existing Hostinger staging site and a real OCPP 1.6J device, use the [staging deployment runbook](../../docs/runbooks/ocpp-staging-quickstart.md). It supplies a secured Compose overlay, private enrollment helper, and an Nginx WebSocket route on the existing HTTPS hostname.
+
+The shared `/ocpp/{identity}` route supports multiple independently enrolled devices. The staging helper's `enroll` action preserves existing registrations; `gateway-up` applies additions with a brief gateway restart. `verify` checks private readiness and public rejection of an unknown device. Admin record creation alone does not provision gateway credentials.
+
 From `services/ocpp-gateway` in PowerShell:
 
 ```powershell

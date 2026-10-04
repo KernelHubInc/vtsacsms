@@ -12,6 +12,7 @@ import pytest
 import uvicorn
 from argon2 import PasswordHasher
 from websockets.asyncio.client import ClientConnection, connect
+from websockets.exceptions import InvalidStatus
 from websockets.typing import Subprotocol
 
 from vtsa_ocpp_gateway.adapters.v16 import Ocpp16ChargePoint
@@ -41,6 +42,69 @@ class FailingAuthorizationStore(MemoryGatewayStore):
         self, stream: str, request: JsonObject, timeout_seconds: float, max_length: int
     ) -> AuthorizationDecision:
         raise ConnectionError("synthetic core outage")
+
+
+@pytest.mark.asyncio
+async def test_shared_endpoint_isolates_two_enrolled_devices_and_credentials() -> None:
+    password_a = "synthetic-device-a-password"
+    password_b = "synthetic-device-b-password"
+    registry = {
+        "DEVICE-A": {
+            "tenant_id": "01J00000000000000000000001",
+            "charger_id": "01J00000000000000000000002",
+            "enabled": True,
+            "basic_password_hash": PasswordHasher().hash(password_a),
+        },
+        "DEVICE-B": {
+            "tenant_id": "01J00000000000000000000003",
+            "charger_id": "01J00000000000000000000004",
+            "enabled": True,
+            "basic_password_hash": PasswordHasher().hash(password_b),
+        },
+    }
+    settings = Settings(
+        require_tls=False, charger_registry_json=json.dumps(registry), raw_message_logging=False
+    )
+    store = MemoryGatewayStore()
+    runtime = GatewayRuntime(settings, store=store)
+    async with _live_gateway(settings, runtime) as endpoint, AsyncExitStack() as stack:
+        sockets = []
+        for identity, password in (("DEVICE-A", password_a), ("DEVICE-B", password_b)):
+            auth = base64.b64encode(f"{identity}:{password}".encode()).decode()
+            sockets.append(
+                await stack.enter_async_context(
+                    connect(
+                        f"{endpoint}/ocpp/{identity}",
+                        subprotocols=[Subprotocol("ocpp1.6")],
+                        additional_headers={"Authorization": f"Basic {auth}"},
+                    )
+                )
+            )
+        # Identical message IDs on different devices must not share dedupe state.
+        for websocket in sockets:
+            await _send_frame(websocket, [2, "same-id", "Heartbeat", {}])
+        for websocket in sockets:
+            assert (await _receive_frame(websocket))[:2] == [3, "same-id"]
+        bad_auth = base64.b64encode(f"DEVICE-B:{password_a}".encode()).decode()
+        with pytest.raises(InvalidStatus) as error:
+            async with connect(
+                f"{endpoint}/ocpp/DEVICE-B",
+                subprotocols=[Subprotocol("ocpp1.6")],
+                additional_headers={"Authorization": f"Basic {bad_auth}"},
+            ):
+                pytest.fail("Another device's password was accepted")
+        assert error.value.response.status_code == 403
+        await _send_frame(sockets[1], [2, "still-connected", "Heartbeat", {}])
+        assert (await _receive_frame(sockets[1]))[:2] == [3, "still-connected"]
+    events = [
+        event
+        for event in store.streams[settings.event_stream]
+        if event["event_type"] == "gateway.ocpp.heartbeat.received.v1"
+    ]
+    assert {(event["tenant_id"], event["aggregate_id"]) for event in events} == {
+        (entry["tenant_id"], entry["charger_id"]) for entry in registry.values()
+    }
+    assert len(events) == 3
 
 
 def _development_gateway(

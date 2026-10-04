@@ -101,6 +101,25 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         app(FeatureFlags::class)->assertProductionSafe();
+        if (config('kyc.enabled') && ! app()->environment(['local', 'testing'])) {
+            foreach (['request_secret', 'callback_secret'] as $key) {
+                if (strlen((string) config('kyc.'.$key)) < 32) {
+                    throw new \LogicException('KYC requires separately provisioned service secrets.');
+                }
+            }
+            foreach (['url', 'privacy_url', 'terms_url', 'consent_url'] as $key) {
+                if (! str_starts_with((string) config('kyc.'.$key), 'https://')) {
+                    throw new \LogicException('KYC requires HTTPS service and reviewed policy URLs.');
+                }
+            }
+            if (trim((string) config('kyc.consent_version')) === '' || config('kyc.consent_version') === 'development-v1') {
+                throw new \LogicException('KYC requires a reviewed consent version outside development.');
+            }
+            if (str_starts_with((string) config('kyc.consent_version'), 'staging-')
+                && (! app()->environment(['staging', 'demo']) || config('kyc.automatic_verification_enabled'))) {
+                throw new \LogicException('Staging KYC consent requires a staging or demo environment and manual approval.');
+            }
+        }
         Sanctum::usePersonalAccessTokenModel(MobileAccessToken::class);
         Gate::policy(Site::class, SitePolicy::class);
         Gate::policy(ChargingStation::class, ChargingStationPolicy::class);

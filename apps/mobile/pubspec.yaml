@@ -27,6 +27,7 @@ dependencies:
   url_launcher: ^6.3.2
 
 dev_dependencies:
+  camera_platform_interface: 2.14.0
   flutter_test:
     sdk: flutter
   integration_test:

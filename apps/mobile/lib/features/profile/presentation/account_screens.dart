@@ -108,7 +108,7 @@ class AccountScreen extends StatelessWidget {
                     dependencies.vehicles.load(),
                   ]);
                   if (context.mounted) {
-                    context.go('/explore');
+                    context.go('/login');
                   }
                 },
               ),

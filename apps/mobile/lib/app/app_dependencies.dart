@@ -117,7 +117,7 @@ final class AppDependencies {
       await MapConfigurationRepository(client).resolve(localEnvironment.maps),
     );
 
-    return AppDependencies.fromParts(
+    final dependencies = AppDependencies.fromParts(
       environment: environment,
       preferences: preferences,
       tokenStore: tokens,
@@ -134,6 +134,8 @@ final class AppDependencies {
       directions: ExternalDirectionsService(),
       location: GeolocatorDeviceLocationService(),
     );
+    client.onSessionExpired = dependencies.auth.sessionExpired;
+    return dependencies;
   }
 
   final AppEnvironment environment;

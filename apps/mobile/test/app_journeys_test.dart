@@ -7,32 +7,32 @@ import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('guest discovers bounded station list with stale indication', (
+  testWidgets(
+    'signed-in driver discovers bounded stations with stale indication',
+    (tester) async {
+      final fixture = await buildTestDependencies(signedIn: true);
+      await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Find your next charge'), findsOneWidget);
+      expect(find.byType(PowerSolutionsLogo), findsOneWidget);
+      expect(find.text('Harbor Exchange'), findsOneWidget);
+      expect(find.text('Status stale'), findsOneWidget);
+      expect(fixture.stations.lastBounds?.west, 120.85);
+
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.toolbarHeight, 96);
+    },
+  );
+
+  testWidgets('driver starts at sign-in and reaches their account', (
     tester,
   ) async {
     final fixture = await buildTestDependencies();
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 
-    expect(find.text('Find your next charge'), findsOneWidget);
-    expect(find.byType(PowerSolutionsLogo), findsOneWidget);
-    expect(find.text('Harbor Exchange'), findsOneWidget);
-    expect(find.text('Status stale'), findsOneWidget);
-    expect(fixture.stations.lastBounds?.west, 120.85);
-
-    final appBar = tester.widget<AppBar>(find.byType(AppBar));
-    expect(appBar.toolbarHeight, 96);
-  });
-
-  testWidgets('driver can sign in from Account', (tester) async {
-    final fixture = await buildTestDependencies();
-    await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Account'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Sign in'));
-    await tester.pumpAndSettle();
+    expect(find.text('Sign in to your drive.'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextField, 'Email address (required)'),
       'ada@example.test',
@@ -51,7 +51,7 @@ void main() {
   testWidgets('primary destinations share the branded navigation header', (
     tester,
   ) async {
-    final fixture = await buildTestDependencies();
+    final fixture = await buildTestDependencies(signedIn: true);
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 
@@ -71,7 +71,7 @@ void main() {
   testWidgets('station details expose connectors, hours, and amenities', (
     tester,
   ) async {
-    final fixture = await buildTestDependencies();
+    final fixture = await buildTestDependencies(signedIn: true);
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Harbor Exchange'));

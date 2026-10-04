@@ -29,7 +29,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) => _AuthShell(
     eyebrow: 'WELCOME BACK',
     title: 'Sign in to your drive.',
-    intro: 'Your saved stations and vehicles stay tied to your account.',
+    intro:
+        'Sign in to find charging stations, manage your vehicles, and verify your identity. New here? Create an account to get started.',
     child: AnimatedBuilder(
       animation: widget.dependencies.auth,
       builder: (context, _) {
@@ -87,10 +88,6 @@ class _LoginScreenState extends State<LoginScreen> {
               variant: VtsaButtonVariant.secondary,
               onPressed: () => context.push('/register'),
             ),
-            TextButton(
-              onPressed: () => context.go('/explore'),
-              child: const Text('Continue as guest'),
-            ),
           ],
         );
       },
@@ -102,22 +99,22 @@ class _LoginScreenState extends State<LoginScreen> {
       showVtsaToast(context, message: 'Enter your email and password.');
       return;
     }
-    final signedIn = await widget.dependencies.auth.login(
+    final dependencies = widget.dependencies;
+    final signedIn = await dependencies.auth.login(
       email: _email.text,
       password: _password.text,
     );
-    if (!mounted || !signedIn) {
+    if (!signedIn || dependencies.auth.needsEmailVerification) {
       return;
     }
     await Future.wait([
-      widget.dependencies.favorites.load(),
-      widget.dependencies.vehicles.load(),
-      widget.dependencies.pushRegistration.register(),
-      widget.dependencies.charging.restoreAuthoritativeSession(),
+      dependencies.favorites.load(),
+      dependencies.vehicles.load(),
+      dependencies.pushRegistration.register(),
+      if (dependencies.featureFlags.remoteCharging ||
+          dependencies.featureFlags.simulatedCharging)
+        dependencies.charging.restoreAuthoritativeSession(),
     ]);
-    if (mounted) {
-      context.go('/account');
-    }
   }
 }
 
@@ -218,7 +215,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       password: _password.text,
     );
     if (mounted && created) {
-      context.go('/verify-email?email=${Uri.encodeComponent(_email.text)}');
+      final deliveryFailed =
+          widget.dependencies.auth.registration?.verificationEmailSent == false;
+      context.go(
+        Uri(
+          path: '/verify-email',
+          queryParameters: {
+            'email': _email.text,
+            if (deliveryFailed) 'delivery': 'failed',
+          },
+        ).toString(),
+      );
     }
   }
 }
@@ -291,38 +298,87 @@ class EmailVerificationScreen extends StatelessWidget {
   const EmailVerificationScreen({
     required this.dependencies,
     this.email,
+    this.deliveryFailed = false,
     super.key,
   });
 
   final AppDependencies dependencies;
   final String? email;
+  final bool deliveryFailed;
 
   @override
   Widget build(BuildContext context) => _AuthShell(
     eyebrow: 'VERIFY EMAIL',
-    title: 'One tap from verified.',
-    intro:
-        'Open the signed link sent to ${email ?? dependencies.auth.user?.email ?? 'your email address'}. Return here when verification is complete.',
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (dependencies.auth.status.name == 'authenticated')
-          VtsaButton(
-            label: 'Resend verification email',
-            onPressed: () async {
-              final sent = await dependencies.auth.resendVerification();
-              if (context.mounted && sent) {
-                showVtsaToast(context, message: 'Verification email sent.');
-              }
-            },
-          ),
-        const SizedBox(height: VtsaSpacing.sm),
-        VtsaButton(
-          label: 'Continue',
-          variant: VtsaButtonVariant.secondary,
-          onPressed: () => context.go('/explore'),
-        ),
-      ],
+    title: deliveryFailed
+        ? 'Your account is created.'
+        : 'One tap from verified.',
+    intro: deliveryFailed
+        ? 'We could not send your verification email. Sign in with the account you just created to request another email. Email verification is still required before browsing.'
+        : 'Open the signed link sent to ${email ?? dependencies.auth.user?.email ?? 'your email address'}. Return here when verification is complete.',
+    child: AnimatedBuilder(
+      animation: dependencies.auth,
+      builder: (context, _) {
+        final auth = dependencies.auth;
+        final signedIn = auth.status == AuthStatus.authenticated;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (auth.failure != null) ...[
+              VtsaErrorState(
+                title: 'Verification needed',
+                description: auth.failure!.message,
+                correlationId: auth.failure!.correlationId,
+              ),
+              const SizedBox(height: VtsaSpacing.md),
+            ],
+            if (signedIn) ...[
+              VtsaButton(
+                label: "I've verified my email",
+                loading: auth.isBusy,
+                onPressed: () async {
+                  final verified = await auth.refreshVerification();
+                  if (!verified) return;
+                  await Future.wait([
+                    dependencies.favorites.load(),
+                    dependencies.vehicles.load(),
+                  ]);
+                },
+              ),
+              const SizedBox(height: VtsaSpacing.sm),
+              VtsaButton(
+                label: 'Resend verification email',
+                variant: VtsaButtonVariant.secondary,
+                onPressed: auth.isBusy
+                    ? null
+                    : () async {
+                        final sent = await auth.resendVerification();
+                        if (context.mounted && sent) {
+                          showVtsaToast(
+                            context,
+                            message: 'Verification email sent.',
+                          );
+                        }
+                      },
+              ),
+              TextButton(
+                onPressed: auth.isBusy ? null : auth.logout,
+                child: const Text('Use a different account'),
+              ),
+            ] else ...[
+              Text(
+                deliveryFailed
+                    ? 'Use the same email and password to sign in. You do not need to create another account.'
+                    : 'Sign in after verifying your email. You can also sign in to request a new link.',
+              ),
+              const SizedBox(height: VtsaSpacing.md),
+              VtsaButton(
+                label: 'Sign in to continue',
+                onPressed: () => context.go('/login'),
+              ),
+            ],
+          ],
+        );
+      },
     ),
   );
 }

@@ -59,13 +59,13 @@ final class ApiAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
   }) async {
     try {
-      await _client.dio.post<void>(
+      final response = await _client.dio.post<Map<String, dynamic>>(
         '/api/v1/auth/register',
         data: {
           'name': name.trim(),
@@ -75,6 +75,10 @@ final class ApiAuthRepository implements AuthRepository {
           if (_environment.hasTenant) 'tenant_id': _environment.defaultTenantId,
         },
         options: Options(extra: {'anonymous': true}),
+      );
+      final data = response.data?['data'] as Map<String, dynamic>?;
+      return RegistrationResult(
+        verificationEmailSent: data?['verification_email_sent'] != false,
       );
     } on Object catch (error) {
       ApiClient.throwFailure(error);

@@ -59,7 +59,7 @@ This phase defines the product and architecture only. It does not authorize impl
 ### 5.1 Experience surfaces
 
 - **Public web:** marketing content, public location/EVSE/connector discovery, availability display, tariff summaries, accessibility details, and deep links to the app.
-- **Consumer mobile:** identity, discovery, charging initiation/control where permitted, live session status, receipts/invoices, payment methods through provider tokenization, support, and notifications.
+- **Consumer mobile:** identity, discovery, charging initiation/control where permitted, live session status, receipts/invoices, payment methods through provider tokenization, support, and notifications. MOB-AUTH-001 requires sign-in and email verification before browsing; only account creation, recovery, and verification are accessible to guests. MOB-KYC-002 requires document/face outlines, step-by-step capture guidance, an explicit readiness action before the live challenge, and photo review before upload. See [mobile user flows](../design/mobile-user-flows.md).
 - **Admin/operator:** tenant configuration, role-scoped operations, locations/assets, charger monitoring, sessions, tariffs, financial operations, procurement, inventory, maintenance, CMS, support, reporting, and integration management.
 - **OCPP gateway:** authenticated charger connections, protocol validation, heartbeats/status, transaction messages, meter values, remote command routing, correlation, and safe store-and-forward behavior.
 - **External API/webhooks:** versioned integration surfaces for approved partners and tenant systems.

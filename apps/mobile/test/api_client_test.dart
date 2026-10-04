@@ -8,6 +8,53 @@ import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 
 void main() {
+  test(
+    'expired session without refresh token clears storage and notifies auth',
+    () async {
+      final tokens = MemoryTokenStore();
+      await tokens.write(
+        TokenBundle(
+          accessToken: 'rejected-token',
+          expiresAt: DateTime.utc(2026),
+          tenantId: 'test-tenant',
+          deviceId: 'test-device',
+        ),
+      );
+      final adapter = _ScriptedAdapter()
+        ..responses.add(const _Reply(401, '{}'));
+      var expired = false;
+      final client = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test'),
+        tokenStore: tokens,
+        dio: Dio()..httpClientAdapter = adapter,
+      )..onSessionExpired = () => expired = true;
+      await expectLater(
+        client.dio.get<void>('/api/v1/me'),
+        throwsA(isA<DioException>()),
+      );
+      expect(await tokens.read(), isNull);
+      expect(expired, isTrue);
+    },
+  );
+
+  test('anonymous login failure does not expire another session', () async {
+    final adapter = _ScriptedAdapter()..responses.add(const _Reply(401, '{}'));
+    var expired = false;
+    final client = ApiClient(
+      baseUrl: Uri.parse('https://api.example.test'),
+      tokenStore: MemoryTokenStore(),
+      dio: Dio()..httpClientAdapter = adapter,
+    )..onSessionExpired = () => expired = true;
+    await expectLater(
+      client.dio.post<void>(
+        '/api/v1/auth/login',
+        options: Options(extra: {'anonymous': true}),
+      ),
+      throwsA(isA<DioException>()),
+    );
+    expect(expired, isFalse);
+  });
+
   test('safe GET retries transient failure and mutation does not', () async {
     final adapter = _ScriptedAdapter();
     adapter.responses.addAll([

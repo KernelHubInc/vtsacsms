@@ -23,6 +23,7 @@ final class FakeAuthRepository implements AuthRepository {
   bool signedIn;
   bool passwordResetRequested = false;
   bool registrationRequested = false;
+  bool verificationEmailSent = true;
   final user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
@@ -59,11 +60,14 @@ final class FakeAuthRepository implements AuthRepository {
   Future<void> logout() async => signedIn = false;
 
   @override
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
-  }) async => registrationRequested = true;
+  }) async {
+    registrationRequested = true;
+    return RegistrationResult(verificationEmailSent: verificationEmailSent);
+  }
 
   @override
   Future<void> requestPasswordReset(String email) async =>

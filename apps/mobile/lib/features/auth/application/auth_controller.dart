@@ -20,11 +20,14 @@ final class AuthController extends ChangeNotifier {
   UserProfile? _user;
   AppFailure? _failure;
   bool _busy = false;
+  bool _verificationRequired = false;
+  RegistrationResult? _registration;
 
   AuthStatus get status => _status;
   UserProfile? get user => _user;
   AppFailure? get failure => _failure;
   bool get isBusy => _busy;
+  RegistrationResult? get registration => _registration;
 
   Future<void> restore() async {
     if (await _tokens.read() == null) {
@@ -72,8 +75,13 @@ final class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     _setBusy(true);
+    _registration = null;
     try {
-      await _repository.register(name: name, email: email, password: password);
+      _registration = await _repository.register(
+        name: name,
+        email: email,
+        password: password,
+      );
       return true;
     } on AppFailure catch (failure) {
       _failure = failure;
@@ -119,6 +127,17 @@ final class AuthController extends ChangeNotifier {
       _status = AuthStatus.guest;
       _setBusy(false);
     }
+  }
+
+  void sessionExpired() {
+    _user = null;
+    _verificationRequired = false;
+    _status = AuthStatus.guest;
+    _failure = const AppFailure(
+      kind: FailureKind.unauthenticated,
+      message: 'Your session has ended. Sign in again to continue.',
+    );
+    notifyListeners();
   }
 
   void _setBusy(bool value) {

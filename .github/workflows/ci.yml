@@ -208,3 +208,9 @@ jobs:
           docker compose --env-file .env.app.staging.example -f infra/cluster/compose.app.yaml config --quiet
           docker compose --env-file .env.app.production.example -f infra/cluster/compose.app.yaml config --quiet
           DATA_BIND_ADDRESS=127.0.0.1 docker compose --env-file .env.data.example -f infra/cluster/compose.data.yaml config --quiet
+      - name: Validate local and staging demo environment selection
+        run: python3 tests/infra/test_compose_environment.py
+      - name: Validate OCPP staging isolation and enrollment configuration
+        run: python3 tests/infra/test_ocpp_staging.py
+      - name: Validate private KYC deployment isolation
+        run: sudo python3 -m unittest discover -s tests/infra -p 'test_kyc*.py'
