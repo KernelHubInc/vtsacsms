@@ -21,6 +21,8 @@ For Android, provide the key through an environment variable or local Gradle pro
 
 ## Authentication behavior
 
+The app opens Sign in for guests and permits only registration, password recovery, and email verification before browsing (MOB-AUTH-001). Onboarding follows verified sign-in. There is no guest continuation; all existing and new app routes default to private. Logout and API session expiry replace the browsing stack with Sign in. An unverified account can resend verification or switch accounts but cannot browse. Regression coverage is in `test/auth_navigation_test.dart`, `test/email_verification_journey_test.dart`, and `test/api_client_test.dart`.
+
 Sanctum access tokens are stored only in secure platform storage. Logout attempts server revocation and always removes the local token. The interceptor serializes concurrent refresh attempts and retries the failed request once only if an adapter returned a refresh token. The current Laravel contract does not issue refresh tokens, so normal expiry returns the driver to sign-in without inventing a renewal credential.
 
 Station deep links use `vtsa:///stations/{station-ulid}`. The app rejects unknown schemes and malformed identifiers. HTTPS universal/app links remain disabled until an owned production domain and platform association files are approved.
@@ -51,6 +53,10 @@ To exercise scanning on a real device, verify allow, deny, deny-permanently, cam
 
 ## Verification
 
+The Git pre-push hook runs Flutter analysis and all unit/widget tests. Commit KYC application, domain, data, and presentation files together with `pubspec.yaml` and `pubspec.lock`; the capture screens require both `camera` and `image_picker`. A screen-only commit can produce cascading missing-import errors even when the screen itself is valid. Run `flutter pub get` after switching branches or changing dependencies.
+
+Email verification preserves the session token when `/me` returns `email_unverified`, so the driver can resend the email. After a cold start with no confirmed profile, an offline or timed-out request keeps browsing blocked until verification can be checked. A `401` during the verification check clears the token and returns to sign-in.
+
 Run from `apps/mobile`:
 
 ```powershell
@@ -65,6 +71,12 @@ flutter build apk --debug --dart-define-from-file=dart_defines.example.json
 Manually verify large text, TalkBack/VoiceOver labels, light/dark themes, list-only discovery, denied location and camera access, offline recovery, stale station status, app termination during charging, delayed payment, notification handoff, deep links, and directions handoff on real devices before release.
 
 The integration command requires a configured Android/iOS emulator or physical device. The pull-request workflow provisions an Android API 35 emulator; a desktop or browser target is not a substitute for the camera and lifecycle journey.
+
+### Guided KYC capture (MOB-KYC-002)
+
+Run `flutter test test/kyc_test.dart test/kyc_navigation_test.dart test/kyc_capture_guidance_test.dart test/kyc_live_feedback_test.dart` for account-to-KYC navigation, logout protection, consent, upload/review, camera guides, explicit live-check readiness, interruption, permission failure, small-screen coverage, pending-frame scanning, server-confirmed green feedback, reduced-motion behavior and safe support references. The test-only camera platform interface is pinned to the version used by the camera plugin.
+
+On a staging phone, verify portrait/landscape framing, camera permission recovery, front-camera mirroring with both head-turn directions, legible document photos, retakes, app background/foreground, and a complete optical challenge through submission and callback. Widget tests use synthetic previews and do not validate real camera hardware or biometric accuracy. This UI change requires a new mobile build; it has no backend migration or policy change.
 
 ## Open decisions
 

@@ -77,11 +77,58 @@ sudo bash scripts/kyc-staging.sh up
 
 `check` builds a local Docker image from an allowlisted source snapshot, tags it with the SHA-256 of that snapshot, pulls infrastructure images, and checks model loading, verified TLS, database connectivity, bucket access and Laravel readiness. It creates disposable containers but does not migrate the database or replace running services. Failed checks stop the command; they are not bypassed. Initial building/downloading needs outbound internet and free RAM/disk alongside your production workload. Build off-peak and check capacity first.
 
+Connectivity failures report the first failing stage (`configuration`, `models`, `database`, `storage`, or `Laravel readiness`) and exception class. Later stages have not been checked. Exception messages and tracebacks remain suppressed because they can include credentials, connection strings or sensitive configuration values. Bucket checks use `HeadBucket`; they do not establish that encrypted object uploads or HMAC callbacks succeed.
+
 `up` repeats preflight, takes a protected PostgreSQL backup, applies Alembic migrations, starts staging containers and waits for their health checks. Both commands share the app deployment lock. A failed backup prevents migration. A failed rollout exits nonzero; it does not automatically undo additive schema changes. Backup/error files are protected under `/var/backups/vtsa-csms/kyc-staging`. Re-running `up` reuses persistent database/evidence and does not delete volumes. Docker layer caching avoids reinstalling unchanged dependencies.
+
+Older transfer bundles may fail with `invalid mount path: 'mode=1777'`: YAML splits the unquoted comma in `tmpfs: [/tmp:size=128m,mode=1777]` into two mounts. In `infra/cluster/compose.kyc.yaml`, replace it with `tmpfs: ["/tmp:size=128m,mode=1777"]` or a block list containing that single string. The Caddy `kyc-ingress` service also needs `cap_add: [NET_BIND_SERVICE]` alongside `cap_drop: [ALL]` because the official executable carries that file capability; otherwise execution can fail with `operation not permitted`. Preserve private bind addresses, TLS verification and any deployment-specific DNS overrides when patching an extracted bundle, then rerun `check` before `up`.
 
 For a repository checkout the equivalent low-level command is `sudo bash scripts/deploy-kyc.sh staging source`. `production source` is rejected. Production still requires a committed, published immutable release.
 
 ## 5. Exercise the flow
+
+### Staging participation notices
+
+For invited adult staging testers, the application provides `/staging/kyc/privacy`,
+`/staging/kyc/terms` and `/staging/kyc/consent`. They are independent of CMS seed data,
+available before enabling KYC, marked noindex/no-store, and return 404 outside
+`APP_ENV=staging` or the existing VPS3 `APP_ENV=demo`. They do not overwrite the
+production privacy/terms pages or claim production legal approval. Identity owns
+this versioned test participation notice; CMS remains the owner of production
+policy content. The operator authorized staging test notices on 2 October 2026.
+
+Use consent version `staging-optical-2026-10-02-v1` and the exact consent text in
+`StagingKycPolicyController::CONSENT`. This version is rejected at startup in
+production and when automatic approval is enabled. The existing HTTPS and secret
+checks still apply; an empty consent version is also rejected. The displayed
+evidence retention comes from `kyc.retention_days`; it must match the processor.
+Prefer synthetic fixtures; real-data tests require consenting invited adults and
+the test coordinator's authorization. Define test-end cleanup and backup retention
+before real-data collection. Cancellation schedules evidence erasure and does not
+claim to delete audit records or backup copies immediately.
+
+The supplemental `vtsa-kyc-staging-notices.tar.gz` bundle contains a checked source
+patch, `enable-staging-kyc.py`, and the existing dotenv validator. Extract it in a
+new directory, then run `python3 enable-staging-kyc.py /opt/vtsa-csms` as root on VPS3.
+It requires the existing `vtsa-csms-staging` project using `infra/compose.yaml`,
+`DEPLOY_ENVIRONMENT=staging`, matching processor secrets, and an HTTPS `APP_URL`.
+It preserves the current Compose file list (including private DNS overrides),
+checks the patch before touching source, backs up `.env.staging` with mode 600,
+fills the three URLs/consent/version, matches processor retention, builds only
+platform/worker/scheduler, and tests bootstrap in a disposable container before
+recreating those three services. It checks effective configuration in each service,
+the HTTPS notice bodies, and private KYC readiness. No migration, permission grant,
+database/container-volume deletion or processor redeploy is performed. A source
+conflict stops the deployment rather than overwriting VPS edits. Build/deployment
+failures attempt to restore app availability with KYC disabled; inspect the result.
+
+Rollback: set `KYC_ENABLED=false` in the protected app environment, then recreate
+the same three services using the same Compose file list. Keep the additive notice
+code and existing evidence. The protected pre-change env backup is for recovery;
+do not publish it. The patch and these settings must remain in subsequent releases.
+The helper does not grant admin roles or complete a real-device submission: verify
+tenant permissions, manual review, request signatures, callbacks and evidence
+viewing in the next staging flow test.
 
 After checks pass, set `KYC_ENABLED=true` in **staging** and redeploy/recreate only the staging Laravel app, workers and scheduler so they receive the new settings. Select **Manual** in web admin KYC settings. Use the updated mobile client configured with the **staging Laravel API URL**, then test consent → supported ID upload → live camera prompts → submit → admin review. The mobile app never connects directly to the processor. The earlier local debug APK targets a local emulator API and must be rebuilt/reconfigured for your staging API.
 

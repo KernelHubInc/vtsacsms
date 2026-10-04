@@ -7,6 +7,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/app_router.dart';
 import 'package:vtsa_mobile/design_system/catalog/design_system_catalog_page.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
+import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/l10n/app_localizations.dart';
 
 class VtsaApp extends StatefulWidget {
@@ -39,6 +40,7 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
+        widget.dependencies.auth.status == AuthStatus.authenticated &&
         !widget.dependencies.auth.needsEmailVerification &&
         (widget.dependencies.featureFlags.remoteCharging ||
             widget.dependencies.featureFlags.simulatedCharging)) {

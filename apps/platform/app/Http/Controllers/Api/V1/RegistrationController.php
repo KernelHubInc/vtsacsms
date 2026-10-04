@@ -12,7 +12,9 @@ use App\Http\Requests\Api\RegisterRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 final class RegistrationController extends Controller
 {
@@ -63,10 +65,24 @@ final class RegistrationController extends Controller
             return $user;
         });
 
-        $user->sendEmailVerificationNotification();
+        $verificationEmailSent = true;
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (TransportExceptionInterface $exception) {
+            // Registration is committed; a mail outage must not invite duplicate signup.
+            $verificationEmailSent = false;
+            Log::warning('identity.registration.verification_email_failed', [
+                'tenant_id' => DemoEnvironment::TENANT_ID,
+                'correlation_id' => $request->attributes->get('correlation_id'),
+                'exception_class' => $exception::class,
+            ]);
+        }
 
         return response()->json(['data' => [
-            'message' => 'Registration complete. Check your email to verify your account.',
-        ]], 201);
+            'message' => $verificationEmailSent
+                ? 'Registration complete. Check your email to verify your account.'
+                : 'Your account was created, but the verification email could not be sent. Sign in to request another email.',
+            'verification_email_sent' => $verificationEmailSent,
+        ]], 201)->header('Cache-Control', 'no-store');
     }
 }

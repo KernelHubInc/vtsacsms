@@ -76,8 +76,12 @@ class KycDeploymentTest(unittest.TestCase):
                     if name == "kyc-ingress":
                         self.assertEqual(service["ports"][0]["host_ip"], "10.77.0.2")
                         self.assertEqual(service["ports"][0]["target"], 8443)
+                        self.assertEqual(service["cap_drop"], ["ALL"])
+                        self.assertEqual(service["cap_add"], ["NET_BIND_SERVICE"])
                     else:
                         self.assertFalse(service.get("ports"), name)
+                    if name in {"kyc-api", "kyc-worker", "kyc-beat", "kyc-migrate"}:
+                        self.assertEqual(service["tmpfs"], ["/tmp:size=128m,mode=1777"])
                 self.assertTrue(config["networks"]["backend"]["internal"])
                 self.assertEqual(set(config["services"]["kyc-redis"]["networks"]), {"backend"})
                 self.assertNotIn("kyc-postgres", config["services"])

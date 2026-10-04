@@ -10,7 +10,7 @@ void main() {
   testWidgets('driver explores station details and saves a favorite', (
     tester,
   ) async {
-    final fixture = await buildTestDependencies();
+    final fixture = await buildTestDependencies(signedIn: true);
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 

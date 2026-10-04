@@ -2,7 +2,21 @@
 
 ## Guardrails
 
-Guest charging, provider selection, reservation policy, roaming, tax terminology, and charger-specific recovery remain unresolved product decisions. Authenticated Phase 10 UI presents only server-supplied connector, tariff, preauthorization, payment-status, and document facts.
+The mobile app requires sign-in before browsing. Provider selection, reservation policy, roaming, tax terminology, and charger-specific recovery remain unresolved product decisions. Authenticated Phase 10 UI presents only server-supplied connector, tariff, preauthorization, payment-status, and document facts.
+
+## Sign in before browsing
+
+MOB-AUTH-001: A guest opens Sign in, including on first launch. Registration, password recovery, and email-verification instructions are the only guest destinations. There is no guest continuation or bottom navigation before authentication. Station, charging, KYC, favorites, wallet, and activity links all pass through the same router guard; new screens are protected by default.
+
+An unverified session remains on email verification, with resend, check status, and change-account actions. Verified drivers complete or skip the first-run introduction, then browse. Returning sessions restore into Explore. A successful sign-in after onboarding opens Account, where Identity verification is available. Logout and rejected sessions return to Sign in and remove the browsing back stack. Direct-link targets are not retained through sign-in; the driver opens them again after authentication. Public website discovery and server authorization contracts are unchanged.
+
+## Guided identity verification
+
+MOB-KYC-002: Explain the process before collecting evidence. Show five named stages: consent, personal details, document selection, photos/face check, and final review. The capture checklist identifies each required side, uploaded evidence, and the next unfinished capture.
+
+Document capture uses an in-app camera with a rectangular outline, shaded surroundings, side-specific instructions and passport photo-page guidance. Selfie capture uses a face oval. These are positioning aids, not detection or approval indicators; images are not cropped to the outline. A quality checklist appears before upload, and Retake reopens the camera. Temporary evidence cleanup remains in place.
+
+For optical verification, Open camera only opens the preview. The driver positions their face, then taps **I'm ready — start live check** to request the timed server challenge. An animated head demonstrates the current server-requested turn and stops on hold-still feedback. Blue scanning animation represents a frame being captured/sent/checked; it is not a face-detection result. Only a server `hold_still` response makes the oval green with “Position confirmed”; unclear-face feedback makes it amber. New requests reset green to blue, and stopping, errors or interruption clear confirmation. Color is paired with text and icons, and system reduced-motion settings disable the animations. Green confirms a requested position, not final identity approval. Error codes and bounded correlation references accompany retry guidance for support. Backgrounding stops the camera and requires a fresh start. The processor remains authoritative for actions, acceptance, expiry and completion; automatic approval policy is unchanged.
 
 ## Find a suitable connector
 
@@ -93,4 +107,4 @@ The four bottom destinations are Explore, Activity, Wallet, and Account. A cente
 
 ## Validation needed
 
-Test with drivers who use assistive technology, low-connectivity environments, unfamiliar charger hardware, and multiple payment outcomes. Navigation provider, guest flow, tariff disclosure content, receipt terminology, and push provider remain open.
+Test with drivers who use assistive technology, low-connectivity environments, unfamiliar charger hardware, and multiple payment outcomes. Navigation provider, tariff disclosure content, receipt terminology, and push provider remain open.

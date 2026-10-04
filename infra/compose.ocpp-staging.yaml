@@ -1,0 +1,73 @@
+# Add after compose.yaml. Docker Compose >= 2.24.4 is required for !override.
+# The host's existing HTTPS Nginx server proxies /ocpp/ to loopback port 9002.
+x-ocpp-core: &ocpp-core
+  FEATURE_OCPP: "true"
+  FEATURE_REMOTE_CHARGING: "false"
+  OCPP_GATEWAY_INTERNAL_URL: http://ocpp-gateway:9000
+  OCPP_GATEWAY_INTERNAL_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:?Prepare .env.staging.ocpp first}
+  OCPP_GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:?Prepare .env.staging.ocpp first}
+  OCPP_GATEWAY_REDIS_KEY_PREFIX: vtsa:staging:ocpp
+  OCPP_GATEWAY_EVENT_STREAM: vtsa:staging:ocpp:events:v1
+  OCPP_GATEWAY_AUTHORIZATION_STREAM: vtsa:staging:ocpp:authorization-requests:v1
+
+x-ocpp-logging: &ocpp-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  platform:
+    environment: *ocpp-core
+    command: ["php", "-S", "0.0.0.0:8000", "-t", "public", "server.php"]
+    entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
+  worker:
+    environment: *ocpp-core
+    entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
+  scheduler:
+    environment: *ocpp-core
+    entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
+
+  ocpp-event-consumer:
+    image: ${COMPOSE_PROJECT_NAME:-vtsa-csms}-ocpp-core:staging
+    environment: *ocpp-core
+    entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
+    restart: unless-stopped
+    logging: *ocpp-logging
+
+  ocpp-authorization-consumer:
+    image: ${COMPOSE_PROJECT_NAME:-vtsa-csms}-ocpp-core:staging
+    environment: *ocpp-core
+    entrypoint: ["/bin/sh", "-ec", 'php artisan config:clear; exec "$$@"', "--"]
+    restart: unless-stopped
+    logging: *ocpp-logging
+
+  ocpp-gateway:
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: "9000"
+      GATEWAY_ENVIRONMENT: staging
+      GATEWAY_SUPPORTED_SUBPROTOCOLS: ocpp1.6
+      GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:?Prepare .env.staging.ocpp first}
+      GATEWAY_REDIS_KEY_PREFIX: vtsa:staging:ocpp
+      GATEWAY_EVENT_STREAM: vtsa:staging:ocpp:events:v1
+      GATEWAY_AUTHORIZATION_STREAM: vtsa:staging:ocpp:authorization-requests:v1
+      GATEWAY_INTERNAL_API_TOKEN: ${GATEWAY_INTERNAL_API_TOKEN:?Prepare .env.staging.ocpp first}
+      OCPP_CHARGER_REGISTRY_JSON: ${OCPP_CHARGER_REGISTRY_JSON:?Prepare .env.staging.ocpp first}
+      OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "false"
+      OCPP_REQUIRE_TLS: "true"
+      # Only the local trusted proxy and this Compose network can reach the listener.
+      GATEWAY_FORWARDED_ALLOW_IPS: "*"
+      GATEWAY_RAW_MESSAGE_LOGGING: "false"
+      OCPP_ALLOWED_COMMANDS: ""
+      OCPP_DATA_TRANSFER_ALLOWLIST: ""
+    ports: !override
+      - "127.0.0.1:9002:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging: *ocpp-logging

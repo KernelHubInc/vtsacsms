@@ -106,6 +106,7 @@ Route::prefix('v1')->middleware([
     Route::post('/auth/logout', [MobileAuthController::class, 'logout'])->name('api.v1.auth.logout');
     Route::post('/auth/email/verification-notification', [EmailVerificationController::class, 'send'])
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
+
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
         Route::get('/me', SanctumIdentityController::class)->name('api.v1.me');
         Route::post('/auth/mobile/verification', [MobileVerificationController::class, 'start'])

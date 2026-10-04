@@ -21,16 +21,21 @@ final class AuthController extends ChangeNotifier {
   AppFailure? _failure;
   bool _busy = false;
   bool _verificationRequired = false;
+  RegistrationResult? _registration;
 
   AuthStatus get status => _status;
   UserProfile? get user => _user;
   AppFailure? get failure => _failure;
   bool get isBusy => _busy;
   bool get needsEmailVerification =>
-      _user?.emailVerified == false || _verificationRequired;
+      _status == AuthStatus.authenticated &&
+      (_verificationRequired || _user?.emailVerified != true);
+  RegistrationResult? get registration => _registration;
 
   Future<void> restore() async {
     if (await _tokens.read() == null) {
+      _user = null;
+      _verificationRequired = false;
       _status = AuthStatus.guest;
       notifyListeners();
       return;
@@ -42,13 +47,14 @@ final class AuthController extends ChangeNotifier {
     } on AppFailure catch (failure) {
       if (failure.code == 'email_unverified') {
         _verificationRequired = true;
-        _failure = failure;
         _status = AuthStatus.authenticated;
       } else if (failure.kind == FailureKind.offline ||
           failure.kind == FailureKind.timeout) {
         _status = AuthStatus.authenticated;
       } else {
         await _tokens.clear();
+        _user = null;
+        _verificationRequired = false;
         _status = AuthStatus.guest;
       }
     }
@@ -61,7 +67,7 @@ final class AuthController extends ChangeNotifier {
       final result = await _repository.login(email: email, password: password);
       await _tokens.write(result.tokens);
       _user = result.user;
-      _verificationRequired = !_user!.emailVerified;
+      _verificationRequired = !result.user.emailVerified;
       _status = AuthStatus.authenticated;
       return true;
     } on AppFailure catch (failure) {
@@ -81,8 +87,13 @@ final class AuthController extends ChangeNotifier {
     required String password,
   }) async {
     _setBusy(true);
+    _registration = null;
     try {
-      await _repository.register(name: name, email: email, password: password);
+      _registration = await _repository.register(
+        name: name,
+        email: email,
+        password: password,
+      );
       return true;
     } on AppFailure catch (failure) {
       _failure = failure;
@@ -118,34 +129,6 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<bool> refreshVerification() async {
-    _setBusy(true);
-    try {
-      _user = await _repository.currentUser();
-      _verificationRequired = !_user!.emailVerified;
-      if (_verificationRequired) {
-        _failure = const AppFailure(
-          kind: FailureKind.forbidden,
-          code: 'email_unverified',
-          message: 'Email verification is required.',
-        );
-      }
-      return _user!.emailVerified;
-    } on AppFailure catch (failure) {
-      _failure = failure;
-      if (failure.code == 'email_unverified') _verificationRequired = true;
-      if (failure.kind == FailureKind.unauthenticated) {
-        await _tokens.clear();
-        _user = null;
-        _verificationRequired = false;
-        _status = AuthStatus.guest;
-      }
-      return false;
-    } finally {
-      _setBusy(false);
-    }
-  }
-
   Future<void> logout() async {
     _setBusy(true);
     try {
@@ -157,6 +140,47 @@ final class AuthController extends ChangeNotifier {
       _status = AuthStatus.guest;
       _setBusy(false);
     }
+  }
+
+  Future<bool> refreshVerification() async {
+    _setBusy(true);
+    try {
+      _user = await _repository.currentUser();
+      _verificationRequired = !_user!.emailVerified;
+      _status = AuthStatus.authenticated;
+      if (_verificationRequired) {
+        _failure = const AppFailure(
+          kind: FailureKind.forbidden,
+          code: 'email_unverified',
+          message: 'Email verification is required.',
+        );
+      }
+      return !_verificationRequired;
+    } on AppFailure catch (failure) {
+      if (failure.kind == FailureKind.unauthenticated) {
+        await _tokens.clear();
+        _user = null;
+        _verificationRequired = false;
+        _status = AuthStatus.guest;
+      } else if (failure.code == 'email_unverified') {
+        _verificationRequired = true;
+      }
+      _failure = failure;
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  void sessionExpired() {
+    _user = null;
+    _verificationRequired = false;
+    _status = AuthStatus.guest;
+    _failure = const AppFailure(
+      kind: FailureKind.unauthenticated,
+      message: 'Your session has ended. Sign in again to continue.',
+    );
+    notifyListeners();
   }
 
   void _setBusy(bool value) {

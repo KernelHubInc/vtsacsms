@@ -66,6 +66,8 @@ The internal command endpoint requires a bearer service credential. The core sup
 
 ## Health and observability
 
+The single-VPS OCPP 1.6J staging deployment is described in [the staging runbook](../runbooks/ocpp-staging-quickstart.md). Its overlay aligns the gateway and both core consumers on staging Redis DB 0 and the `vtsa:staging:ocpp` namespace, binds the gateway to host loopback behind the existing HTTPS Nginx route, and disables outbound commands during connectivity acceptance. The Assets registry is supplied through a private, generated dotenv file containing per-device Argon2id hashes. No ownership or event-schema change is introduced.
+
 - `/health/live` proves the process can answer HTTP.
 - `/health/ready` proves Redis is reachable and reports TLS mode and active local connections.
 - `/internal/metrics` exposes connection gauges, message/duplicate/event/clock-skew/command counters, and command latency.

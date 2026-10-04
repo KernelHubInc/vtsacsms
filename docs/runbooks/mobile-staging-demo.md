@@ -4,6 +4,13 @@ This runbook uses `infra/compose.yaml` and a private root `.env.staging` on the
 existing staging host. It is separate from the cluster Compose deployment.
 No database migration is introduced by the verification fix.
 
+If `MobileRegistrationTest::test_staging_mobile_registration_creates_a_scoped_consumer_account`
+returns 404 instead of 201, ensure the deployed registration controller includes
+`staging` in its environment allowlist. Keep `APP_ENV=staging`: registration still
+requires `FEATURE_DEMO_MODE=true` and the demo tenant ID. Regression tests cover
+successful scoped registration, disabled demo mode, a different tenant, and denied
+production registration.
+
 ## Configuration
 
 Use `.env.staging.example` as a checklist. For an existing deployment, merge
@@ -67,6 +74,10 @@ throttling, without `Authenticate:sanctum` or `EstablishSanctumTenantContext`.
 The POST resend route must retain authentication and tenant middleware.
 
 ## Acceptance flow
+
+Registration commits the account before attempting verification email delivery. A mail transport failure now returns HTTP 201 with `data.verification_email_sent=false`; the mobile app explains that the account exists and offers sign-in to request another email. The flag is additive: older successful responses without it retain the existing check-email screen. Verification and tenant authorization remain required. The server logs `identity.registration.verification_email_failed` with the exception class and correlation ID, without the SMTP exception message or credentials.
+
+If staging still reports HTTP 500 while the email becomes registered, obtain the matching server error class before changing mail settings. Confirm the existing account can sign in and inspect the mail transport configuration; creating more email aliases does not repair delivery. Deploy both the registration controller change and the updated mobile client for the recovery message. This response fix does not repair SMTP connectivity or authentication, and no migration is required.
 
 1. Open the newly built web app or install the newly built APK. Create an account.
 2. Open the delivered email in a separate browser while logged out. Expect the

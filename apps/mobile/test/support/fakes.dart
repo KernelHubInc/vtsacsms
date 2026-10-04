@@ -15,6 +15,7 @@ import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
+import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 
 final class FakeAuthRepository implements AuthRepository {
@@ -23,7 +24,9 @@ final class FakeAuthRepository implements AuthRepository {
   bool signedIn;
   bool passwordResetRequested = false;
   bool registrationRequested = false;
+  bool verificationEmailSent = true;
   int verificationEmailsSent = 0;
+  AppFailure? currentUserFailure;
   UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
@@ -33,6 +36,9 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    if (currentUserFailure case final failure?) {
+      throw failure;
+    }
     if (!signedIn) {
       throw StateError('Not signed in');
     }
@@ -67,20 +73,21 @@ final class FakeAuthRepository implements AuthRepository {
   Future<void> logout() async => signedIn = false;
 
   @override
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
-  }) async => registrationRequested = true;
+  }) async {
+    registrationRequested = true;
+    return RegistrationResult(verificationEmailSent: verificationEmailSent);
+  }
 
   @override
   Future<void> requestPasswordReset(String email) async =>
       passwordResetRequested = true;
 
   @override
-  Future<void> resendEmailVerification() async {
-    verificationEmailsSent++;
-  }
+  Future<void> resendEmailVerification() async => verificationEmailsSent++;
 }
 
 final class FakeStationRepository implements StationRepository {
@@ -375,6 +382,7 @@ buildTestDependencies({
   bool signedIn = false,
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
+  KycRepository? kycRepository,
 }) async {
   SharedPreferences.setMockInitialValues({
     'onboarding_complete_v1': onboardingComplete,
@@ -424,6 +432,7 @@ buildTestDependencies({
     vehicleRepository: LocalVehicleRepository(preferences),
     favoritesRepository: LocalFavoritesRepository(preferences),
     chargingRepository: charging,
+    kycRepository: kycRepository,
     featureFlags: const FeatureFlags(
       ocpp: false,
       remoteCharging: false,

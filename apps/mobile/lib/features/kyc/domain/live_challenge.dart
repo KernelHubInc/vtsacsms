@@ -8,6 +8,12 @@ final class LiveChallenge {
       expiresAt = DateTime.parse(data['expires_at'] as String) {
     if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(token) ||
         !const {'center', 'left', 'right', 'complete'}.contains(action) ||
+        !const {
+          'follow_prompt',
+          'hold_still',
+          'face_not_clear',
+          'complete',
+        }.contains(feedback) ||
         step < 0 ||
         step > 9 ||
         data['total_steps'] != 9 ||

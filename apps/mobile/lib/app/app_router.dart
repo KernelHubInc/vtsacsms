@@ -26,6 +26,20 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     if (!ready || !authChecked) {
       return state.matchedLocation == '/splash' ? null : '/splash';
     }
+    final location = state.matchedLocation;
+    const authRoutes = {
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/verify-email',
+    };
+    // New destinations are private unless explicitly part of signing in.
+    if (dependencies.auth.status == AuthStatus.guest) {
+      return authRoutes.contains(location) ? null : '/login';
+    }
+    if (dependencies.auth.needsEmailVerification) {
+      return location == '/verify-email' ? null : '/verify-email';
+    }
     if (!dependencies.bootstrap.onboardingComplete) {
       return state.matchedLocation == '/onboarding' ? null : '/onboarding';
     }
@@ -33,20 +47,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
         state.matchedLocation == '/onboarding') {
       return '/explore';
     }
-    final protected =
-        state.matchedLocation == '/profile' ||
-        state.matchedLocation.startsWith('/vehicles') ||
-        state.matchedLocation == '/kyc' ||
-        state.matchedLocation == '/charge' ||
-        state.matchedLocation.startsWith('/charging/') ||
-        (state.matchedLocation.startsWith('/activity/') &&
-            state.matchedLocation != '/activity');
-    if (protected && dependencies.auth.status == AuthStatus.guest) {
-      return '/login';
-    }
-    if (protected && dependencies.auth.needsEmailVerification) {
-      return '/verify-email';
-    }
+    if (authRoutes.contains(location)) return '/account';
     return null;
   },
   routes: [
@@ -74,6 +75,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
       builder: (context, state) => EmailVerificationScreen(
         dependencies: dependencies,
         email: state.uri.queryParameters['email'],
+        deliveryFailed: state.uri.queryParameters['delivery'] == 'failed',
       ),
     ),
     ShellRoute(

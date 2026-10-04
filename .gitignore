@@ -28,6 +28,9 @@
 /.env.production
 /.env.production.*
 !/.env.production.example
+/.env.staging
+/.env.staging.*
+!/.env.staging.example
 /.idea/
 /.vscode/
 *.log
@@ -36,3 +39,9 @@ Thumbs.db
 /tests/browser/node_modules/
 /tests/browser/report/
 /tests/browser/test-results/
+/services/kyc-service/.venv
+/services/kyc-service/.env
+/services/kyc-service/.env.*
+!/services/kyc-service/.env.example
+__pycache__/
+*.py[cod]

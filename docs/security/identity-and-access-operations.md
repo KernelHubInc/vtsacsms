@@ -11,13 +11,17 @@ Tenant operators suspend memberships. Platform-authorized workflows may suspend 
 
 Email verification URLs are signed, expire after 60 minutes, and identify users by public ULID rather than the internal numeric key. Password-reset responses never disclose whether an email exists.
 
-Email links may be opened in a logged-out browser: signature validation and
-throttling protect the GET route, while resend requires a tenant-bound Sanctum
-token. Identity verifies the email hash, enabled account and an active membership
-in an active tenant. Verification and its audit commit together; repeat clicks
-are idempotent. Browser requests receive a confirmation page, while JSON clients
-retain `data.email_verified`. Expired or altered links return 403. See the
-[mobile staging runbook](../runbooks/mobile-staging-demo.md) for proxy and deployment checks.
+The signed GET verification link works in a browser without an API token. Signature
+and expiry middleware remain mandatory; resend still requires an authenticated
+tenant session. Identity verifies the current email hash and enabled account, then
+derives active, unexpired memberships from stored records. Verification and audit
+entries for those tenants commit together under a user row lock. Repeated valid
+links succeed without duplicate audit entries. No tenant scope is accepted from
+the URL, and verification does not issue a login session or grant memberships.
+The Organizations-owned `ActiveMembershipTenants::forUser` read contract returns
+only tenant ULIDs for a stored user ID. Its projection combines membership status
+and expiry with Tenancy's active status; Identity never writes either context's
+records during verification.
 
 ## Mobile Number Verification
 

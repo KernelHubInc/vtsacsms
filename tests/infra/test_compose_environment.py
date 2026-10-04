@@ -79,6 +79,18 @@ class ComposeEnvironmentTest(unittest.TestCase):
         self.assertEqual(mobile["ports"][0]["published"], "3001")
         self.assertEqual(services["platform"]["ports"][0]["published"], "8081")
 
+    def test_staging_redis_requires_password_and_loopback_binding(self):
+        values = self.template(".env.staging.example")
+        result = self.render(".env.staging", values)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        services = json.loads(result.stdout)["services"]
+        redis = services["redis"]
+        self.assertEqual(redis["ports"][0]["host_ip"], "127.0.0.1")
+        password_index = redis["command"].index("--requirepass") + 1
+        self.assertEqual(redis["command"][password_index], values["REDIS_PASSWORD"])
+        self.assertEqual(services["platform"]["environment"]["REDIS_PASSWORD"],
+                         values["REDIS_PASSWORD"])
+
     def test_missing_app_key_fails_before_containers_start(self):
         values = self.template(".env.staging.example")
         del values["APP_KEY"]

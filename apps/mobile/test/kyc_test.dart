@@ -294,6 +294,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Get started'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
     final button = tester.widget<FilledButton>(

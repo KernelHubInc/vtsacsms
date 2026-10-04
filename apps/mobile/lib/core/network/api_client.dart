@@ -35,6 +35,7 @@ final class ApiClient {
   final UlidGenerator _ids;
   final RetryDelay _retryDelay;
   Future<TokenBundle?>? _refreshing;
+  void Function()? onSessionExpired;
 
   Dio get dio => _dio;
 
@@ -66,6 +67,7 @@ final class ApiClient {
         return handler.resolve(await _dio.fetch<Object?>(request));
       }
       await _tokens.clear();
+      onSessionExpired?.call();
     }
 
     final retries = (request.extra['retry_count'] as int?) ?? 0;
@@ -85,6 +87,7 @@ final class ApiClient {
   bool _canRefresh(DioException error) {
     final path = error.requestOptions.path;
     return error.response?.statusCode == 401 &&
+        error.requestOptions.extra['anonymous'] != true &&
         !path.contains('/auth/login') &&
         !path.contains('/auth/refresh');
   }

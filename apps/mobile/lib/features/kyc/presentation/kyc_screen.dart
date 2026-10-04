@@ -11,7 +11,9 @@ import 'package:vtsa_mobile/features/kyc/application/kyc_controller.dart';
 import 'package:vtsa_mobile/features/kyc/data/capture_cleanup.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_verification.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/live_capture_screen.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/photo_capture_screen.dart';
 
 enum _Step { overview, consent, personal, document, capture, review }
 
@@ -150,16 +152,26 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
       captureKind = kind;
     });
     try {
-      final file = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: kind == 'selfie'
-            ? CameraDevice.front
-            : CameraDevice.rear,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        imageQuality: 90,
-        requestFullMetadata: false,
-      );
+      final file = widget.picker == null
+          ? await Navigator.of(context).push<XFile>(
+              MaterialPageRoute(
+                builder: (_) => PhotoCaptureScreen(
+                  kind: kind,
+                  passport:
+                      controller?.verification?.documentType == 'passport',
+                ),
+              ),
+            )
+          : await picker.pickImage(
+              source: ImageSource.camera,
+              preferredCameraDevice: kind == 'selfie'
+                  ? CameraDevice.front
+                  : CameraDevice.rear,
+              maxWidth: 2400,
+              maxHeight: 2400,
+              imageQuality: 90,
+              requestFullMetadata: false,
+            );
       if (file == null) return;
       Uint8List bytes;
       try {
@@ -232,6 +244,18 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.only(bottom: 32),
               children: [
                 if (step != _Step.overview) ...[
+                  Text(
+                    'Step ${step.index} of 5 · ${switch (step) {
+                      _Step.consent => 'Your consent',
+                      _Step.personal => 'Your details',
+                      _Step.document => 'Choose an ID',
+                      _Step.capture => 'Photos & face check',
+                      _Step.review => 'Review & submit',
+                      _ => '',
+                    }}',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
                   LinearProgressIndicator(value: step.index / 5),
                   const SizedBox(height: VtsaSpacing.lg),
                 ],
@@ -313,6 +337,24 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
               ),
             ),
           const SizedBox(height: 24),
+          if (status == KycStatus.notStarted || status.canResubmit) ...[
+            Text(
+              'How it works',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            const CaptureTips(
+              tips: [
+                'Read the consent and enter your details exactly as shown on your ID.',
+                'Choose your ID, then photograph the requested sides using the outline.',
+                'Follow the face check instructions, review your photos and submit.',
+              ],
+            ),
+            const Text(
+              'Before you start: have your original ID ready, clean your camera lens and find a well-lit spot with a stable connection.',
+            ),
+            const SizedBox(height: 20),
+          ],
           if (!kyc.enabled)
             const Text('Identity verification is not enabled yet.'),
           if (kyc.enabled &&
@@ -408,6 +450,10 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
     title: 'Review your details',
     child: Column(
       children: [
+        const Text(
+          'Use the details printed on the document you will photograph.',
+        ),
+        const SizedBox(height: 16),
         VtsaTextField(
           label: 'Full legal name',
           controller: name,
@@ -535,6 +581,15 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
 
   Widget capturePage(KycController kyc) {
     final uploaded = kyc.verification?.uploaded ?? {};
+    final remaining = requiredPhotos
+        .where((kind) => !uploaded.contains(kind))
+        .toList();
+    final live = kyc.verification?.liveCaptureRequired == true;
+    String label(String kind) => kind == 'selfie'
+        ? (live ? 'Live camera check' : 'Selfie')
+        : kyc.verification?.documentType == 'passport' && kind == 'front'
+        ? 'Passport photo page'
+        : 'Document $kind';
     return VtsaCard(
       title: preview != null ? 'Check your photo' : 'Add clear photos',
       child: Column(
@@ -547,6 +602,11 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 20),
           if (preview case final bytes?) ...[
+            Text(
+              label(captureKind!),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Image.memory(
@@ -558,6 +618,17 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: 20),
+            CaptureTips(
+              tips: captureKind == 'selfie'
+                  ? const [
+                      'Your whole face is visible and in focus.',
+                      'Your eyes are visible, with no glare or face covering.',
+                    ]
+                  : const [
+                      'All four corners are visible, with no fingers covering the document.',
+                      'You can read the text clearly. There is no blur or glare.',
+                    ],
+            ),
             VtsaButton(
               label: 'Use photo and upload',
               loading: kyc.busy,
@@ -566,14 +637,26 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
             TextButton(
               onPressed: kyc.busy
                   ? null
-                  : () {
+                  : () async {
                       unawaited(MemoryImage(bytes).evict());
                       bytes.fillRange(0, bytes.length, 0);
                       setState(() => preview = null);
+                      await capture(captureKind!);
                     },
               child: const Text('Retake photo'),
             ),
           ] else ...[
+            Text(
+              '${requiredPhotos.length - remaining.length} of ${requiredPhotos.length} checks ready',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              remaining.isEmpty
+                  ? 'Everything is ready. Review your submission below.'
+                  : 'Next: ${label(remaining.first)}. Tap Capture to see the guide.',
+            ),
+            const SizedBox(height: 12),
             for (final kind in requiredPhotos)
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -584,17 +667,17 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
                       ? Icons.face_outlined
                       : Icons.badge_outlined,
                 ),
-                title: Text(
-                  kind == 'selfie'
-                      ? (kyc.verification?.liveCaptureRequired == true
-                            ? 'Live camera check'
-                            : 'Selfie')
-                      : 'Document $kind',
-                ),
+                title: Text(label(kind)),
                 subtitle: Text(
                   uploaded.contains(kind)
-                      ? 'Uploaded securely'
-                      : 'Ready to capture',
+                      ? (kind == 'selfie' && live
+                            ? 'Live check completed'
+                            : 'Uploaded securely')
+                      : kind == 'selfie'
+                      ? (live
+                            ? 'Follow the head-turn prompts'
+                            : 'Fit your face in the oval')
+                      : 'Keep every edge inside the frame',
                 ),
                 trailing: TextButton(
                   onPressed: capturing || kyc.busy
@@ -627,7 +710,10 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
             const SizedBox(height: 20),
             VtsaButton(
               label: 'Review submission',
-              onPressed: requiredPhotos.every(uploaded.contains)
+              onPressed:
+                  !capturing &&
+                      !kyc.busy &&
+                      requiredPhotos.every(uploaded.contains)
                   ? () => setState(() => step = _Step.review)
                   : null,
             ),

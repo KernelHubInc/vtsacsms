@@ -109,6 +109,30 @@ void main() {
     expect(failure.correlationId, '01K0M0JJ5X0M0JJ5X0M0JJ5X0M');
   });
 
+  test('server errors do not display private diagnostics', () {
+    final request = RequestOptions(path: '/example');
+    final failure = AppFailure.fromDio(
+      DioException.badResponse(
+        statusCode: 500,
+        requestOptions: request,
+        response: Response<Map<String, Object?>>(
+          requestOptions: request,
+          statusCode: 500,
+          data: {
+            'error': {
+              'code': 'internal_error',
+              'message': 'Private database diagnostic',
+              'correlation_id': 'synthetic-request',
+            },
+          },
+        ),
+      ),
+    );
+    expect(failure.kind, FailureKind.server);
+    expect(failure.message, 'The service is temporarily unavailable.');
+    expect(failure.correlationId, 'synthetic-request');
+  });
+
   test('memory token store supports revocation', () async {
     final store = MemoryTokenStore();
     await store.write(

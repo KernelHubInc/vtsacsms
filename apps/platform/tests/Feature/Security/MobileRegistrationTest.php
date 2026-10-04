@@ -9,17 +9,60 @@ use App\Models\User;
 use App\Modules\Identity\Notifications\VerifyEmailNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 final class MobileRegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_mail_failure_preserves_registration_and_requires_email_verification(): void
+    {
+        Log::spy();
+        Log::shouldReceive('warning')->once()->with(
+            'identity.registration.verification_email_failed',
+            Mockery::on(static fn (array $context): bool => $context['exception_class'] === TransportException::class
+                && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), 'Private SMTP diagnostic')),
+        );
+        Notification::shouldReceive('send')->once()->andThrow(new TransportException('Private SMTP diagnostic'));
+        config()->set('features.demo_mode', true);
+        $this->seedRegistrationScope();
+
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Mail Failure Driver',
+            'email' => 'mail.failure@example.test',
+            'password' => 'SafePassword!2026',
+            'password_confirmation' => 'SafePassword!2026',
+            'tenant_id' => DemoEnvironment::TENANT_ID,
+        ])->assertCreated()
+            ->assertJsonPath('data.verification_email_sent', false)
+            ->assertDontSee('Private SMTP diagnostic');
+
+        $user = User::query()->where('email', 'mail.failure@example.test')->sole();
+        $this->assertNull($user->email_verified_at);
+        $this->assertDatabaseHas('memberships', [
+            'tenant_id' => DemoEnvironment::TENANT_ID,
+            'user_id' => $user->getKey(),
+            'status' => 'active',
+        ]);
+
+        $login = $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email, 'password' => 'SafePassword!2026',
+            'tenant_id' => DemoEnvironment::TENANT_ID, 'device_name' => 'Mail recovery test',
+        ])->assertOk()->assertJsonPath('data.user.email_verified', false);
+        $this->withToken((string) $login->json('data.token'))->getJson('/api/v1/me')
+            ->assertForbidden()->assertJsonPath('error.code', 'email_unverified');
+    }
+
     public function test_staging_mobile_registration_creates_a_scoped_consumer_account(): void
     {
+        $this->withoutVite();
         Notification::fake();
         config()->set('features.demo_mode', true);
         $this->seedRegistrationScope();
@@ -104,6 +147,42 @@ final class MobileRegistrationTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'blocked.driver@example.test']);
         Notification::assertNothingSent();
+    }
+
+    #[DataProvider('blockedStagingRegistrations')]
+    public function test_staging_registration_requires_demo_mode_and_the_demo_tenant(bool $demoMode, string $tenantId): void
+    {
+        Notification::fake();
+        config()->set('features.demo_mode', $demoMode);
+        $this->seedRegistrationScope();
+        $originalEnvironment = app()->environment();
+        app()->detectEnvironment(static fn (): string => 'staging');
+
+        try {
+            $this->postJson('/api/v1/auth/register', [
+                'name' => 'Blocked Staging Driver',
+                'email' => 'blocked.staging@example.test',
+                'password' => 'SafePassword!2026',
+                'password_confirmation' => 'SafePassword!2026',
+                'tenant_id' => $tenantId,
+            ])->assertNotFound();
+        } finally {
+            app()->detectEnvironment(static fn (): string => $originalEnvironment);
+        }
+
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('memberships', 0);
+        $this->assertDatabaseCount('role_assignments', 0);
+        Notification::assertNothingSent();
+    }
+
+    /** @return array<string, array{bool, string}> */
+    public static function blockedStagingRegistrations(): array
+    {
+        return [
+            'demo mode disabled' => [false, DemoEnvironment::TENANT_ID],
+            'another tenant' => [true, '01J00000000000000000000001'],
+        ];
     }
 
     private string $fleetOrganizationId;

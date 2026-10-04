@@ -27,9 +27,8 @@ final class AppFailure implements Exception {
     final response = error.response;
     final body = response?.data;
     final json = body is Map<String, dynamic> ? body : null;
-    final details = json?['error'] is Map<String, dynamic>
-        ? json!['error'] as Map<String, dynamic>
-        : json;
+    final nested = json?['error'];
+    final details = nested is Map<String, dynamic> ? nested : json;
     final status = response?.statusCode;
     final headers = response?.headers;
     final correlation =
