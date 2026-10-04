@@ -1,0 +1,31 @@
+OCPP STAGING VERIFICATION - 2026-10-04
+
+LIVE endpoint: wss://staging.evcspowersolutions.com/ocpp/DEMO-CP-023
+Protocol: ocpp1.6; authenticated with a unique simulator credential.
+Public TLS verification and hostname checks enabled.
+BootNotification Accepted; 6 Heartbeats accepted over 150 seconds.
+A fresh reconnect, BootNotification and Heartbeat also passed.
+Missing password, wrong password and unknown identity: HTTP 403.
+
+Gateway, both consumers, platform, worker and scheduler: running / healthy.
+Gateway Redis readiness: ok. Laravel HTTPS liveness: HTTP 200.
+KYC DNS override retained on platform, worker and scheduler.
+DEMO-CP-023 OCPP version corrected from unset to 1.6J with an audit record.
+Earlier events quarantined before that correction were retained.
+Subsequent heartbeat, reconnect boot and disconnect events: processed.
+No charging transaction, physical device, RFID authorization or remote command tested.
+
+Local checks: 46 gateway tests passed; 1 Redis integration test skipped because
+TEST_REDIS_URL was unset. Ruff formatting/lint and mypy passed.
+10 deployment helper/Compose tests passed. Gateway venv dependency audit clean.
+No PHP/mobile code was changed or retested for this OCPP deployment.
+
+Use scripts/test-ocpp-staging.ps1 from the repo root to repeat the WSS test.
+The password is DPAPI-encrypted for the enrolling Windows user under ignored
+.cache/ocpp-staging/simulator-client/password.dpapi. No password is printed.
+Temporary plaintext enrollment copies were removed from the workstation and VPS.
+The server registry is root-readable (0600), with only an Argon2id password hash.
+
+For VPS helper operations, preserve the existing override:
+--compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml
+The VPS base Compose and private env files must be retained when uploading updates.
