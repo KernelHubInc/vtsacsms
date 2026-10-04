@@ -27,12 +27,14 @@ final class AppFailure implements Exception {
     final response = error.response;
     final body = response?.data;
     final json = body is Map<String, dynamic> ? body : null;
+    final nested = json?['error'];
+    final details = nested is Map<String, dynamic> ? nested : json;
     final status = response?.statusCode;
     final headers = response?.headers;
     final correlation =
-        json?['correlation_id']?.toString() ??
+        details?['correlation_id']?.toString() ??
         headers?.value('x-correlation-id');
-    final message = json?['message']?.toString();
+    final message = details?['message']?.toString();
 
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.sendTimeout ||
@@ -61,9 +63,9 @@ final class AppFailure implements Exception {
         _ => FailureKind.unknown,
       },
       message: message ?? _safeMessage(status),
-      code: json?['code']?.toString(),
+      code: details?['code']?.toString(),
       correlationId: correlation,
-      fieldErrors: _fieldErrors(json?['errors']),
+      fieldErrors: _fieldErrors(details?['errors']),
     );
   }
 

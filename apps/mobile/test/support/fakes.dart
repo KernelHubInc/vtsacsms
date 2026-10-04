@@ -24,7 +24,9 @@ final class FakeAuthRepository implements AuthRepository {
   bool passwordResetRequested = false;
   bool registrationRequested = false;
   bool verificationEmailSent = true;
-  final user = const UserProfile(
+  int verificationEmailsSent = 0;
+  AppFailure? currentUserFailure;
+  UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
     email: 'ada@example.test',
@@ -33,8 +35,18 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    if (currentUserFailure case final failure?) {
+      throw failure;
+    }
     if (!signedIn) {
       throw StateError('Not signed in');
+    }
+    if (!user.emailVerified) {
+      throw const AppFailure(
+        kind: FailureKind.forbidden,
+        code: 'email_unverified',
+        message: 'Email verification is required.',
+      );
     }
     return user;
   }
@@ -74,7 +86,7 @@ final class FakeAuthRepository implements AuthRepository {
       passwordResetRequested = true;
 
   @override
-  Future<void> resendEmailVerification() async {}
+  Future<void> resendEmailVerification() async => verificationEmailsSent++;
 }
 
 final class FakeStationRepository implements StationRepository {

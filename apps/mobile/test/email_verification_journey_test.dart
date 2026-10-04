@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 
@@ -52,6 +53,57 @@ void main() {
     expect(await fixture.dependencies.auth.resendVerification(), isTrue);
     expect(fixture.auth.verificationEmailsSent, 1);
     expect(fixture.dependencies.auth.needsEmailVerification, isTrue);
+  });
+
+  for (final failure in [
+    const AppFailure(
+      kind: FailureKind.forbidden,
+      code: 'email_unverified',
+      message: 'Email verification is required.',
+    ),
+    const AppFailure(kind: FailureKind.offline, message: 'Offline'),
+    const AppFailure(kind: FailureKind.timeout, message: 'Timed out'),
+  ]) {
+    test('cold restore keeps verification gated for ${failure.kind}', () async {
+      final repository = FakeAuthRepository(signedIn: true)
+        ..currentUserFailure = failure;
+      final tokens = MemoryTokenStore();
+      final session = await repository.login(
+        email: 'ada@example.test',
+        password: 'test-only',
+      );
+      await tokens.write(session.tokens);
+      final auth = AuthController(repository: repository, tokens: tokens);
+      addTearDown(auth.dispose);
+
+      await auth.restore();
+      expect(auth.status, AuthStatus.authenticated);
+      expect(auth.needsEmailVerification, isTrue);
+      expect(await tokens.read(), isNotNull);
+      expect(await auth.refreshVerification(), isFalse);
+      expect(auth.needsEmailVerification, isTrue);
+
+      repository.currentUserFailure = null;
+      expect(await auth.refreshVerification(), isTrue);
+      expect(auth.needsEmailVerification, isFalse);
+    });
+  }
+
+  test('an expired verification session clears its token', () async {
+    final repository = FakeAuthRepository()..user = unverifiedUser;
+    final tokens = MemoryTokenStore();
+    final auth = AuthController(repository: repository, tokens: tokens);
+    addTearDown(auth.dispose);
+    await auth.login(email: 'ada@example.test', password: 'test-only');
+    repository.currentUserFailure = const AppFailure(
+      kind: FailureKind.unauthenticated,
+      message: 'Please sign in again.',
+    );
+
+    expect(await auth.refreshVerification(), isFalse);
+    expect(auth.status, AuthStatus.guest);
+    expect(auth.user, isNull);
+    expect(await tokens.read(), isNull);
   });
 
   testWidgets('unverified login supports resend and checks before continuing', (

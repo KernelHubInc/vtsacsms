@@ -4,6 +4,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.dependencies, super.key});
