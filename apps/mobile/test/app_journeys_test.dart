@@ -79,6 +79,8 @@ void main() {
 
     expect(find.text('Connectors'), findsOneWidget);
     expect(find.textContaining('CCS2'), findsOneWidget);
+    expect(find.text('Connection unconfirmed'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Operating hours'), 150);
     expect(find.text('Operating hours'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Restroom'), 250);
     expect(find.text('Restroom'), findsOneWidget);

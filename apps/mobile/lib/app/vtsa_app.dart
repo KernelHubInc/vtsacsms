@@ -27,6 +27,9 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _router = createAppRouter(widget.dependencies);
+    widget.dependencies.discovery.startAutoRefresh(
+      canRefresh: () => widget.dependencies.network.isOnline,
+    );
   }
 
   @override
@@ -39,6 +42,16 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.dependencies.discovery.startAutoRefresh(
+        canRefresh: () => widget.dependencies.network.isOnline,
+      );
+      if (widget.dependencies.network.isOnline) {
+        unawaited(widget.dependencies.discovery.refresh());
+      }
+    } else {
+      widget.dependencies.discovery.stopAutoRefresh();
+    }
     if (state == AppLifecycleState.resumed &&
         widget.dependencies.auth.status == AuthStatus.authenticated &&
         !widget.dependencies.auth.needsEmailVerification &&

@@ -1715,6 +1715,8 @@ components:
         operator_id: {$ref: '#/components/schemas/Ulid'}
         operator_name: {type: string, maxLength: 160}
         availability: {type: string, enum: [available, busy, faulted, offline, stale, unknown]}
+        connection_status: {type: string, enum: [online, offline, unknown], description: 'Recent authenticated station communication, independent of connector availability'}
+        last_seen_at: {type: [string, 'null'], format: date-time, description: Last observed station communication in UTC}
         is_stale: {type: boolean}
         status_observed_at: {type: [string, 'null'], format: date-time}
         maximum_power_w: {type: integer, minimum: 0}

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Modules\Assets\Application\AccessibleStationsQuery;
 use App\Modules\Assets\Domain\AssetLifecycleStatus;
 use App\Modules\Assets\Domain\Models\ChargingStation;
+use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use BackedEnum;
@@ -84,10 +85,19 @@ final class ChargingStationResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
+        return $table->poll('5s')->columns([
             TextColumn::make('name')->searchable()->sortable(),
             TextColumn::make('site.name')->label('Site')->sortable(),
             TextColumn::make('charge_point_identity')->searchable(),
+            TextColumn::make('connection_status')->label('Connection')->badge()
+                ->state(fn (ChargingStation $record): string => app(StationConnectionQuery::class)->status(
+                    $record->getAttribute('ocpp_connected') === null ? null : (bool) $record->getAttribute('ocpp_connected'),
+                    $record->getAttribute('ocpp_last_seen_at'),
+                ))
+                ->color(fn (string $state): string => match ($state) {
+                    'online' => 'success', 'offline' => 'danger', default => 'gray',
+                }),
+            TextColumn::make('ocpp_last_seen_at')->label('Last device message (UTC)')->dateTime()->placeholder('Not seen'),
             TextColumn::make('lifecycle_status')->badge(),
             IconColumn::make('is_public')->boolean(),
         ])
@@ -128,7 +138,12 @@ final class ChargingStationResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+            ->leftJoin('charging_station_connections as connection', function ($join): void {
+                $join->on('connection.charging_station_id', '=', 'charging_stations.id')
+                    ->on('connection.tenant_id', '=', 'charging_stations.tenant_id');
+            })
+            ->select('charging_stations.*', 'connection.connected as ocpp_connected', 'connection.last_seen_at as ocpp_last_seen_at');
 
         return $user instanceof User
             ? $query->whereIn('charging_stations.id', app(AccessibleStationsQuery::class)->for($user)->select('charging_stations.id'))

@@ -6,6 +6,7 @@ namespace App\Modules\Reporting\Application;
 
 use App\Models\User;
 use App\Modules\Charging\Application\AccessibleChargingSessionsQuery;
+use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Inventory\Application\InventoryReportService;
@@ -40,7 +41,7 @@ final readonly class PortalDashboardQuery
         $key = $this->cacheKey('summary', $user, $siteIds);
 
         /** @var array<string, int|float|string|null> $summary */
-        $summary = Cache::remember($key, now()->addSeconds(60), function () use ($user, $siteIds): array {
+        $summary = Cache::remember($key, now()->addSeconds(5), function () use ($user, $siteIds): array {
             $periodStart = CarbonImmutable::now('UTC')->subDays(30);
             $sessions = $this->sessions->for($user);
             $sessionIds = (clone $sessions)->where('requested_at', '>=', $periodStart)->pluck('id');
@@ -81,17 +82,10 @@ final readonly class PortalDashboardQuery
                 ->whereIn('station.site_id', $siteIds)
                 ->count();
             $chargerCount = DB::table('charging_stations')->whereIn('site_id', $siteIds)->count();
-            $offlineChargers = $connectorSignals
-                ->groupBy('station_id')
-                ->filter(function (Collection $signals) use ($now): bool {
-                    return $signals->isNotEmpty() && $signals->every(
-                        static fn (array $signal): bool => $signal['status'] === 'offline'
-                            || CarbonImmutable::parse($signal['observed_at'])
-                                ->addSeconds($signal['stale_after_seconds'])
-                                ->isBefore($now),
-                    );
-                })
-                ->count();
+            $stationIds = DB::table('charging_stations')->whereIn('site_id', $siteIds)->get(['id'])->map(static fn (object $station): string => (string) $station->id)->values()->all();
+            $connections = app(StationConnectionQuery::class)->forStations(array_values($stationIds));
+            $onlineChargers = count(array_filter($connections, static fn (array $connection): bool => $connection['status'] === 'online'));
+            $offlineChargers = $chargerCount - $onlineChargers;
             $activeSessions = (clone $sessions)->whereIn('state', $activeStates)->count();
             $energyWh = (int) (clone $sessions)->where('requested_at', '>=', $periodStart)->sum('energy_wh');
             $grossRevenue = (int) (clone $sessions)
@@ -156,7 +150,7 @@ final readonly class PortalDashboardQuery
         $key = $this->cacheKey('map', $user, $siteIds);
 
         /** @var list<array<string, int|float|string>> $markers */
-        $markers = Cache::remember($key, now()->addSeconds(30), function () use ($siteIds): array {
+        $markers = Cache::remember($key, now()->addSeconds(5), function () use ($siteIds): array {
             $sites = DB::table('sites')
                 ->whereIn('id', $siteIds)
                 ->whereNotNull('latitude')
@@ -242,19 +236,39 @@ final readonly class PortalDashboardQuery
      */
     private function connectorSignals(array $siteIds): Collection
     {
-        return DB::table('charging_connector_statuses as signal')
+        $signals = DB::table('charging_connector_statuses as signal')
             ->join('connectors as connector', 'connector.id', '=', 'signal.connector_id')
             ->join('evses as evse', 'evse.id', '=', 'connector.evse_id')
             ->join('charging_stations as station', 'station.id', '=', 'evse.charging_station_id')
             ->whereIn('station.site_id', $siteIds)
-            ->get(['station.site_id', 'station.id as station_id', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
+            ->get(['station.site_id', 'station.id as station_id', 'signal.ocpp_connection_id', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
             ->map(static fn (object $row): array => [
                 'site_id' => (string) $row->site_id,
                 'station_id' => (string) $row->station_id,
                 'status' => (string) $row->status,
                 'observed_at' => (string) $row->observed_at,
                 'stale_after_seconds' => (int) $row->stale_after_seconds,
+                'ocpp_connection_id' => $row->ocpp_connection_id === null ? null : (string) $row->ocpp_connection_id,
             ]);
+        $query = app(StationConnectionQuery::class);
+        $connections = $query->forStations(array_values($signals->map(static fn (array $signal): string => $signal['station_id'])->unique()->all()));
+
+        return $signals->map(static function (array $signal) use ($query, $connections): array {
+            $connection = $connections[$signal['station_id']] ?? null;
+            if ($connection !== null) {
+                $signal['status'] = $query->availability($connection, $signal['status'], $signal['observed_at'], $signal['stale_after_seconds'], $signal['ocpp_connection_id']);
+                $signal['observed_at'] = $connection['last_seen_at'];
+                $signal['stale_after_seconds'] = (int) config('charging.connection_stale_after_seconds');
+            }
+
+            return [
+                'site_id' => $signal['site_id'],
+                'station_id' => $signal['station_id'],
+                'status' => $signal['status'],
+                'observed_at' => $signal['observed_at'],
+                'stale_after_seconds' => $signal['stale_after_seconds'],
+            ];
+        });
     }
 
     /** @param list<string> $siteIds */

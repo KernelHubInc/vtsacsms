@@ -20,6 +20,7 @@ use App\Modules\Charging\Application\ManualSessionReviewService;
 use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\RemoteStartService;
 use App\Modules\Charging\Application\SessionLifecycleService;
+use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Charging\Domain\ChargerCommandState;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\ConnectorAvailability;
@@ -377,6 +378,109 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
         self::assertNull($leaked);
         $this->expectException(DomainException::class);
         $this->withinTenant($tenantA, $user, fn () => app(OcppEventConsumer::class)->consume($eventB));
+    }
+
+    public function test_station_presence_tracks_multi_connector_boot_heartbeat_and_disconnect(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T10:00:00Z'));
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('presence');
+        [$connector] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'PRESENCE', '1.6J'));
+        $this->withinTenant($tenant, $actor, function () use ($connector): void {
+            $second = $connector->replicate();
+            $second->forceFill(['connector_number' => 2, 'qr_identifier' => 'SECOND-PRESENCE'])->save();
+        });
+        $connection = ['connection_id' => '01J00000000000000000000001'];
+        $event = $this->event($tenant, $connector, 'charger_connected', '2026-07-22T10:00:00Z', $connection);
+        $this->consume($tenant, $actor, $event);
+        $duplicate = $this->withinTenant($tenant, $actor, fn () => app(OcppEventConsumer::class)->consume($event));
+        self::assertTrue($duplicate->duplicate);
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'boot_notification', '2026-07-22T10:00:01Z', $connection));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:02Z', [
+            ...$connection, 'connector_id' => 1, 'status' => 'Available', 'protocol_timestamp' => '2000-01-01T00:00:00Z',
+        ]));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:03Z', [
+            ...$connection, 'connector_id' => 0, 'status' => 'Available',
+        ]));
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T10:06:00Z'));
+        $query = app(StationConnectionQuery::class);
+        $id = (string) $connector->evse->charging_station_id;
+        self::assertSame('offline', $query->forStations([$id])[$id]['status']);
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'heartbeat', '2026-07-22T10:06:00Z', $connection));
+        $presence = $query->forStations([$id])[$id];
+        self::assertSame('online', $presence['status']);
+        self::assertSame('available', $query->availability($presence, 'available', '2026-07-22T10:00:02Z', 300, $connection['connection_id']));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_disconnected', '2026-07-22T10:06:01Z', $connection));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'heartbeat', '2026-07-22T10:06:02Z', $connection));
+        self::assertSame('offline', $query->forStations([$id])[$id]['status']);
+        self::assertSame('offline', $query->availability($query->forStations([$id])[$id], 'available', '2026-07-22T10:00:02Z', 300));
+        $this->assertDatabaseCount('charging_station_connections', 1);
+        $this->assertDatabaseCount('charging_sessions', 0);
+    }
+
+    public function test_replaced_connections_and_reordered_status_cannot_overwrite_current_device_state(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T10:00:00Z'));
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('presence-order');
+        [$connector] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'ORDER', '1.6J'));
+        $old = ['connection_id' => '01J00000000000000000000001'];
+        $new = ['connection_id' => '01J00000000000000000000002'];
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_connected', '2026-07-22T10:00:00Z', $old));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_connected', '2026-07-22T10:00:10Z', $new));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_disconnected', '2026-07-22T10:00:11Z', $old));
+        $query = app(StationConnectionQuery::class);
+        $id = (string) $connector->evse->charging_station_id;
+        self::assertSame('online', $query->forStations([$id])[$id]['status']);
+        self::assertSame('unknown', $query->availability($query->forStations([$id])[$id], 'available', '2026-07-22T10:00:00Z', 300));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:12.900000Z', [...$new, 'connector_id' => 1, 'status' => 'Faulted']));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:12.100000Z', [...$new, 'connector_id' => 1, 'status' => 'Available']));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:13Z', [...$old, 'connector_id' => 1, 'status' => 'Available']));
+        $this->assertDatabaseHas('charging_connector_statuses', ['connector_id' => $connector->getKey(), 'status' => 'faulted']);
+    }
+
+    public function test_presence_rejects_foreign_station_identity_protocol_and_invalid_connection(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('presence-owner');
+        $other = $this->createTenant('presence-other');
+        [$connector] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'OWNER', '1.6J'));
+        foreach ([
+            ['connection_id' => 'invalid'],
+            ['connection_id' => '01J00000000000000000000001', 'protocol' => 'ocpp2.0.1'],
+            ['connection_id' => '01J00000000000000000000001', 'charge_point_identity' => 'OTHER'],
+        ] as $data) {
+            $event = $this->event($tenant, $connector, 'heartbeat', now()->toIso8601String(), $data);
+            $result = $this->withinTenant($tenant, $actor, fn () => app(OcppEventConsumer::class)->consume($event));
+            self::assertSame('quarantined', $result->outcome);
+        }
+        $foreign = $this->event($other, $connector, 'heartbeat', now()->toIso8601String(), ['connection_id' => '01J00000000000000000000001']);
+        $result = $this->withinTenant($other, $actor, fn () => app(OcppEventConsumer::class)->consume($foreign));
+        self::assertSame('quarantined', $result->outcome);
+        $this->assertDatabaseCount('charging_station_connections', 0);
+    }
+
+    public function test_public_mobile_projection_follows_live_status_and_disconnect(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T10:00:00Z'));
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('presence-mobile');
+        [$connector] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'MOBILE', '1.6J'));
+        $this->withinTenant($tenant, $actor, function () use ($connector): void {
+            $station = $connector->evse->station;
+            $station->update(['is_public' => true]);
+            $station->site->update(['latitude' => 14.6, 'longitude' => 121, 'is_public' => true, 'published_at' => now()->subDay()]);
+        });
+        $data = ['connection_id' => '01J00000000000000000000001'];
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_connected', '2026-07-22T10:00:01Z', $data));
+        $url = '/api/v1/public/stations?west=120&south=14&east=122&north=15';
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'online')->assertJsonPath('data.0.availability', 'unknown');
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:02Z', [...$data, 'connector_id' => 1, 'status' => 'Available']));
+        $this->travel(6)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.availability', 'available');
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_disconnected', '2026-07-22T10:00:07Z', $data));
+        $this->travel(6)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'offline')->assertJsonPath('data.0.availability', 'offline');
     }
 
     /** @return array{Connector, TariffVersion} */

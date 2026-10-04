@@ -6,6 +6,7 @@ namespace App\Modules\Assets\Application;
 
 use App\Modules\Assets\Domain\AssetLifecycleStatus;
 use App\Modules\Assets\Domain\Models\Connector;
+use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Charging\Domain\ConnectorAvailability;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -63,6 +64,17 @@ final class ConnectorSnapshotQuery
 
         if ($status !== null && $status->observed_at->addSeconds($status->stale_after_seconds)->isPast()) {
             $availability = ConnectorAvailability::Unknown;
+        }
+        if ($status !== null) {
+            $connections = app(StationConnectionQuery::class);
+            $presence = $connections->forStations([(string) $station->getKey()]);
+            $availability = ConnectorAvailability::from($connections->availability(
+                $presence[(string) $station->getKey()] ?? null,
+                $status->status->value,
+                $status->observed_at->toIso8601String(),
+                $status->stale_after_seconds,
+                $status->ocpp_connection_id,
+            ));
         }
 
         return new ConnectorSnapshot(

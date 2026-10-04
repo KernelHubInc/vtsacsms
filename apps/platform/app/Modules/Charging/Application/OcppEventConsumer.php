@@ -34,6 +34,7 @@ final readonly class OcppEventConsumer
         private MeterValueService $meters,
         private ChargeDetailRecordGenerator $cdrs,
         private FaultObservationContract $faults,
+        private StationConnectionProjector $connections,
     ) {}
 
     /** @param array<string, mixed> $event */
@@ -103,6 +104,17 @@ final readonly class OcppEventConsumer
             throw new DomainException('OCPP event data must be an object.');
         }
         $action = str($event['event_type'])->between('gateway.ocpp.', '.received.v1')->toString();
+        $stationAction = in_array($action, ['charger_connected', 'charger_disconnected', 'boot_notification', 'heartbeat'], true);
+        $currentConnection = true;
+        if ($stationAction || isset($data['connection_id'])) {
+            $currentConnection = $this->connections->observe($event, $action);
+        }
+        if ($stationAction || ($action === 'status_notification' && (! $currentConnection || ($data['connector_id'] ?? null) === 0))) {
+            return;
+        }
+        if (! in_array($action, ['start_transaction', 'stop_transaction', 'transaction_event', 'meter_values', 'status_notification'], true)) {
+            return;
+        }
         $connector = $this->connector($event, $data);
         if (! hash_equals($connector->protocol, (string) ($data['protocol'] ?? ''))) {
             throw new DomainException('OCPP event protocol does not match the enrolled charger profile.');
@@ -115,8 +127,7 @@ final readonly class OcppEventConsumer
             'stop_transaction' => $this->stop($connector, $event, $data, $sourceAt),
             'transaction_event' => $this->transactionEvent($connector, $event, $data, $sourceAt),
             'meter_values' => $this->meterValues($connector, $event, $data, $occurredAt),
-            'status_notification' => $this->status($connector, $event, $data, $sourceAt),
-            default => null,
+            'status_notification' => $this->status($connector, $event, $data, $occurredAt),
         };
     }
 
@@ -144,7 +155,7 @@ final readonly class OcppEventConsumer
             'protocol_transaction_id' => $transactionId,
         ], (string) $event['event_id']);
         $this->reservations->release((string) $session->getKey(), 'transaction_started');
-        $this->setConnectorStatus($connector, ConnectorAvailability::Occupied, 'transaction_started', $sourceAt, (string) $event['event_id']);
+        $this->setConnectorStatus($connector, ConnectorAvailability::Occupied, 'transaction_started', $sourceAt, (string) $event['event_id'], $data['connection_id'] ?? null);
         if ($samples !== []) {
             $this->meters->record($session, (string) $event['event_id'], $samples, $sourceAt);
         }
@@ -243,7 +254,9 @@ final readonly class OcppEventConsumer
             'offline' => ConnectorAvailability::Offline,
             default => ConnectorAvailability::Unknown,
         };
-        $this->setConnectorStatus($connector, $status, 'ocpp_status_notification', $sourceAt, (string) $event['event_id']);
+        if (! $this->setConnectorStatus($connector, $status, 'ocpp_status_notification', $sourceAt, (string) $event['event_id'], $data['connection_id'] ?? null)) {
+            return;
+        }
         $faultCode = $data['error_code'] ?? $data['vendor_error_code'] ?? null;
         $this->faults->observe(
             (string) $event['event_id'],
@@ -343,12 +356,19 @@ final readonly class OcppEventConsumer
         string $reason,
         CarbonImmutable $observedAt,
         string $eventId,
-    ): void {
+        ?string $connectionId = null,
+    ): bool {
         $status = ConnectorStatus::query()->firstOrCreate(
             ['connector_id' => $connector->connectorId],
             ['status' => ConnectorAvailability::Unknown, 'observed_at' => $observedAt, 'stale_after_seconds' => 300],
         );
+        if ($reason === 'ocpp_status_notification' && ($status->last_ocpp_event_at ?? $status->observed_at)->greaterThan($observedAt)) {
+            return false;
+        }
+        $status->forceFill(['ocpp_connection_id' => $connectionId, 'last_ocpp_event_at' => $observedAt])->save();
         $this->connectorStates->transition($status, $next, $reason, ['observed_at' => $observedAt], $eventId);
+
+        return true;
     }
 
     /** @param array<string, mixed> $event

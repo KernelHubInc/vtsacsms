@@ -70,6 +70,8 @@ final class Station {
     required this.maximumPowerW,
     required this.openNow,
     required this.connectors,
+    this.connectionStatus = 'unknown',
+    this.lastSeenAt,
     this.address,
     this.statusObservedAt,
     this.distanceM,
@@ -78,6 +80,10 @@ final class Station {
   });
 
   factory Station.fromJson(Map<String, dynamic> json) => Station(
+    connectionStatus: json['connection_status'] as String? ?? 'unknown',
+    lastSeenAt: DateTime.tryParse(
+      json['last_seen_at'] as String? ?? '',
+    )?.toUtc(),
     id: json['id']! as String,
     siteId: json['site_id']! as String,
     name: json['name']! as String,
@@ -115,6 +121,8 @@ final class Station {
         const [],
   );
 
+  final String connectionStatus;
+  final DateTime? lastSeenAt;
   final String id;
   final String siteId;
   final String name;

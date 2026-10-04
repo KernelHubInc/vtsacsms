@@ -59,6 +59,13 @@ class StationDetailScreen extends StatelessWidget {
                   label: availabilityLabel(station),
                   state: operationalStateFor(station),
                 ),
+                Chip(
+                  label: Text(switch (station.connectionStatus) {
+                    'online' => 'Charger online',
+                    'offline' => 'Charger offline',
+                    _ => 'Connection unconfirmed',
+                  }),
+                ),
                 Chip(label: Text(station.openNow ? 'Open now' : 'Closed now')),
                 Chip(label: Text('Up to ${station.maximumPowerLabel}')),
               ],

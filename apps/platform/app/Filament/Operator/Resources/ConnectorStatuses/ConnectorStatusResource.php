@@ -33,7 +33,7 @@ final class ConnectorStatusResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
+        return $table->poll('5s')->columns([
             TextColumn::make('connector_id')->label('Connector')->copyable()->searchable(),
             TextColumn::make('status')->badge()->sortable(),
             TextColumn::make('observed_at')->dateTime()->sortable(),

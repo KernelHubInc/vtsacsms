@@ -36,3 +36,9 @@ Remote start locks the latest projection and accepts only a fresh `AVAILABLE` co
 
 Every change appends transition evidence and emits `charging.connector.status_changed.v1`. Staleness is calculated from UTC `observed_at` and `stale_after_seconds`; stale data must not be presented as live availability.
 
+
+Live station presence now gates reads of connector availability: explicit disconnect or
+expired last-message time means Offline; a new socket without a fresh connector report
+means Unknown. Heartbeats preserve the last connector state reported on the current
+connection. They do not cause an Available transition. See the
+[OCPP projection rollout](ocpp-gateway.md#live-station-projection-2026-10-04).

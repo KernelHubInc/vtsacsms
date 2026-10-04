@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Locations\Application;
 
+use App\Modules\Charging\Application\StationConnectionQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -119,6 +120,8 @@ final class PublicStationSearch
             return $stations;
         }
         $stationCollection = collect($stations);
+        $connectionQuery = app(StationConnectionQuery::class);
+        $connections = $connectionQuery->forStations(array_values($stationCollection->pluck('id')->all()));
         $connectors = DB::table('connectors as connector')
             ->join('evses as evse', function ($join): void {
                 $join->on('evse.id', '=', 'connector.evse_id')->on('evse.tenant_id', '=', 'connector.tenant_id');
@@ -130,10 +133,10 @@ final class PublicStationSearch
             })
             ->whereIn('evse.charging_station_id', $stationCollection->pluck('id'))
             ->where('connector.lifecycle_status', 'active')
-            ->select(['evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
+            ->select(['evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.ocpp_connection_id', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
             ->get()->groupBy('charging_station_id');
 
-        return array_values($stationCollection->map(function (array $station) use ($connectors): array {
+        return array_values($stationCollection->map(function (array $station) use ($connectors, $connections, $connectionQuery): array {
             $items = $connectors->get($station['id'], collect());
             $fresh = $items->filter(function (object $item): bool {
                 if ($item->observed_at === null) {
@@ -144,6 +147,16 @@ final class PublicStationSearch
             });
             $statuses = array_values($fresh->pluck('status')->filter()->all());
             $station['availability'] = $this->summarizeAvailability($statuses, $items->isNotEmpty() && $fresh->isEmpty());
+            $connection = $connections[(string) $station['id']] ?? null;
+            $station['connection_status'] = $connection['status'] ?? 'unknown';
+            $station['last_seen_at'] = $connection['last_seen_at'] ?? null;
+            if ($connection !== null) {
+                $liveStatuses = $items->map(fn (object $item): string => $item->observed_at === null
+                    ? 'unknown'
+                    : $connectionQuery->availability($connection, (string) $item->status, (string) $item->observed_at, (int) $item->stale_after_seconds, $item->ocpp_connection_id))->all();
+                $station['availability'] = $connection['status'] === 'offline'
+                    ? 'offline' : $this->summarizeAvailability(array_values($liveStatuses), false);
+            }
             $station['is_stale'] = $station['availability'] === 'stale';
             $station['status_observed_at'] = $items->pluck('observed_at')->filter()->sortDesc()->first();
             $station['maximum_power_w'] = (int) ($items->max('maximum_power_w') ?? 0);

@@ -60,7 +60,8 @@ final class MasterDataAssetFoundationTest extends TenantSecurityTestCase
         $response = $this->getJson('/api/v1/public/stations?'.$query)->assertOk()->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.availability', 'available')->assertJsonPath('data.0.maximum_power_w', 150000)
             ->assertJsonPath('data.0.connectors.0.standard', 'ccs2')->assertJsonPath('data.0.open_now', true);
-        $this->assertStringContainsString('stale-while-revalidate=120', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('no-cache', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringNotContainsString('stale-while-revalidate', (string) $response->headers->get('Cache-Control'));
         $this->withHeader('If-None-Match', (string) $response->headers->get('ETag'))
             ->getJson('/api/v1/public/stations?'.$query)->assertStatus(304);
 

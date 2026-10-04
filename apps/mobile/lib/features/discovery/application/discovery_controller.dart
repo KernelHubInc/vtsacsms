@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
@@ -16,6 +18,34 @@ final class DiscoveryController extends ChangeNotifier {
   AppFailure? _failure;
   bool _loading = false;
   int _requestGeneration = 0;
+  bool _disposed = false;
+  bool _refreshing = false;
+  int _requestsInFlight = 0;
+  Timer? _refreshTimer;
+  ({double latitude, double longitude, int radiusM})? _lastNearby;
+
+  void startAutoRefresh({bool Function()? canRefresh}) {
+    _refreshTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_requestsInFlight == 0 &&
+          !_refreshing &&
+          (canRefresh?.call() ?? true)) {
+        unawaited(refresh());
+      }
+    });
+  }
+
+  void stopAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _requestGeneration++;
+    stopAutoRefresh();
+    super.dispose();
+  }
 
   List<Station> get stations {
     if (_query.isEmpty) {
@@ -44,8 +74,11 @@ final class DiscoveryController extends ChangeNotifier {
 
   Future<void> loadBounds(GeoBounds bounds) async {
     _lastBounds = bounds;
+    _lastNearby = null;
+    if (_disposed) return;
     final generation = ++_requestGeneration;
-    _loading = true;
+    _requestsInFlight++;
+    _loading = !_refreshing;
     _failure = null;
     notifyListeners();
     try {
@@ -63,6 +96,7 @@ final class DiscoveryController extends ChangeNotifier {
         _failure = failure;
       }
     } finally {
+      _requestsInFlight--;
       if (generation == _requestGeneration) {
         _loading = false;
         notifyListeners();
@@ -75,8 +109,12 @@ final class DiscoveryController extends ChangeNotifier {
     required double longitude,
     int radiusM = 10000,
   }) async {
+    _lastBounds = null;
+    _lastNearby = (latitude: latitude, longitude: longitude, radiusM: radiusM);
+    if (_disposed) return;
     final generation = ++_requestGeneration;
-    _loading = true;
+    _requestsInFlight++;
+    _loading = !_refreshing;
     _failure = null;
     notifyListeners();
     try {
@@ -95,6 +133,7 @@ final class DiscoveryController extends ChangeNotifier {
         _failure = failure;
       }
     } finally {
+      _requestsInFlight--;
       if (generation == _requestGeneration) {
         _loading = false;
         notifyListeners();
@@ -106,8 +145,15 @@ final class DiscoveryController extends ChangeNotifier {
     _filters = filters;
     notifyListeners();
     final bounds = _lastBounds;
+    final nearby = _lastNearby;
     if (bounds != null) {
       await loadBounds(bounds);
+    } else if (nearby != null) {
+      await loadNearby(
+        latitude: nearby.latitude,
+        longitude: nearby.longitude,
+        radiusM: nearby.radiusM,
+      );
     }
   }
 
@@ -122,9 +168,22 @@ final class DiscoveryController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    final bounds = _lastBounds;
-    if (bounds != null) {
-      await loadBounds(bounds);
+    if (_disposed || _requestsInFlight > 0 || _refreshing) return;
+    _refreshing = true;
+    try {
+      final bounds = _lastBounds;
+      final nearby = _lastNearby;
+      if (bounds != null) {
+        await loadBounds(bounds);
+      } else if (nearby != null) {
+        await loadNearby(
+          latitude: nearby.latitude,
+          longitude: nearby.longitude,
+          radiusM: nearby.radiusM,
+        );
+      }
+    } finally {
+      _refreshing = false;
     }
   }
 }
