@@ -1,0 +1,2446 @@
+
+===== PAGE 1 =====
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Payment Interface Developer’s Guide   
+Merchant-Presented Payment API Specification 
+Payment Interface 
+ 
+Develop  Document version: 1.4.3 
+ 
+          Interface version: 2.0  
+ 
+ 
+   
+  Document Changes 
+Date Version Description 
+2018-02-24 1.0 First draft  
+2018-06-01 1.0 Request URL is changed to https://gateway.wepayez.com/pay/gateway  
+2019-03-15 1.1 Integrate Alipay/WeChat Pay/Unionpay  
+2019-07-18 1.2 Add retrieve interface  
+2019-10-15 1.3 Update UI  
+2020-09-02 1.4 Add Online payment interface ,update all interfaces parameters  
+2020-09-16 1.4.2 Add Instapay bank payment  
+2020-12-18 1.4.3 Add QRPh 
+
+===== PAGE 2 =====
+2 / 38 
+ 
+Catalog 
+1 Introduction ................................ ................................ ................................ ................................ ....................... 4 
+1.1 Abstract ................................ ................................ ................................ ................................ ..........4 
+1.2 Audience ................................ ................................ ................................ ................................ ..........4 
+2 Program Overview ................................ ................................ ................................ ................................ ............. 5 
+2.1 Industry Background ................................ ................................ ................................ ................................ ...5 
+2.2 Business realization process ................................ ................................ ................................ ........................ 5 
+3 Data format ................................ ................................ ................................ ................................ ....................... 7 
+3.1 Request data ................................ ................................ ................................ ................................ ..........7 
+3.2 XML data format ................................ ................................ ................................ ................................ .........7 
+4 Digital Signature................................ ................................ ................................ ................................ ................. 8 
+4.1 Original string of signature ................................ ................................ ................................ .......................... 8 
+4.2 Method of signature ................................ ................................ ................................ ................................ ...9 
+5 QR Code Payment ................................ ................................ ................................ ................................ ............ 13 
+5.1 QR code pay ................................ ................................ ................................ ................................ ........ 13 
+5.1.1 Business function ................................ ................................ ................................ ...............................  13 
+5.1.2 Interactive mode ................................ ................................ ................................ ................................  13 
+5.1.3 Request Parameters ................................ ................................ ................................ ...........................  13 
+5.1.4 Response Parameters ................................ ................................ ................................ .........................  15 
+5.2 Gcash/Grab Online Payment Interface ................................ ................................ ................................ ...... 16 
+5.2.1 Request Parameters ................................ ................................ ................................ ...........................  16 
+5.2.2  Response Parameters ................................ ................................ ................................ ........................  17 
+5.2.3 Online payment callback................................ ................................ ................................ .....................  18 
+5.3 Instapay Bank Payment ................................ ................................ ................................ .............................  18 
+5.3.1 Instapay payment interface ................................ ................................ ................................ ................  18 
+5.3.2 Response parameter ................................ ................................ ................................ ..........................  19 
+5.3.3 Retrieve transaction result interface ................................ ................................ ................................ ... 19 
+5.3.4 Respose parameter ................................ ................................ ................................ ............................  20 
+5.4 QR Ph ................................ ................................ ................................ ................................ ........................  21 
+5.4.1 Instapay (QR Ph) payment interface ................................ ................................ ................................ ... 21 
+5.4.2 Response parameter ................................ ................................ ................................ ..........................  22 
+5.4.3 Retrieve transaction result interface ................................ ................................ ................................ ... 22 
+5.4.4 Response parameter ................................ ................................ ................................ ..........................  23 
+6 Notification interface ................................ ................................ ................................ ................................ ....... 24 
+6.1 Notification request parameters ................................ ................................ ................................ ............ 24 
+6.2 Response of notification ................................ ................................ ................................ ........................  26 
+7 Retrieve transaction result interface ................................ ................................ ................................ ................  27 
+7.1 Business function ................................ ................................ ................................ ................................ . 27 
+7.2 Request Parameters ................................ ................................ ................................ ..............................  27 
+7.3 Response parameter ................................ ................................ ................................ .............................  28 
+8 Refund interface ................................ ................................ ................................ ................................ ..............  29 
+8.1 Business function ................................ ................................ ................................ ................................ . 29 
+8.2  Request parameters ................................ ................................ ................................ .............................  30 
+8.3 Response parameters ................................ ................................ ................................ ............................  31 
+
+===== PAGE 3 =====
+3 / 38 
+ 
+9 Retrieve refund result interface ................................ ................................ ................................ .......................  33 
+9.1 Request parameters ................................ ................................ ................................ ..............................  33 
+9.2  Response parameters ................................ ................................ ................................ ...........................  34 
+10 Close Order Interface ................................ ................................ ................................ ................................ ..... 35 
+10.1 Business function ................................ ................................ ................................ ................................ . 35 
+10.2 Request parameters ................................ ................................ ................................ ............................  35 
+10.3 Response parameter ................................ ................................ ................................ ...........................  36 
+11 Notes ................................ ................................ ................................ ................................ .............................  37 
+ 
+ 
+
+===== PAGE 4 =====
+4 / 38 
+ 
+ 
+1 Introduction 
+1.1 Abstract 
+QR Payment is a payment method which means merchants integrate with the Third Party ’s API and generate a 
+QR Code to show customers for each transaction. Then customers use WeChat/Alipay/Unionpay to scan the QR Code 
+generated by merchants to complete the payment.   
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+QR Pay can be applied in both on-line and off-line payment scenes. Eg.off-line vending machine with screen, off-
+line cashier, on-line mall on PC and etc. 
+ 
+ 
+1.2 Audience 
+ 
+This document is provided to technical and business staff of merchants for reference
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 5 =====
+5 / 38 
+ 
+ 
+2 Program Overview 
+2.1 Industry Background 
+WeChat payment is a payment service function which is provided based on WeChat application, and meanwhile it 
+provides the commercial tenants with such support functions as sales,  marketing analysis and management of account. 
+Customers could complete a payment by scanning QR code, being scanned payment QR code or other payment 
+methods. 
+2.2 Business realization process 
+2.2.1 Business of QR code pay 
+Usage scenario:  
+The payer scans a QR Code shown by vendors in the following process.  
+Step (1): Merchants create a QR Code for their products correspondingly based on WeChat payment rules, as 
+shown in Figure 2.1. 
+Step (2): The payer scans the QR Code with their WeChat to access the Merchants’ product data and proceeds with 
+the transaction, as shown in Figure 2.2. The Payer then makes their payment as instructed, as shown in Figure 2.3. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 2.1 Payment QR Code Figure 2.2 Scan QR Code on WeChat Figure 2.3 Confirm Payment 
+ 
+Step (3): The payer confirms their transaction and enters their payment password, as shown in Figure 2.4.  
+Step (4): The payer is prompted of a successful payment after completing their payment, as shown in Figure 2.5. 
+ 
+ 
+
+===== PAGE 6 =====
+6 / 38 
+ 
+ 
+The merchant delivers the paid products to the payer after receiving a notification about the successful payment.  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Figure 2.4 Enter Payment Figure 2.5 Prompt after Successful 
+ 
+Time sequence of interface calls:  
+After the merchant generates an order, the QR code pay interface will be invoked to obtain code_url, and this URL 
+will generate QR code, and after the user scans the QR code, the payment could be invoked. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 7 =====
+7 / 38 
+ 
+ 
+3 Data format 
+3.1 Request data 
+Used HTTPS POST protocol. To ensure security, transfer data must be signed.   
+<xml>   
+<service>pay.weixin.native </service>   
+<attach><![CDATA[att]]></attach>   
+<body><![CDATA[支付測試]]></body>   
+<device_info>1000</device_info>   
+<mch_id>10000100</mch_id>   
+<nonce_str>adf880d5c8986bd0deb6423c92c9d948</nonce_str>   
+<out_trade_no>1406046836</out_trade_no>   
+<mch_create_ip>127.0.0.1</mch_create_ip>   
+<total_fee>100</total_fee>   
+<sign><![CDATA[F53145E553092CE52E4CAA4D2B49A91C]]></sign>   
+</xml> 
+3.2 XML data format 
+Used Standard XML protocol. First-level node only. No nested nodes. 
+Protocol error return:   
+<xml>   
+<status>500</status>   
+<message><![CDATA[SYSERR]]></message>   
+</xml>   
+Successful response:   
+<xml>   
+<status>0</status>   
+<message><![CDATA[OK]]></message>   
+<appid><![CDATA[wx2421b1c4370ec43b]]></appid>   
+<mch_id><![CDATA[10000100]]></mch_id>   
+<device_info><![CDATA[1000]]></device_info>   
+<nonce_str><![CDATA[FvYSnPuFFPkAr77M]]></nonce_str>   
+<sign><![CDATA[63238039D6E43634297CF2A6EB5F3B72]]></sign>   
+<result_code>0</result_code>   
+<openid><![CDATA[oUpF8uN95-Ptaags6E_roPHg7AG0]]></openid>   
+<is_subscribe><![CDATA[Y]]></is_subscribe>   
+<trade_type><![CDATA[MICROPAY]]></trade_type>   
+<bank_type><![CDATA[CCB_CREDIT]]></bank_type> 
+ 
+
+===== PAGE 8 =====
+8 / 38 
+ 
+<total_fee>100</total_fee>   
+<coupon_fee>0</coupon_fee>   
+<fee_type><![CDATA[CNY]]></fee_type>   
+<transaction_id><![CDATA[1008450740201407220000058756]]></transaction_id>   
+<out_trade_no><![CDATA[1406033828]]></out_trade_no>   
+<attach><![CDATA[att]]></attach>   
+<time_end><![CDATA[20140722160655]]></time_end>   
+</xml>  
+ 
+Normal error return:   
+<xml>   
+<status>0</status>   
+<message><![CDATA[OK]]></message>   
+<appid><![CDATA[wx2421b1c4370ec43b]]></appid>   
+<mch_id><![CDATA[10000100]]></mch_id>   
+<device_info><![CDATA[1000]]></device_info>   
+<nonce_str><![CDATA[sthBJ9QyUG6vkrjJ]]></nonce_str>   
+<sign><![CDATA[6277A96D7875D4FF23AA7B6A4C3046AB]]></sign>   
+<result_code>1</result_code>   
+<err_code><![CDATA[AUTHCODE_EXPIRE]]></err_code>   
+<err_code_des><![CDATA[二维码已过期，请刷新再试]]></err_code_des>  
+</xml>  
+ 
+ 
+ 
+ 
+4 Digital Signature 
+To ensure the authenticity and integrity of transmissible data, we need to verify the signed data after it being 
+received. 
+There are two steps in digital signature.  
+1. Follow the rules to connect the original string that needs to be signed;  
+2. Calculate the result of signature according to specific algorithm and key. 
+ 
+Generally, the failed result will not be signed. 
+4.1 Original string of signature 
+The original string of signature will be assembled into character string according to the following modes no 
+matter whether it is request or response:  
+1. Besides the sign field, all parameter fields will be ranked in ascending order according to the ASCII of the field 
+name and then connected in the format of QueryString (i.e. key1=value1&key2=value2…), and the null value will n ot 
+transfer and will not participate in formation of string of signature. 
+ 
+
+===== PAGE 9 =====
+9 / 38 
+ 
+ 
+2. In the original string of signature, both the field name and field value will adopt original values and will 
+not conduct URL Encode. 
+3. The response or notification information returned by platform might increase parameters due to upgrading, and 
+this case should be allowed when the response signature is verified. 
+ 
+Example：  
+Calling an interface with following fields:  
+<xml> 
+<body><![CDATA[TestPay]]></body> 
+<mch_create_ip><![CDATA[127.0.0.1]]></mch_create_ip> 
+<mch_id><![CDATA[100500014415]]></mch_id> 
+<nonce_str><![CDATA[1409196838]]></nonce_str> 
+<notify_url><![CDATA[http://227.0.0.1:9001/javak/]]></notify_url> 
+<out_trade_no><![CDATA[141903606228]]></out_trade_no> 
+<service><![CDATA[pay.weixin.native.intl]]></service> 
+<sign><![CDATA[1AAD56668CDBBCD94AE6DF463064197A]]></sign> 
+<total_fee><![CDATA[100]]></total_fee> 
+</xml> 
+ 
+The signature field sequence:  
+body=TestPay&mch_create_ip=127.0.0.1&mch_id=100500014415&nonce_str=1409196838&n   
+otify_url=http://227.0.0.1:9001/javak/&out_trade_no=141903606228&service=pay.we   
+ixin.native.intl&total_fee=100  
+ 
+ 
+ 
+4.2 Method of signature 
+SHA256 / RSA signature are supported. 
+ 
+Signature is a kind of abstract generation algorithm, and if the content of communication keys of the merchant is 
+added to the back of the original string of signature and then signature operation is made, then the abstract character 
+string formed is the signature result. In order to facilitate the comparison, the signature result is uniformly converted to 
+the uppercase letter. 
+ 
+Notes: the coded character set appointed when converting the character string into the byte stream at signing 
+should be in accordance with parameter charset. 
+ 
+ 
+SHA256 signature calculation formula: 
+ 
+sign =SHA256(“The signature field sequence strings”&key=“signature key”). toUpperCase 
+ 
+Example: 
+ 
+There are XML afferent parameters:   
+<xml> 
+<body><![CDATA[TestPay]]></body> 
+<device_info><![CDATA[100]]></device_info> 
+<mch_create_ip><![CDATA[127.0.0.1]]></mch_create_ip> 
+<mch_id><![CDATA[127500000158]]></mch_id> 
+
+===== PAGE 10 =====
+10 / 38 
+ 
+<nonce_str><![CDATA[2209193392]]></nonce_str> 
+<notify_url><![CDATA[http://zeming.dev.swiftpass.cn/pytest/notify_suc]]></notify_url> 
+<out_trade_no><![CDATA[127500000158112233001]]></out_trade_no> 
+<service><![CDATA[pay.weixin.native.intl]]></service> 
+<sign><![CDATA[A406815CA24BDD040A5011AF6BED8C0E40DD75994DFC476048B706EFFAC2633F]]></sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<total_fee><![CDATA[100]]></total_fee> 
+</xml> 
+ 
+Merchant signature key：06af0776878e8fbdd45f2ac8a916573e 
+ 
+ 
+i:the first step of which is to connect the original string(string1) that needs 
+signature according to certain rules: 
+ 
+body=TestPay&device_info=100&mch_create_ip=127.0.0.1&mch_id=127500000158&nonce_str=2209193392&n
+otify_url=http://zeming.dev.swiftpass.cn/pytest/notify_suc&out_trade_no=127500000158112233001&s
+ervice=pay.weixin.native.intl&sign_type=SHA256&total_fee=100&key=06af0776878e8fbdd45f2ac8a91657
+3e 
+ 
+ii:the second step of which is to choose SHA256 and keys to calculate the result 
+of signature(sign): 
+ 
+sign=SHA256(string1&key=06af0776878e8fbdd45f2ac8a916573e).toUpperCase=SHA256(body=TestPay&devic
+e_info=100&mch_create_ip=127.0.0.1&mch_id=127500000158&nonce_str=2209193392&notify_url=http://z
+eming.dev.swiftpass.cn/pytest/notify_suc&out_trade_no=127500000158112233001&service=pay.weixin.
+native.intl&sign_type=SHA256&total_fee=100&key=06af0776878e8fbdd45f2ac8a916573e).toUpperCase()=
+"A406815CA24BDD040A5011AF6BED8C0E40DD75994DFC476048B706EFFAC2633F"
+ 
+ 
+ 
+ 
+ 
+
+===== PAGE 11 =====
+11 / 38 
+ 
+ 
+RSA signature calculation formula: 
+ 
+The RSA algorithm has always been the most widely used "asymmetric encryption algorithm". By adding the content 
+of the RSA private key of the merchant communication after the original string is signed, the result string is the result of 
+the RSA operation. 
+ 
+Note: The set of coded characters specified when converting a string to a byte stream at signature should match the 
+parameter charset. The RSA key pair is generated by the merchant. You need to upload the public key to the merchant 
+portal and download the SwiftPass public key for the response. 
+ 
+ 
+Sign = RSA (request parameter string, merchant RSA private key) 
+ 
+Description: The name of the platform signature algorithm: RSA_1_256, corresponding to the standard signature 
+ 
+algorithm name: SHA256WithRSA, the length of the RSA key is required to be 2048. 
+ 
+sign =RSA(“The signature field sequence strings”&key=“signature key”). toUpperCase 
+ 
+Example: 
+ 
+There are XML afferent parameters:   
+<xml>   
+<out_trade_no><![CDATA[6057113230875088]]></out_trade_no>   
+<nonce_str><![CDATA[wNzpaD0sN17KI80yBQwINNHfmOIeNqap]]></nonce_str>   
+<time_expire><![CDATA[]]></time_expire>   
+<mch_create_ip><![CDATA[127.0.0.1]]></mch_create_ip>   
+<sign_type><![CDATA[RSA_1_256]]></sign_type>   
+<total_fee><![CDATA[100]]></total_fee>   
+<notify_url><![CDATA[http://www.baidu.cn/notify.aspx]]></notify_url> 
+<body><![CDATA[Test pay]]></body>   
+<version><![CDATA[1.0]]></version>   
+<mch_id><![CDATA[102532336411]]></mch_id>   
+<time_start><![CDATA[]]></time_start>   
+<attach><![CDATA[Additional information]]></attach>   
+<service><![CDATA[pay.alipay.native]]></service>  
+<sign><![CDATA[SE008JDir0uwOuBy8d48SmdfG37PyGvhtqu8pDTO0DpdNkgkLuegNsb6SaL/dEfzuO35bwAVwiKSc9m9x  
+BKohGJEMtzRm3tLNnpQ0BDpLlYNWQkr0JN3JAjy6wk1icSmfbjXgEvWCcx17MUe59NfIl0JRR3MgFg/ySYq2cT4U/o6WJisx  
+tIbre0ZPM66WL8l5gAzosJW3Gwr+B8fkRyOckF4w64i0TM20xoSHGEa8w1utOFik5wvxyPHb/JcjhRyrBnb2LFZy5Rq3XzZL   
+W6FaK1gunWnjK5+4NiNuHDgm7CKZPp8BphA/qnJtAMGfexEZ8J4z9ktyywDK8b8VWJ5ow==]]>   
+</sign>   
+</xml> 
+ 
+ 
+ 
+   
+Merchant RSA Private key：  
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCfU8v4BUr81SKm/H0ahbdQZjEpO8nMyk+xuYSatHwnU4//
+m47R+4G2YB4Z6PHsJi4+ScfJpQutFhKrFwTXZ6TDqLvaqZDDkJq5G271g+PmrzFp7f40/E9m0qjeL64RJra0rZql23dvPW4v
+VomMRgRcoPOn0YWVp+M6T5PaFgE4M8dh4lMZz57gVwOdd08F99Z92f3QgZtEjI+/EXvMenXxb/aRofNkt+Wdk2ELJ6MIP0d9
+
+===== PAGE 12 =====
+12 / 38 
+ 
+UU5v3WgLuuNv5QnQYzj/RMr8GD+wrDYiNQJxsaTmE/OEJggsumhD4eYY5YlRy2EIN504cujYVKU1wOSZgq9oJCynGR0aPuQW
+x58IHxEtAgMBAAECggEAHfEFd8qm2PTE2lTAvec7F+TcgD84IUAz0dZnURtx6YIOoZ5+LH/zVG6juYLJU/Oo5RPAc+iMVS68
+u2JMCp7zm8Ft7B3JkrbuHLNHGuR6Q7PQuXN8PkDcOxqDmZ2kPJzl4PZvBZRE0abdug+tMatGzpGAuJzrWcB/N0oVIvrXp9Pn
+Oqfo/Y5nxmpOFCImJppIS3AL1pftNtQZo9G15CPHDYtpUbXPtD2MjjW4OLxKuPRoHSwUgo6LW9XSwNXfcuK+lbzLL0BhlWD9
+IV/+yCEUEblN87yxxfhpQFaAhXj5W+B3YsMOZuK93+XMOpYmw8EpUDMObOnvwb0NSHUrV2RUAQKBgQDTojlnNS1e7+tjPzFt
+OhGPj1uCBPAEIeHAcnPgd80bEiujxMLCnGaAvmnTrMu4Xo0e5fAP4F7R6UD+IUsfr3CAAu7CadQ49TW+SovAvciy9AZuSVVI
+wynu6QdYgFyPKe1LZYAEq5k+mB1Vh5q0RoxMNAA5pGYKg8+4MmmsJi7X7QKBgQDAunCOqIiH128bs/1VRIhDpzuRW5Qr/SRb
+O2saVg5RSHnO/nGT2OuxSTTkc8yrx7qd9SmAxXl5kR238DhMOQOnRBomldmVtAJuJgrdQyt0wXfeQVQqshqCUaE/xhEbpSCd
+bPSZbKZZdplV0y6O5vXIhxw+1qAvXLcxw46s3R92QQKBgQClQ+ejywkVPDILHMwSSehwvThufkCYWYUbbcVDowpOe5AMoZid
+tNju7MNjg2rLHTsCx/kBzOr+7THNwl4R7kTiEmg09cO+fu5rHXepGgtig+GJukaZPZ6/bMZJvGOLgOhHmomwG/jdwpgVtIGB
+Ch6BW5JZcSImT+ykIOoYfvDRuQKBgCgwOHxnBGFfORoLxE3dhpSk8LT05cbueIBVuZW6UC3+8PeK82AjIbLMUy04QHupoG6D
+yu3BP/1rl0jd3L94PBzLBLD7Gm4vJTqW0DknYo5sMXS1JrnofcKjBv7nbHXZTx3EtJSxpVaOdpcA/HpsCuCP3AH2e1yk9sZ3
+wu6lBYSBAoGACYM60j1CVRNSZxUNRgiwfWzS69qI1eezPc7xQEganpVBI9SZcTNp1kpDKmQikXJ4Yb5XWn12HCY/sFeBW6Su
+3ruNqxvg1XiUPbH6A6nxd5B3QX0mS9+wDm6ONysPLRdKbfFO0mdP4CeyuGPdvDIMXP4dJdLhMUL4pcJLI0B7gBE= 
+ 
+i:the first step of which is to connect the original string(string1) that needs 
+signature according to certain rules:  
+attach=Additionalinformation&body=Testpay&mch_create_ip=127.0.0.1&mch_id=102532336411&nonce_str=
+wNzpaD0sN17KI80yBQwINNHfmOIeNqapnotify_url=http://www.baidu.cn/notify.aspx&out_trade_no=60571132
+30875088&service=pay.alipay.native&sign_type=RSA_1_256&total_fee=100&version=1.0 
+ 
+ii:the second step of which is to choose RSA and keys to calculate the result 
+of signature(sign):  
+sign=RSA(string1，
+MerchantRSAPrivatekey)==RSA(attach=Additionalinformation&body=Testpay&mch_create_ip=127.0.0.1&mch_id
+=102532336411&nonce_str=wNzpaD0sN17KI80yBQwINNHfmOIeNqapnotify_url=http://www.baidu.cn/notify.aspx&o
+ut_trade_no=6057113230875088&service=pay.alipay.native&sign_type=RSA_1_256&total_fee=100&version=1.0
+,MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCfU8v4BUr81SKm/H0ahbdQZjEpO8nMyk+xuYSatHwnU4//m47
+R+4G2YB4Z6PHsJi4+ScfJpQutFhKrFwTXZ6TDqLvaqZDDkJq5G271g+PmrzFp7f40/E9m0qjeL64RJra0rZql23dvPW4vVomMRgR
+coPOn0YWVp+M6T5PaFgE4M8dh4lMZz57gVwOdd08F99Z92f3QgZtEjI+/EXvMenXxb/aRofNkt+Wdk2ELJ6MIP0d9UU5v3WgLuuN
+v5QnQYzj/RMr8GD+wrDYiNQJxsaTmE/OEJggsumhD4eYY5YlRy2EIN504cujYVKU1wOSZgq9oJCynGR0aPuQWx58IHxEtAgMBAAE
+CggEAHfEFd8qm2PTE2lTAvec7F+TcgD84IUAz0dZnURtx6YIOoZ5+LH/zVG6juYLJU/Oo5RPAc+iMVS68u2JMCp7zm8Ft7B3Jkrb
+uHLNHGuR6Q7PQuXN8PkDcOxqDmZ2kPJzl4PZvBZRE0abdug+tMatGzpGAuJzrWcB/N0oVIvrXp9PnOqfo/Y5nxmpOFCImJppIS3A
+L1pftNtQZo9G15CPHDYtpUbXPtD2MjjW4OLxKuPRoHSwUgo6LW9XSwNXfcuK+lbzLL0BhlWD9IV/+yCEUEblN87yxxfhpQFaAhXj
+5W+B3YsMOZuK93+XMOpYmw8EpUDMObOnvwb0NSHUrV2RUAQKBgQDTojlnNS1e7+tjPzFtOhGPj1uCBPAEIeHAcnPgd80bEiujxML
+CnGaAvmnTrMu4Xo0e5fAP4F7R6UD+IUsfr3CAAu7CadQ49TW+SovAvciy9AZuSVVIwynu6QdYgFyPKe1LZYAEq5k+mB1Vh5q0Rox
+MNAA5pGYKg8+4MmmsJi7X7QKBgQDAunCOqIiH128bs/1VRIhDpzuRW5Qr/SRbO2saVg5RSHnO/nGT2OuxSTTkc8yrx7qd9SmAxXl
+5kR238DhMOQOnRBomldmVtAJuJgrdQyt0wXfeQVQqshqCUaE/xhEbpSCdbPSZbKZZdplV0y6O5vXIhxw+1qAvXLcxw46s3R92QQK
+BgQClQ+ejywkVPDILHMwSSehwvThufkCYWYUbbcVDowpOe5AMoZidtNju7MNjg2rLHTsCx/kBzOr+7THNwl4R7kTiEmg09cO+fu5
+rHXepGgtig+GJukaZPZ6/bMZJvGOLgOhHmomwG/jdwpgVtIGBCh6BW5JZcSImT+ykIOoYfvDRuQKBgCgwOHxnBGFfORoLxE3dhpS
+k8LT05cbueIBVuZW6UC3+8PeK82AjIbLMUy04QHupoG6Dyu3BP/1rl0jd3L94PBzLBLD7Gm4vJTqW0DknYo5sMXS1JrnofcKjBv7
+nbHXZTx3EtJSxpVaOdpcA/HpsCuCP3AH2e1yk9sZ3wu6lBYSBAoGACYM60j1CVRNSZxUNRgiwfWzS69qI1eezPc7xQEganpVBI9S
+ZcTNp1kpDKmQikXJ4Yb5XWn12HCY/sFeBW6Su3ruNqxvg1XiUPbH6A6nxd5B3QX0mS9+wDm6ONysPLRdKbfFO0mdP4CeyuGPdvDI
+MXP4dJdLhMUL4pcJLI0B7gBE=”)=SE008JDir0uwOuBy8d48SmdfG37PyGvhtqu8pDTO0DpdNkgkLuegNsb6SaL/dEfzuO35bwA
+VwiKSc9m9xBKohGJEMtzRm3tLNnpQ0BDpLlYNWQkr0JN3JAjy6wk1icSmfbjXgEvWCcx17MUe59NfIl0JRR3MgFg/ySYq2cT4U/o
+6WJisxtIbre0ZPM66WL8
+
+===== PAGE 13 =====
+13 / 38 
+ 
+5 QR Code Payment 
+5.1 QR code pay 
+5.1.1 Business function 
+The QR code payment request needs to be initialized. The request is for generating QR code to 
+make transactions of QR Code Pay. 
+5.1.2 Interactive mode 
+Request: Background request interaction mode  
+Return & Notification: Background request interaction mode + Background notifies interaction 
+mode 
+5.1.3 Request Parameters 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML  
+Parameter Required Type Description 
+ 
+service Yes String(32) WeChat：pay.weixin.native.intl 
+Alipay：pay.alipay.native.intl 
+UPI：pay.upi.native.intl 
+Grab Offline： pay.grab.native 
+Gcash Offline：pay.gcash.native 
+ 
+  
+ 
+    
+ 
+version No String(8) Version number. default value : 2.0 
+ 
+   
+ 
+    
+ 
+charset No String(8) Value : UTF-8 
+ 
+   
+ 
+    
+ 
+sign_type Yes String(16) SHA256 : SHA256； 
+ 
+   
+ 
+   RSA : RSA_1_256 
+ 
+    
+ 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform. 
+ 
+   
+ 
+    
+ 
+out_trade_no Yes String(32) The unique trade reference(merchant order id of 5-32 bits) in 
+ 
+   
+ 
+   Merchants’ system. Letter, number and underline are allowed. 
+ 
+   Case-sensitive 
+ 
+    
+ 
+device_info No String(32) Specifies a Terminal device id. 
+ 
+   
+ 
+    
+ 
+     
+ 
+
+===== PAGE 14 =====
+14 / 38 
+ 
+     
+body Yes String(127) Description of merchants’ goods. 
+ 
+   
+ 
+    
+ 
+attach No String(127) Merchant additional information. 
+ 
+   
+ 
+    
+ 
+total_fee Yes Int Integral number is allowed only. The unit of the fee is the minimal unit 
+ 
+   of the local currency. 
+ 
+mch_create_ip Yes String(16) 
+Specifies the machine IP that calls the API. 
+ 
+ 
+  
+ 
+   
+ 
+notify_url Yes String(255) Specifies the callback address for receiving platform payment 
+ 
+   
+ 
+   notifications. Should be absolute path and ensure platform accessible. 
+ 
+   i.e. http://wap.tenpay.com/tenpay.asp 
+ 
+    
+ 
+time_start No String(14) Order created date. Format: yyyyMMddHHmmss. 
+ 
+   i.e.20091225091010. GMT+8 Beijing Time 
+ 
+time_expire No String(14) Order timeout date. Format: yyyyMMddHHmmss. 
+ 
+   i.e.20091225091010. GMT+8 Beijing Time 
+ 
+op_user_id No String(32) Specifies the Operator ID. This field shows mch_id by default. 
+ 
+goods_tag No String(32) Specifies the label of goods, which is a parameter in the coupon feature 
+ 
+   for businesses. 
+ 
+product_id No String(32) This ID contains the product ID as set by the merchant. 
+ 
+   
+ 
+    
+ 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure unpredictability 
+ 
+   for signatures. 32 characters or fewer. 
+ 
+limit_credit_pay No String(32) Restrict consumer pay in credit card. 
+ 
+ 
+  
+ 
+  
+“1”: forbidden using credit card. 
+ 
+   
+ 
+   “0” or null: permit using credit card. 
+ 
+    
+ 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+  
+ 
+    
+ 
+     
+Example 
+ 
+<xml> 
+<body><![CDATA[TestPay]]></body> 
+<device_info><![CDATA[100]]></device_info> 
+<mch_create_ip><![CDATA[127.0.0.1]]></mch_create_ip> 
+<mch_id><![CDATA[127500000158]]></mch_id> 
+<nonce_str><![CDATA[2209193392]]></nonce_str> 
+<notify_url><![CDATA[http://zeming.dev.swiftpass.cn/pytest/notify_suc]]></notify_url> 
+<out_trade_no><![CDATA[127500000158112233001]]></out_trade_no> 
+<service><![CDATA[pay.weixin.native.intl]]></service> 
+<sign><![CDATA[A406815CA24BDD040A5011AF6BED8C0E40DD75994DFC476048B706EFFAC2633F]]></
+sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<total_fee><![CDATA[100]]></total_fee> 
+</xml> 
+ 
+ 
+ 
+ 
+
+===== PAGE 15 =====
+15 / 38 
+ 
+1.4 Response Parameters 
+Parameter Required  Type Description  
+ 
+version Yes  String(8) Version number. default value : 2.0  
+ 
+    
+ 
+      
+ 
+charset Yes  String(8) Value : UTF-8  
+ 
+    
+ 
+      
+ 
+sign_type Yes  String(16) SHA256 : SHA256；  
+ 
+     
+ 
+    RSA : RSA_1_256  
+ 
+status Yes  String(16) “0”: success. Others value: fail.  
+ 
+         Specifies communicating label (not transaction label). The status of a 
+ 
+         transaction is determined by the value of result_code. 
+ 
+message No   String(128)  Return message. Only return when the signature verification invalid. 
+ 
+     The following fields will returned when status is “0”   
+ 
+        
+result_code Yes   String(16)  “0”: success. Others value: fail. 
+ 
+mch_id Yes   String(32)  Merchant ID, Specifies a unique id assigned by platform. 
+ 
+         
+ 
+                      
+ 
+device_info No   String(32)  Specifies a Terminal device id. 
+ 
+         
+ 
+       
+ 
+nonce_str Yes   String(32)  Included in platform payment API protocols to ensure unpredictability 
+ 
+         for signatures. 32 characters or fewer. 
+ 
+err_code No   String(32)  Reference error code 
+ 
+err_msg No   String  Error information description 
+ 
+    
+(128) 
+   
+ 
+                      
+ 
+sign Yes   String(344)  Please refer to the section 4 ‘Digital Signature’. 
+ 
+         
+ 
+                
+ 
+  The following fields will returned when status and result_code both are “0” 
+ 
+       
+ 
+code_url Yes   String(64)  This parameter should be used to create a QR Code that is displayed to 
+ 
+         the Payer later. 
+ 
+code_img_url Yes   String(256)  This parameter should be the QR code image source URL created by 
+ 
+         
+ 
+         code_url. 
+ 
+       
+ 
+appid No   String(18)  Wechat Appid (It will return this parameter in WeChat Pay) 
+ 
+       
+ 
+uuid No   String(33)  uuid 
+ 
+                         
+ 
+ 
+Example 
+<xml><appid><![CDATA[wxce926ea78004260e]]></appid> 
+<charset><![CDATA[UTF-8]]></charset> 
+<code_img_url><![CDATA[https://pay.wepayez.com/pay/qrcode?uuid=weixin%3A%2F%2Fwxpay%2Fbizpa
+yurl%3Fpr%3D09JTnyQ&s=22c9171b1119685ce407e7a69b4656b2]]></code_img_url> 
+<code_url><![CDATA[weixin://wxpay/bizpayurl?pr=09JTnyQ]]></code_url> 
+<device_info><![CDATA[100]]></device_info> 
+<mch_id><![CDATA[127520000042]]></mch_id> 
+<nonce_str><![CDATA[2209196862]]></nonce_str> 
+<result_code><![CDATA[0]]></result_code> 
+<sign><![CDATA[0CDCA7D0E91F52DF16971F0C326AD47D]]></sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<status><![CDATA[0]]></status> 
+
+===== PAGE 16 =====
+16 / 38 
+ 
+<uuid><![CDATA[1917fb1f70a4679721975591ed6a64fe8]]></uuid> 
+<version><![CDATA[2.0]]></version> 
+</xml> 
+ 
+5.2 Gcash/Grab Online Payment Interface 
+5.2.1 Request Parameters 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML 
+Parameter Required Type Description 
+service Yes String(32) Gcash Online：pay.gcash.webpay 
+GrabPay Online  ：pay.grab.webpay 
+version No String(8) Version number. default value : 2.0 
+charset No String(8) Value : UTF-8 
+sign_type Yes String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+out_trade_no Yes String(32) 
+The unique trade reference (merchant order id of 5-32 bits) in 
+merchant’s system. Letter, number and underline are 
+allowed.Case-sensitive 
+device_info No String(32) Specifies a Terminal device id. 
+body Yes String(127) Description of merchants’ goods. 
+total_fee Yes Int Integral number is allowed only. The unit of the fee is the 
+minimal unit of the local currency. 
+mch_create_ip Yes String(16) Specifies the machine IP that calls the API. 
+notify_url Yes String(255) 
+Specifies the callback address for receiving platform payment 
+notifications. Should be absolute path and ensure platform 
+accessible,i.e. http://wap.tenpay.com/tenpay.asp 
+time_start No String(14) Order created date. Format: yyyyMMddHHmmss. 
+i.e.20091225091010. GMT+8 Beijing Time 
+time_expire No String(14) Order timeout date. Format: yyyyMMddHHmmss. 
+i.e.20091225091010. GMT+8 Beijing Time 
+op_user_id No String(32) Specifies the Operator ID. This field shows mch_id by default. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+callback_url Yes String(512) 
+The URL of the front-end page redirection (including when 
+the payment is successful and closed, it will jump to this 
+address, the merchant needs to handle the logic by itself), an 
+absolute path is required, and the format within 255 characters 
+is such as: http://wap.tenpay.com/callback.asp Note: This 
+address is only used as a jump to the front-end page, and the 
+notification result of notify_url must be used as the final 
+payment result. 
+attach No String(128) Merchant additional information. 
+ 
+Example 
+<xml> 
+<body><![CDATA[TestPay]]></body> 
+<device_info><![CDATA[100]]></device_info> 
+
+===== PAGE 17 =====
+17 / 38 
+ 
+<mch_create_ip><![CDATA[127.0.0.1]]></mch_create_ip> 
+<mch_id><![CDATA[127500000158]]></mch_id> 
+<nonce_str><![CDATA[2209196862]]></nonce_str> 
+<notify_url><![CDATA[http://zeming.dev.swiftpass.cn/pytest/notify_suc]]></notify_url> 
+<callback_url><![CDATA[https://www.baidu.com/]]></callback_url> 
+<out_trade_no><![CDATA[12750000015886001]]></out_trade_no> 
+<service><![CDATA[pay.gcash.webpay]]></service> 
+<sign><![CDATA[81806B7EFCFDB09EC31B990F43D5A751265F86C9B2959CEBD401192D3F5814CB]]>
+</sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<total_fee><![CDATA[100]]></total_fee> 
+</xml> 
+ 
+5.2.2  Response Parameters 
+Parameter Required Type Description 
+version Yes String(8) Version number. default value : 2.0 
+charset Yes String(8) Value : UTF-8 
+sign_type Yes String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) “0” : success. Others value: fail. Specifies communicating label 
+(not transaction label). The status of a transaction is determined 
+by the value of result_code. 
+message No String(128) Return message. Only return when the signature verification 
+invalid. 
+ 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+The following fields will returned when status and result_code both are “0” 
+appid No String(18) Official account ID（WeChat return this parameter ） 
+uuid No String(33) Uuid 
+pay_url Yes String(1024) (Online payment address) 
+ 
+ 
+Example 
+<xml><appid><![CDATA[217020000646016545274]]></appid> 
+<charset><![CDATA[UTF-8]]></charset> 
+<device_info><![CDATA[100]]></device_info> 
+<mch_id><![CDATA[800580000001]]></mch_id> 
+<nonce_str><![CDATA[2209196862]]></nonce_str> 
+<pay_url><![CDATA[https://payintl-
+test.wepayez.com/pay/webpay?token_id=01a9a931cc2be0dcc35c1ceefa3865237&service=pay.gcash.webpay]]
+></pay_url> 
+<result_code><![CDATA[0]]></result_code> 
+<sign><![CDATA[7E6256C4FB6C5D9AA65D02166C793840]]></sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<status><![CDATA[0]]></status> 
+
+===== PAGE 18 =====
+18 / 38 
+ 
+<uuid><![CDATA[01a9a931cc2be0dcc35c1ceefa3865237]]></uuid> 
+<version><![CDATA[2.0]]></version> 
+</xml> 
+ 
+ 
+5.2.3 Online payment callback 
+The URL of the front-end page redirection (including when the payment is successful and closed, it will jump to this 
+address, the merchant needs to handle the logic by itself), an absolute path is required, and the format within 255 
+characters is such as: http://wap.tenpay.com/callback.asp Note: This address is only used as a jump to the front -end 
+page, and the notification result of notify_url must be used as the final payment result. The POST method calls back to 
+this address, and will bring the callback parameters. For specific parameters, please see the table below. 
+ 
+Response parameter 
+Parameter Required Type Description 
+result_code Yes String(16) “0”: success. Others value: fail. the final payment result is 
+subject to notification 
+out_trade_no Yes String(32) 
+The unique trade reference (merchant order id of 5-32 bits) in 
+merchant’s system. Letter, number and underline are allowed. 
+Case-sensitive 
+transaction_id Yes String(32 Platform transaction id 
+err_code No String(32) There is a value when result_code is 1 For specific error 
+codes, please see the list of error codes at the end of the 
+document 
+err_msg No String (128) There is a value when result_code is 1 For specific error 
+codes, please see the list of error codes at the end of the 
+document 
+ 
+ 
+5.3 Instapay Bank Payment 
+5.3.1 Instapay payment interface 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML 
+ 
+Parameter Required Type Description 
+service Yes String(32) Service：pay.instapay.native 
+version No String(8) Version number. default value : 2.0 
+charset No String(8) Value : UTF-8 
+sign_type No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+out_trade_no Yes String(32) 
+The unique trade reference (merchant order id of 5-32 bits) 
+in merchant’s system. Letter, number and underline are 
+allowed. Case-sensitive 
+device_info Yes String(32) Specifies a Terminal device id. 
+body Yes String(127) Description of merchants’ goods. 
+
+===== PAGE 19 =====
+19 / 38 
+ 
+attach No String(127) Specifies merchant's data package, which is returned as it 
+is. 
+total_fee Yes Int 
+Specifies the total amount.Integral number is allowed only. 
+The unit of the fee is the minimal unit of the local 
+currency. 
+mch_create_ip Yes String(16) Specifies the machine IP that calls the API. 
+notify_url Yes String(255) 
+Specifies the callback address for receiving platform 
+payment notifications. Should be absolute path and ensure 
+platform accessible,i.e. http://wap.tenpay.com/tenpay.asp 
+op_user_id No String(32) Specifies the Operator ID. This field shows mch_id by 
+default. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+expiration_date No String(14) 
+InstaPay order expiration time, the format is 
+yyyymmddhhmmss, such as 20091227091010 at 9:10 on 
+December 27, 2009. The time zone is GMT+8 Beijing. 
+ 
+5.3.2 Response parameter 
+Parameter Required Type Description 
+version Yes String(8) Version number. default value : 2.0 
+charset Yes String(8) Value : UTF-8 
+sign_type Yes String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) “0”: success. Others value: fail. Specifies 
+communicating label (not transaction label). The status 
+of a transaction is determined by the value of 
+result_code. 
+message No String(128) Return message. Only return when the signature 
+verification invalid. 
+ 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+The following fields will returned when status and result_code both are “0” 
+invoice_id Yes String(16) Instapay invoice number 
+appid No String(18) Public account ID (WeChat returns this parameter) 
+uuid No String(33) Uuid（WeChat returns this parameter） 
+ 
+5.3.3 Retrieve transaction result interface 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+
+===== PAGE 20 =====
+20 / 38 
+ 
+POST request with content of XML 
+Parameter Required Type Description 
+service Yes String(32) Service：pay.instapay.query 
+version No String(8) Version number. default value : 2.0 
+charset No String(8) Value : UTF-8 
+sign_type No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+out_trade_no No String(32) 
+The internal order number of the merchant system 
+(out_trade_no, transaction_id, invoice_id cannot be empty 
+at the same time, the priority is transaction_id> 
+out_trade_no>invoice_id) 
+transaction_id No String(32) 
+Platform transaction number (out_trade_no, transaction_id, 
+invoice_id cannot be empty at the same time, priority is 
+transaction_id> out_trade_no>invoice_id) 
+invoice_id Yes String(16) Instapay invoice number  
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+5.3.4 Response parameter 
+Parameter Required Type Description 
+version Yes String(8) Version number. default value : 2.0 
+charset Yes String(8) Value: UTF-8。 
+sign_type Yes String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) “0”: success. Others value: fail. Specifies communicating 
+label (not transaction label). The status of a transaction is 
+determined by the value of result_code. 
+message No String(128) Return message. Only return when the signature 
+verification invalid. 
+ 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+The following fields are returned when the trade_state is SUCCESS 
+trade_type Yes String（32） pay.instapay.native 
+trade_state_desc No String(32) Transaction status description 
+appid No String Service provider appid 
+sub_appid No String Service provider sub-merchant appid 
+openid No String(128) It is the only user identification under the current appid. 
+sub_openid No String(128) The user id of the Payer provided by the WeChat system in 
+OpenID format as unique tag on vendor’s appid. Also it is 
+unique to each appid instance. 
+is_subscribe No String(1) Specifies whether the payer follows the associated official 
+account or  not, with “Y” meaning ‘follows’ and “N”  
+meaning  ’not follows’. 
+
+===== PAGE 21 =====
+21 / 38 
+ 
+sub_is_subscribe No String(1) Specifies whether the payer follows the associated official 
+account or  not, with “Y” meaning  ‘follows’ and “N” 
+meaning  ’not follows’. 
+payment_inst No String(16) Mainland Wallet: 'ALIPAYCN' 
+Hong Kong Wallet: 'ALIPAYHK' 
+transaction_id Yes String(32 platform order id 
+out_transaction_id Yes String(32) order number provided by the third-party 
+out_trade_no Yes String(32) Specifies an order number created by a merchant’s system, 
+which is consistent with request. 
+total_fee Yes Int Specifies the total amount.Integral number is allowed only. 
+The unit of the fee is the minimal unit of the local currency. 
+coupon_fee No Int Coupon amount. coupon_fee <= total_fee. total_fee - 
+oupon_fee = cash pay amount 
+fee_type No String(8) Complies with ISO 4217 standards. 
+attach No String(127) Specifies merchant's data package, which is returned as it is. 
+bank_type No String(16) String states bank_type 
+bank_billno No String(32) Bank order number. Null for wechat payment. 
+time_end Yes String(14) Specifies the transaction payment time in the format of 
+yyyyMMddHHmmss, such as 20091225091010 for Dec 25, 
+2009 09:10:10. GMT+8 Beijing. 
+cash_fee No Int Cash amount of order, The unit of the fee is the minimal 
+unit of CNY. 
+cash_fee_type No String(16) Currency type, Complies with ISO 4217 standards.CNY 
+rate No String(16) Exchange rate between user payment currency and 
+merchant’s settlement currency. 
+local_fee_type No String(8) Merchant currency，E.g. HKD 
+local_total_fee No Int Merchant currency 
+order_fee Yes Int Order amount (price currency) 
+invoice_id Yes String(16) Instapay invoice number 
+ 
+ 
+5.4 QR Ph 
+5.4.1 Instapay (QR Ph) payment interface 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML 
+Parameter Required Type Description 
+service Yes String(32) Service：pay.instapay.native.v2 
+version No String(8) Version number. default value : 2.0      
+charset No String(8) Value : UTF-8     
+sign_type No String(16) SHA256 : SHA256 
+RSA : RSA_1_256 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform. 
+out_trade_no Yes String(32) 
+The unique trade reference (merchant order id of 5-32 bits) 
+in merchant’s system. Letter, number and underline are 
+allowed. Case-sensitive 
+device_info No String(32) Specifies a Terminal device id. 
+body Yes String(127) Description of merchants’ goods. 
+attach No String(127) Merchant additional information 
+total_fee Yes Int Integral number is allowed only. The unit of the fee is the 
+minimal unit of the local currency. 
+mch_create_ip Yes String(16) Specifies the machine IP that calls the API. 
+notify_url Yes String(255) Specifies the callback address for receiving platform 
+
+===== PAGE 22 =====
+22 / 38 
+ 
+payment notifications. Should be absolute path and ensure 
+platform accessible. i.e. http://wap.tenpay.com/tenpay.asp       
+goods_tag No String(32) Specifies the label of goods, which is a parameter in the 
+coupon feature for businesses. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+expiration_date No String(14) InstaPay Order timeout date. Format: yyyyMMddHHmmss. 
+i.e.20091225091010. GMT+8 Beijing Time. 
+5.4.2 Response parameter 
+Parameter Required Type Description 
+version Yes String(8) Version number. default value : 2.0   
+charset Yes String(8) Value : UTF-8   
+sign_type Yes String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) “0”: success. Others value: fail. Specifies communicating 
+label (not transaction label). The status of a transaction is 
+determined by the value of result_code. 
+message No String(128) Return message. Only return when the signature 
+verification invalid. 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+    
+The following fields will returned when status and result_code both are “0” 
+code_img_url Yes String(128) 
+This parameter should be the QR code image source URL 
+created by code_url. 
+code_url Yes String(512) EMV code 
+uuid No String(33) Uuid 
+expiration_date Yes String(14) InstaPay Order timeout date. Format: yyyyMMddHHmmss. 
+i.e.20091225091010. GMT+8 Beijing Time. 
+invoiceId Yes String(16) Instapay invoice number, will use this number to query 
+ 
+ 
+5.4.3 Retrieve transaction result interface 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML 
+Parameter Required Type Description 
+service Yes String(32) Service：pay.instapay.query 
+version No String(8) Version number. default value : 2.0 
+charset No String(8) Value : UTF-8    
+sign_type No String(16) SHA256 : SHA256 
+RSA : RSA_1_256 
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+
+===== PAGE 23 =====
+23 / 38 
+ 
+out_trade_no No String(32) 
+The unique trade reference of merchant system. 
+out_trade_no and transaction_id at least one required. 
+transaction_id priority when both be filled. 
+transaction_id No String(32) 
+The unique trade reference of platform system. 
+out_trade_no and transaction_id at least one required. 
+transaction_id priority when both be filled. 
+invoice_id Yes String(16) Instapay invoice number  
+nonce_str Yes String(32) 
+Included   in   platform   payment   API   protocols   to   
+ensure unpredictability for signatures. 32 characters or 
+fewer. 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’.              
+ 
+5.4.4 Response parameter 
+ 
+Parameter Required Type Description 
+version Yes String(8) Version number. default value : 2.0 
+charset Yes String(8) Value:UTF-8 
+sign_type Yes String(16) SHA256:‘SHA256’  
+RSA:‘RSA_1_256’ 
+status Yes String(16) “0”: success. Others value: fail. Specifies communicating 
+label (not transaction label). The status of a transaction is 
+determined by the value of result_code. 
+message No String(128) Return message. Only return when the signature 
+verification invalid. 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+The following fields will returned when status and result_code both are “0” 
+trade_type Yes String（32） pay.instapay.native.v2 
+trade_state_desc No String(32) Transaction status description 
+appid No String Service provider appid 
+transaction_id Yes String(32 platform order id 
+out_transaction_id Yes String(32) order number provided by the third-party 
+out_trade_no Yes String(32) Specifies an order number created by a merchant’s 
+system, which is consistent with request. 
+total_fee Yes Int Specifies the total amount.Integral number is allowed 
+only. The unit of the fee is the minimal unit of the local 
+currency. 
+fee_type No String(8) Complies with ISO 4217 standards.。 
+attach No String(127) Specifies merchant's data package, which is returned as it 
+is. 
+time_end Yes String(14) Specifies the transaction payment time in the format of 
+yyyyMMddHHmmss, such as 20091225091010 for Dec 
+25, 2009 09:10:10. GMT+8 Beijing. 
+order_fee Yes Int Order amount (price currency) 
+invoice_id Yes String(16) Instapay invoice number 
+ 
+
+===== PAGE 24 =====
+24 / 38 
+ 
+6 Notification interface 
+6.1 Notification request parameters 
+The notification URL is the parameter notify_url submitted in section 6.1. And after the payment is completed, 
+platform will send related payment and user information to the URL. And the merchant needs to receive and dispose 
+such information. 
+When interaction of the backstage notification is being made, if the response received by platform from the 
+merchant is not pure character string “success” or if the response is given after 5 seconds, then it will be deemed as 
+unsuccessful by platform, and platform will adopt certain strategies (the interval of notification: 
+0/15/15/30/180/1800/1800/1800/1800/3600 Unit: seconds) to intermittently re -initiate notification  to do its best to 
+improve the rate of success of notification, but the final success of notification will not be guaranteed.  
+Because there is the case where the backstage notification will be resent, the same notification might be sent to 
+the merchant system many times. The merchant system must be able to process the repeated notification in a right way. 
+The method recommended by platform is to first examine the status of the corresponding business data upon 
+receiving the notification to judge whether the notification has been disposed, and in case it hasn’t been dispose, it will 
+be disposed otherwise, and if it has been disposed, the pure character string success will be returned directly. Before 
+status examination and disposal of business data are conducted, data lock should be adopted for concurrency control to 
+avoid data chaos caused by repeated data interposition in the function. 
+Notices: After the backstage of the merchant has received the parameters of notification. It’s required to 
+verify out_trade_no and total_fee in notification received according to the order number and amount of order of 
+their own business system. And the status of order in the database will only be allowed to update after the 
+verification is consistent. (Notify in XML format)  
+The backstage notification will return by POST mode through notify_url which sent in payment request. 
+ 
+Parameter Required Type Description 
+version No String(8) Version number. default value : 2.0 
+charset No String(8) Value : UTF-8 
+sign_type No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) “0”: success. Others value: fail. Specifies communicating 
+label (not transaction label). The status of a transaction is 
+determined by the value of result_code. 
+message No String(128) Return message. Only return when the signature verification 
+invalid. 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail.  
+mch_id Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(32) Please refer to the section 4 ‘Digital Signature’. 
+The following fields will returned when status and result_code both are “0” 
+
+===== PAGE 25 =====
+25 / 38 
+ 
+openid Yes String(128) It is the only user identification under the current appid. 
+trade_type Yes String(32) pay.weixin.native.intl(Wechat) 
+pay.alipay.native.intl (Alipay) 
+pay.upi.native.intl (UPI) 
+pay.grab.native(GrabPay) 
+pay.gcash.native(Gcash) 
+pay.instapay.native(Instapay Bank payment) 
+pay.instapay.native.v2(QR Ph) 
+pay.gcash.webpay(Gcash Online) 
+pay.grab.webpay(Grab Online) 
+is_subscribe Yes String(1) Specifies whether the payer follows the associated official 
+account or not, with “Y” meaning ‘follows’ and “N” 
+meaning ’not follows’. 
+pay_result Yes Int Payment result. “0”: success. Others fail. 
+pay_info No String(64) Payment result information. Payment successful return null. 
+transaction_id Yes String(32) Platform order number 
+out_transaction_id Yes String(34) Order number provided by the third-party(ex:WeChat) 
+sub_is_subscribe No String(1) Specifies whether the payer follows the associated official 
+account or not, with “Y” meaning ‘follows’ and “N” 
+meaning ’not follows’. 
+sub_appid No String Specifies an Official Account ID assigned by WeChat. 
+sub_openid No String(128) The user id of the Payer provided by the WeChat system in 
+OpenID format as unique tag on vendor’s appid. Also it is 
+unique to each appid instance. 
+out_trade_no Yes String(32) Specifies an order number created by a merchant’s system, 
+which is consistent with request. 
+total_fee Yes Int Specifies the total amount. Integral number is allowed only. 
+The unit of the fee is the minimal unit of the local currency. 
+coupon_fee No Int Coupon amount. coupon_fee <= total_fee. 
+total_fee - coupon_fee = cash pay amount 
+fee_type Yes String(8) Complies with ISO 4217 standards. 
+attach No String(127) Specifies merchant's data package, which is returned as it is. 
+bank_type Yes String(16) String states bank_type 
+time_end Yes String(14) Specifies the transaction payment time in the format of 
+yyyyMMddHHmmss, such as 20091225091010 for Dec 25 , 
+2009 09:10:10.GMT+8 Beijing Time. 
+discount_detail No String
+（512） 
+Offer details, different payment types return different 
+results, for example, UnionPay returns: 
+[{"discountAmt":"98.00","discountNote":"Uplan  
+discount"},{"discountAmt":"5.00","discountNote":"Instant 
+Discount"}]  
+unsettled_discount_fee No Int The amount of the discount that does not participate in 
+settlement, in cents 
+ invoice_id Yes String(16) Instapay invoice number (Only QR Ph will return this 
+parameter) 
+
+===== PAGE 26 =====
+26 / 38 
+ 
+ 
+Example 
+<xml> 
+<bank_type><![CDATA[CFT]]></bank_type> 
+<cash_fee><![CDATA[3117]]></cash_fee> 
+<cash_fee_type><![CDATA[CNY]]></cash_fee_type> 
+<charset><![CDATA[UTF-8]]></charset> 
+<device_info><![CDATA[SPAY_AND]]></device_info> 
+<discount_detail><![CDATA[[{"discountAmt":"30.00","discountNote":"Uplan 
+discount"},{"discountAmt":"10.00","discountNote":"Instant Discount"}]]]> 
+</discount_detail> 
+<fee_type><![CDATA[USD]]></fee_type> 
+<is_subscribe><![CDATA[Y]]></is_subscribe> 
+<local_fee_type><![CDATA[PHP]]></local_fee_type> 
+<local_total_fee><![CDATA[21850]]></local_total_fee> 
+<mch_id><![CDATA[102520000212]]></mch_id> 
+<nonce_str><![CDATA[1573186381348]]></nonce_str> 
+<openid><![CDATA[oH4im0mWBDXpepe81q04qiEnRq98]]></openid> 
+<order_fee><![CDATA[21850]]></order_fee> 
+<out_trade_no><![CDATA[10252000021270741546158683729]]></out_trade_no> 
+<out_transaction_id><![CDATA[4200000437201911083557508581]]></out_transaction_id> 
+<pay_result><![CDATA[0]]></pay_result> 
+<platform_rate><![CDATA[2040399.9184]]></platform_rate> 
+<rate><![CDATA[699040000]]></rate> 
+<result_code><![CDATA[0]]></result_code> 
+<sign><![CDATA[0FEC037A2D48654C0FC8AEA96F1C4B55]]></sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<status><![CDATA[0]]></status> 
+<time_end><![CDATA[20191108121300]]></time_end> 
+<total_fee><![CDATA[446]]></total_fee> 
+<trade_type><![CDATA[pay.weixin.native.intl]]></trade_type> 
+<transaction_id><![CDATA[102520000212201911081086849655]]></transaction_id> 
+<unsettled_discount_fee><![CDATA[3000]]></unsettled_discount_fee> 
+<version><![CDATA[2.0]]></version> 
+</xml> 
+6.2 Response of notification 
+Platform server will send notification, then post send XML data flow, the notify_url of the merchant will  receive the 
+result of notification, with the method of reception being as written in demo (for example, callback method in php, 
+notify.aspx file in c#, TestPayResultSerlet method in java), and after the merchant conducts business disposal, the 
+feedback of result of disposal needs to be given in the form of pure character string, with its content being as follows: 
+  
+Returned results Description 
+  
+success The  disposal  is  successful,  and  after  swiftpass  system  receives  this  result,  no  ongoing 
+ notification will be made. 
+  
+  
+ 
+  
+fail or other The disposal fails, and if swiftpass receives this result or doesn’t receive any result, then the 
+character system will resend the notification through the mechanism of supplementing order (for detail 
+ please see section 6.1). 
+  
+  
+
+===== PAGE 27 =====
+27 / 38 
+ 
+7 Retrieve transaction result interface 
+7.1 Business function 
+Retrieve transaction result information with platform order number or merchant order number. 
+7.2 Request Parameters 
+Request URL:  https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML  
+     
+Field Name Required Type Description 
+ 
+    
+ 
+service Yes String(32) Value : unified.trade.query 
+ 
+   
+ 
+    
+ 
+version No String(8) Version number. default value : 2.0 
+ 
+  
+ 
+    
+ 
+charset No String(8) Value : UTF-8 
+ 
+  
+ 
+    
+ 
+sign_type Yes String(16) SHA256 : SHA256； 
+ 
+   
+ 
+   RSA : RSA_1_256 
+ 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform. 
+ 
+   
+ 
+    
+ 
+ No String(32) The unique trade reference of merchant system. out_trade_no and 
+ 
+  
+ 
+out_trade_no   transaction_id at least one required. transaction_id priority when 
+ 
+   both be filled. 
+ 
+    
+ 
+ No String(32) The unique trade reference of platform system. out_trade_no and 
+ 
+  
+ 
+transaction_id   transaction_id at least one required. transaction_id priority when 
+ 
+   both be filled. 
+ 
+    
+ 
+nonce_str Yes String(32) 
+Included   in   platform   payment   API   protocols   to   ensure 
+unpredictability for signatures. 32 characters or fewer. 
+ 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+ 
+ 
+    
+ 
+     
+
+===== PAGE 28 =====
+28 / 38 
+ 
+7.3 Response parameter 
+Data return in real time with XML format  
+Field Name Required Type Description 
+version Yes String(8) Version number. default value : 2.0 
+charset Yes String(8) Value : UTF-8 
+sign_type Yes String(16) 
+SHA256 : SHA256； 
+RSA : RSA_1_256 
+status Yes String(16) 
+“0” : success. Others value: fail. Specifies communicating label (not 
+transaction label). The status of a transaction is determined by the 
+value of trade_state. 
+message No String(128) 
+Return message.  Only return when the signature verification is 
+invalid. 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Merchant ID, Specifies an official account id assigned by platform. 
+device_info No String(32) Specifies a Terminal device id. 
+nonce_str Yes String(32) 
+Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+The following fields will returned when trade_state is “SUCCESS” 
+trade_type Yes String(32) 
+pay.weixin.native.intl(Wechat) 
+pay.alipay.native.intl (Alipay) 
+pay.upi.native.intl (UPI) 
+pay.grab.native(GrabPay) 
+pay.gcash.native(Gcash) 
+pay.instapay.native(Instapay Bank Payment) 
+pay.instapay.native.v2(QR Ph) 
+pay.gcash.webpay(Gcash Online) 
+pay.grab.webpay(Grab Online) 
+trade_state_desc No String(32) Transaction status description 
+appid No String Specifies an official account ID of institution assigned by WeChat. 
+sub_appid No String Specifies an official account ID of merchant assigned by WeChat. 
+openid No String(128) It is the only user identification under the current appid. 
+sub_openid No String(128) 
+The user id of the Payer provided by the WeChat system in OpenID 
+format as unique tag on vendor’s appid. Also it is unique to each 
+appid instance. 
+is_subscribe No String(1) 
+Specifies whether the payer follows the associated official account 
+or  not, with “Y” meaning ‘follows’ and “N”  meaning  ’not 
+follows’. 
+sub_is_subscribe No String(1) 
+Specifies whether the payer follows the associated official account 
+or  not, with “Y” meaning  ‘follows’ and “N” meaning  ’not 
+follows’. 
+payment_inst No String(16) 
+Mainland Wallet: 'ALIPAYCN' 
+Hong Kong Wallet: 'ALIPAYHK' 
+transaction_id Yes String(32 platform order id 
+out_transaction_id Yes String(32) order number provided by the third-party 
+out_trade_no Yes String(32) 
+Specifies an order number created by a merchant’s system, which is 
+consistent with request. 
+
+===== PAGE 29 =====
+29 / 38 
+ 
+total_fee Yes Int 
+Specifies the total amount.Integral number is allowed only. The unit 
+of the fee is the minimal unit of the local currency. 
+coupon_fee No Int 
+Coupon amount. coupon_fee <= total_fee.total_fee - coupon_fee = 
+cash pay amount 
+fee_type No String(8) Complies with ISO 4217 standards. 
+attach No String(127) Specifies merchant's data package, which is returned as it is. 
+bank_type No String(16) String states bank_type 
+bank_billno No String(32) Bank order number. Null for wechat payment. 
+time_end Yes String(14) 
+Specifies the transaction payment time in the format of 
+yyyyMMddHHmmss, such as 20091225091010 for Dec 25, 2009 
+09:10:10. GMT+8 Beijing. 
+cash_fee Yes Int 
+Cash amount of order, The unit of the fee is the minimal unit of 
+CNY. 
+cash_fee_type No String(16) Currency type, Complies with ISO 4217 standards.CNY 
+rate Yes String(16) 
+Exchange rate between user payment currency and merchant’s 
+settlement currency. 
+local_fee_type No String(8) Merchant currency，E.g. HKD 
+local_total_fee No Int Merchant currency 
+order_fee Yes Int Order fee(Merchant currency) 
+discount_detail No 
+String
+（512） 
+Discount details, different payment types return different results, 
+such as UnionPay return: 
+[{"discountAmt":"98.00","discountNote":"Uplan 
+discount"},{"discountAmt":"5.00","discountNote":"Instant 
+Discount"}] 
+unsettled_discount_fee No Int The discount amount not involved in settlement ,unit is cent 
+cost_amount No Int 
+The actual payment amount of the consumer (channel currency), 
+unit is cent 
+voucher_no No Int Qr code voucher Number 
+ 
+ 
+8 Refund interface 
+8.1 Business function 
+If the merchant initiate refund in respect of an order that has been successfully paid, then the result of the operation 
+will be synchronously returned in the same dialogue. 
+ 
+I. Refund mode  
+Currently, the fund of the refund will follow the same route back to customers’ account.  
+Notes: Generally the amount will be refunded to the bank account within 1 to 3 working days after the refund is 
+initiated.  
+The different parts of refund of a same order need to be set with the same order number and the different 
+out_refund_no. After a refund that fails is resubmitted, the original out_refund_no will be adopted. The total 
+sum of refund couldn’t surpass the amount actually pa id by users (the amount of the cash coupon couldn’t be 
+refunded). 
+II. Restrictions of refund  
+When operating the refund, the merchant should pay attention to the restrictions of refund to avoid the request of 
+refund that will not be successful, and the main restrictions of refund are as follows: 
+
+===== PAGE 30 =====
+30 / 38 
+ 
+In platform system, only if the accumulative amount of refund doesn’t surpass the total sum of payment for the 
+transacted order, then the same order could be refunded for several times, and the refund application fo rm number 
+(there are such parameters in the refund interface) rather than the transaction order number shall be solely used to 
+confirm one time of refund. The refund application form number is to be generated by the merchant, and so the 
+merchant has to guarantee the uniqueness of the refund application form. In the process of refund, the merchant needs 
+to pay special attention that only when the refund is confirmed to fail, then could another refund be re-initiated. 
+Currently most banks support full refund and partial refund, but there are a few banks that don’t support full refund 
+or partial refund or don’t support refund. In such case the merchant could negotiate with the buyer to refund to the 
+WeChat balance account.  
+Currently only refund interface witho ut key is provided, and in case the merchant needs refund interface 
+with key, please contact the business person. 
+8.2  Request parameters 
+Request URL: https://gateway.wepayez.com/pay/gateway 
+POST request with content of XML 
+ Field Name  Required Type Description 
+ 
+ service  Yes String(32) Value : unified.trade.refund 
+ 
+     
+ 
+      
+ 
+ version  No String(8) Version number. default value : 2.0 
+ 
+    
+ 
+      
+ 
+ charset  No String(8) Value : UTF-8 
+ 
+    
+ 
+      
+ 
+ sign_type  No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+ 
+     
+ 
+ mch_id  Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+ 
+     
+ 
+      
+ 
+   No String(32) The unique trade reference of merchant system.  out_trade_no  and 
+ 
+ out_trade_no    transaction_id at least one required. transaction_id priority when both 
+ 
+     be filled. 
+ 
+ 
+transaction_i 
+ No String(32) The unique trade reference of platform system.  out_trade_no  and 
+ 
+    
+transaction_id at least one required. transaction_id priority when both 
+ 
+ 
+d 
+   
+ 
+    
+be filled. 
+ 
+     
+ 
+   Yes String(32) Specifies the internal refund number, which is unique in the system. A 
+ 
+ 
+out_refund_n 
+   single transaction can be processed as multiple partial refunds, with 
+ 
+    
+the total sum of the partial refunds being equal to the original one. If 
+ 
+ 
+o 
+   
+ 
+    
+the refund is not successful. The recall function should be used with 
+ 
+     
+ 
+     same refund number to avoid duplication of refunds. 
+ 
+ total_fee  Yes Int The total amount of the transaction. The unit of the fee is the minimal 
+ 
+     unit of the local currency. 
+ 
+       
+ refund_fee  Yes Int Refund amount. The unit of the fee is the minimal unit of the local 
+ 
+     currency. Partial refund can be supported. 
+ 
+ op_user_id  Yes String(32) Specifies the Operator ID. This field shows mch_id by default. 
+ 
+ refund_chann  No String(16) Value: ORIGINAL. The money will refund back to where it came 
+ 
+ el    from. 
+ 
+ nonce_str  Yes String(32) 
+Included in platform payment API protocols to ensure unpredictability 
+for signatures. 32 characters or fewer. 
+ 
+
+===== PAGE 31 =====
+31 / 38 
+ 
+ sign  Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+    
+ 
+      
+ 
+       
+ 
+Example 
+<xml> 
+<charset><![CDATA[UTF-8]]></charset> 
+<mch_id><![CDATA[116580000002]]></mch_id> 
+<nonce_str><![CDATA[IoYSGn9G2Lr8THa1h2zdBPM9w4lNf-MN]]></nonce_str> 
+<op_user_id><![CDATA[116580000002]]></op_user_id> 
+<out_refund_no><![CDATA[116580000002133601000045]]></out_refund_no> 
+<refund_fee><![CDATA[000000000100]]></refund_fee> 
+<service><![CDATA[unified.trade.refund]]></service> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<total_fee><![CDATA[000000000100]]></total_fee> 
+<transaction_id><![CDATA[116580000002201911072087163426]]></transaction_id> 
+<version><![CDATA[2]]></version> 
+<sign><![CDATA[D3B4C37CA76B05D714CC79473372F997]]></sign> 
+</xml> 
+ 
+8.3 Response parameters 
+ Data return in real time with XML format 
+ 
+ Field Name Required Type  Description  
+ 
+ version Yes String(8)  Version number. default value : 2.0  
+ 
+          
+ 
+                      
+ 
+ charset Yes String(8)  Value : UTF-8  
+ 
+          
+ 
+                      
+ 
+ sign_type Yes String(16)  SHA256 : SHA256； 
+RSA : RSA_1_256 
+ 
+ 
+           
+ 
+ status Yes String(16)  “0”: success. Others value: fail.  
+ 
+          Specifies communicating label (not transaction label). The status of a  
+ 
+          transaction is determined by the value of result_code.  
+ 
+                       
+ message No String(128)  Return message. Only return when the signature verification invalid.  
+ 
+           
+ 
+                          
+ 
+      The following fields will returned when status is “0”    
+ 
+       
+ 
+ result_code Yes String(16)  “0”: success. Others value: fail.  
+ 
+ mch_id Yes String(32)  
+Merchant ID, Specifies a unique id assigned by platform. 
+ 
+ 
+           
+ 
+                      
+ 
+ device_info No String(32)  
+Specifies a Terminal device id. 
+ 
+ 
+           
+ 
+       
+ 
+ nonce_str Yes String(32)  Included in platform payment API protocols to ensure unpredictability  
+ 
+          for signatures. 32 characters or fewer.  
+ 
+ err_code No String(32)  
+Reference error code 
+ 
+ 
+           
+ 
+                      
+ 
+ err_msg No String  
+Error information description 
+ 
+ 
+     
+(128) 
+    
+ 
+                         
+ 
+
+===== PAGE 32 =====
+32 / 38 
+ 
+   
+ 
+                   
+ sign Yes String(344)  Please refer to the section 4 ‘Digital Signature’.  
+ 
+           
+ 
+                  
+ 
+   The following fields will returned when status and result_code both are “0”  
+ 
+                       
+ transaction_i Yes String(32)  The unique trade reference of platform system.  
+ 
+ 
+d 
+         
+ 
+                          
+ 
+ out_trade_no Yes String(32)  The unique trade reference of merchant system.  
+ 
+        
+ out_refund_ Yes String(32)  Specifies the internal refund number, which is unique in the merchant  
+ 
+ no         system.  
+ 
+ refund_id Yes String(32)  Specifies the internal refund number, which is unique in the platform  
+ 
+         
+system. 
+ 
+ 
+           
+ 
+ refund_chan Yes String(16)  Value: ORIGINAL. The money will refund back to where it came from. 
+ 
+ 
+ 
+nel 
+         
+ 
+                          
+ 
+                            
+ 
+      
+      
+ refund_fee Yes Int Refund amount.The unit of the fee is the minimal unit of the local  
+    Currency. Partial refund can be supported.  
+ coupon_refu No Int Coupon refund amount.  
+ nd_fee   coupon_refund_fee <= refund_fee.  
+    refund_fee - coupon_refund_fee = cash refund amount  
+ total_fee No Int Order channel amount  
+ fee_type No String(8) Channel Currency  
+ order_fee No Int Order fee  
+ 
+local_total_fe
+e No Int Merchant currency E.g HKD  
+ 
+local_fee_typ
+e No String(8) Merchant currency  
+ 
+out_transactio
+n_id No String(32) （Alipay/WeChat/unionPay/etc）  
+ trade_type No String(32) 
+pay.weixin.native.intl(Wechat) 
+pay.alipay.native.intl (Alipay) 
+pay.upi.native.intl (UPI) 
+pay.grab.native(GrabPay) 
+pay.gcash.native(Gcash) 
+pay.gcash.webpay(Gcash Online) 
+pay.grab.webpay(Grab Online)  
+      
+ 
+      
+ 
+ 
+Example 
+<xml> 
+<charset><![CDATA[UTF-8]]></charset> 
+<fee_type><![CDATA[PHP]]></fee_type> 
+<local_fee_type><![CDATA[PHP]]></local_fee_type> 
+<local_total_fee><![CDATA[100]]></local_total_fee> 
+<mch_id><![CDATA[116580000002]]></mch_id> 
+<nonce_str><![CDATA[IoYSGn9G2Lr8THa1h2zdBPM9w4lNf-MN]]></nonce_str> 
+<order_fee><![CDATA[100]]></order_fee> 
+<out_refund_no><![CDATA[116580000002133601000045]]></out_refund_no> 
+<out_trade_no><![CDATA[116580000002132825000045]]></out_trade_no> 
+<out_transaction_id><![CDATA[2019110722001495210581660169]]></out_transaction_id> 
+<refund_channel><![CDATA[ORIGINAL]]></refund_channel> 
+<refund_fee><![CDATA[100]]></refund_fee> 
+
+===== PAGE 33 =====
+33 / 38 
+ 
+<refund_id><![CDATA[116580000002201911072087163866]]></refund_id> 
+<result_code><![CDATA[0]]></result_code> 
+<sign><![CDATA[51BE40E21C2834D0FF682FAD05A22E9D]]></sign> 
+<sign_type><![CDATA[SHA256]]></sign_type> 
+<status><![CDATA[0]]></status> 
+<total_fee><![CDATA[100]]></total_fee> 
+<trade_type><![CDATA[pay.alipay.native.intl]]></trade_type> 
+<transaction_id><![CDATA[116580000002201911072087163426]]></transaction_id> 
+<version><![CDATA[2.0]]></version> 
+</xml> 
+ 
+ 
+9 Retrieve refund result interface 
+9.1 Request parameters 
+Request:https://gateway.wepayez.com/pay/gateway 
+ 
+POST request with content of XML  
+ 
+Field Name  Required Type Description 
+ 
+service  Yes String(32) Value :unified.trade.refundquery 
+ 
+    
+ 
+     
+ 
+version  No String(8) Version number. default value : 2.0 
+ 
+   
+ 
+     
+ 
+charset  No String(8) Value : UTF-8 
+ 
+   
+ 
+     
+ 
+sign_type  No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+ 
+    
+ 
+      
+mch_id  Yes String(32) Merchant ID, Specifies a unique id assigned by platform. 
+ 
+    
+ 
+     
+ 
+  No String(32) The unique trade reference of merchant system.  out_trade_no  and 
+ 
+out_trade_no    
+transaction_id at least one required. transaction_id priority when both be 
+filled. 
+ 
+     
+ 
+  No String(32) The unique trade reference of platform system.  out_trade_no  and 
+ 
+transaction_id    transaction_id at least one required. transaction_id priority when both be 
+ 
+    filled. 
+ 
+      
+out_refund_n  No String(32) Specifies the internal refund number, which is unique in the merchant 
+ 
+o    system. 
+ 
+      
+refund_id  No String(32) Specifies the internal refund number, which is unique in the platform 
+ 
+    system. out_refund_no and refund_id at least one required. refund_id 
+ 
+    priority when both be filled. 
+ 
+  Yes String(32) Included in platform payment API protocols to ensure unpredictability 
+ 
+nonce_str 
+   
+ 
+   
+for signatures. 32 characters or fewer. 
+ 
+    
+ 
+     
+ 
+sign  Yes String(344) Please refer to the section 4 ‘Digital Signature’. 
+ 
+    
+ 
+     
+ 
+
+===== PAGE 34 =====
+34 / 38 
+ 
+ 
+9.2  Response parameters 
+ 
+Field Name  Required Type  Description 
+ 
+version  Yes String(8)  Version number. default value : 2.0 
+ 
+         
+ 
+                     
+ 
+charset  Yes String(8)  Value : UTF-8 
+ 
+         
+ 
+                     
+ 
+sign_type  Yes String(16)  SHA256 : SHA256； 
+RSA : RSA_1_256 
+ 
+          
+ 
+status  
+Yes String(16)  “0” : success. Others value : fail. 
+Specifies communicating label (not transaction label). The status of a 
+transaction is determined by the value of result_code. 
+ 
+     
+ 
+         
+ 
+message  No 
+String(12
+8)  Return message. Only return when the signature verification invalid. 
+ 
+          
+ 
+                         
+ 
+      The following fields will returned when status is “0”   
+ 
+      
+ 
+result_code  Yes String(16)  “0”: success. Others value: fail. 
+ 
+mch_id  Yes String(32)  Specifies a unique id assigned by platform. 
+ 
+          
+ 
+                     
+ 
+device_info  No String(32)  Specifies a Terminal device id. 
+ 
+          
+ 
+      
+ 
+nonce_str  Yes String(32)  
+Included in platform payment API protocols to ensure 
+unpredictability 
+ 
+          for signatures. 32 characters or fewer. 
+ 
+                      
+err_code  No String(32)  Reference error code 
+ 
+          
+ 
+                     
+ 
+err_msg  No 
+String 
+(128)  Error information description 
+ 
+          
+ 
+                     
+ 
+sign  Yes String(344)  Please refer to the section 4 ‘Digital Signature’. 
+ 
+          
+ 
+                 
+ 
+   The following fields will returned when status & result_code both are “0” 
+ 
+       
+transaction_id  Yes String(32)  The unique trade reference of platform system. 
+ 
+out_trade_no  Yes String(32)  The unique trade reference of merchant system. 
+ 
+refund_count  Yes Int  Specifies recorded refund counts. 
+ 
+out_refund_n  Yes String(32)  Specifies the internal refund number, which is unique in the merchant 
+ 
+o_$n          system. 
+ 
+refund_id_$n 
+ Yes String(32)  Specifies the internal refund number, which is unique in the platform 
+ 
+         
+system. 
+ 
+          
+ 
+refund_chann  Yes String(16)  Value: ORIGINAL. The money will refund back to where it came from. 
+ 
+el_$n 
+         
+ 
+                         
+ 
+refund_fee_$n   Yes Int  Refund amount. The unit of the fee is the minimal unit of the currency. 
+ 
+          Partial refund can be supported. 
+ 
+coupon_refun  No Int  Coupon refund amount. 
+ 
+d_fee_$n          coupon_refund_fee <= refund_fee. 
+ 
+          refund_fee - coupon_refund_fee = cash refund amount 
+ 
+ 
+
+===== PAGE 35 =====
+35 / 38 
+ 
+ 
+cash_fee 
+ 
+Yes 
+ 
+Int 
+ 
+Cash amount of order. The unit of the fee is the minimal unit of the 
+currency 
+cash_fee_type No String(16) Currency type, Complies with ISO 4217 standards, CNY 
+total_fee No Int Order fee(Channel currency) 
+out_transaction_id No String(32) The third party orderid  
+Rate 
+ 
+Yes 
+ 
+String(16) 
+ 
+ 
+Exchange rate between user payment currency and merchants settlement 
+currency 
+ 
+refund_time_ 
+$n 
+No 
+ 
+String(14) 
+ 
+Format : yyyyMMddHHmmss 
+ 
+refund_status 
+_$n 
+ 
+ 
+ 
+ 
+ 
+ 
+Yes 
+ 
+ 
+ 
+ 
+ 
+ 
+String(16) 
+ 
+ 
+ 
+ 
+ 
+ 
+Refund Status: 
+SUCCESS: Refunded successfully. 
+FAIL: Refund failed. 
+PROCESSING: Refund is pending. 
+NOTSURE: Require the Vendor to call the Submit Refund API again 
+with the original refund number. 
+CHANGE: Refund can't be processed as the Payer's bank card is either 
+revoked or blocked. As a consequence, the refund will be transferred to 
+the merchant's cash account. In this case, the refund must be processed 
+offline via the help of the merchant’s customer. 
+  
+ 
+$n is the record number. It can be 0~($ refund_count -1). Example: There are 2 records of refund_count. The first 
+record number should be “0” and the second one should be “1”. 
+10 Close Order Interface 
+10.1 Business function 
+If the payment of order of the merchant fails, then it ’ s required to generate a new order number to re -initiate 
+payment, and the original order number needs to be invoked for closing to avoid repeated payment. After an order is 
+placed in the system, if the payment of users is time out, the system will exit and no longer accept the payment to avoid 
+ongoing payment of users, and please invoke close order interface. 
+ 
+10.2 Request parameters 
+Request url：https://gateway.wepayez.com/pay/gateway 
+ 
+
+===== PAGE 36 =====
+36 / 38 
+ 
+ 
+POST request with content of XML  
+      
+Field Name Required Type Description  
+ 
+Normal Parameters    
+ 
+service Yes String(32) Value : unified.trade.close  
+ 
+    
+ 
+     
+ 
+version No String(8) Version number. default value : 2.0  
+ 
+    
+ 
+     
+ 
+charset No String(8) Value : UTF-8  
+ 
+    
+ 
+     
+ 
+sign_type No String(16) SHA256 : SHA256； 
+RSA : RSA_1_256 
+ 
+ 
+    
+ 
+mch_id Yes String(32) Merchant ID, Specifies an unique id assigned by platform.  
+ 
+    
+ 
+     
+ 
+out_trade_no Yes String(32) The unique trade reference of merchant system.  
+ 
+    
+ 
+     
+ 
+transaction_id No 
+String(32) 
+Platform transaction number, at least one of out_trade_no and 
+transaction_id is required, and transaction_id takes precedence when both 
+exist.  
+ 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure unpredictability  
+ 
+    
+ 
+   for signatures. 32 characters or fewer.  
+ 
+     
+ 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’.  
+ 
+    
+ 
+     
+ 
+      
+ 
+Example 
+<xml> 
+<service><![CDATA[unified.trade.close]]></service> 
+<mch_id>124540000124</mch_id> 
+<out_trade_no><![CDATA[b0842dc63ae3bd33ab841067618a0bf3]]></out_trade_no> 
+<nonce_str><![CDATA[5dc395e12fce9]]></nonce_str> 
+<sign><![CDATA[52E550CFE0D2A3EBEB2D4F99D9785EEC]]></sign> 
+</xml> 
+ 
+ 
+10.3 Response parameter 
+ 
+version  Yes String(8) Version number. default value : 2.0  
+ 
+charset Yes String(8) Value : UTF-8  
+ 
+sign_type 
+ 
+Yes 
+ 
+String(16) 
+ 
+SHA256 : SHA256； 
+RSA : RSA_1_256  
+ 
+ 
+status No String(16) “0”: success. Others value: fail. 
+ 
+ 
+ 
+ 
+     
+ 
+   
+Return message. Only return when the signature verification invalid. 
+ 
+ 
+message No String (128)  
+ 
+     
+ 
+sign Yes String(344) Please refer to the section 4 ‘Digital Signature’.  
+ 
+    
+ 
+     
+ 
+      
+
+===== PAGE 37 =====
+37 / 38 
+ 
+The following fields will returned when status is “0” 
+result_code Yes String(16) “0”: success. Others value: fail. 
+mch_id Yes String(32) Specifies a unique id assigned by platform. 
+nonce_str Yes String(32) Included in platform payment API protocols to ensure 
+unpredictability for signatures. 32 characters or fewer. 
+err_code No String(32) Reference error code 
+err_msg No String (128) Error information description 
+ 
+11 Notes 
+1. The unit of any related amount is the minimal unit of the currency, and decimals are not allowed.  
+2. notify_url means that platform server directly initiates request from back end to merchant ’ s server, and when 
+disposing, the merchant could not examine the user ’s cookie or session; the merchant ’s updating of DB and 
+other goods delivery procedure needs t o be made after notify_url is completed to ensure that to supplement order 
+after order fails will be successful.  
+3. notify_url means that it might have repeated notification and the merchant needs to do away with the repeated ones 
+to avoid repeated goods delivery. 
+4. notify_url means the receive notification, and if the merchant disposes successfully or if the examined order has 
+been disposed, then the successful disposal mark, the pure character string success needs to be returned, and the 
+character string success is not case sensitive; if we don ’t receive the returned success, then our server will keep 
+sending notification to you until three hours later; if it ’s assumed that all orders don’t return success, then the 
+load of notification of our server will b e increase, and the worst case is that the notification normally sent to the 
+merchants might delay; besides, we will urge you to perfect, and if you don ’t improve for a long time period, 
+then the R&D or operation and maintenance technology staff will adopt  control measures over the payment 
+interface opened by your company. For the parameters sent in requesting interface in the document, if the one 
+required to fill is given a yes, then it has to be sent (in case of lack, an error will be alarmed), and if the  one 
+required to fill is given a no, then it will be optional to be sent.  
+5. For the returned parameters, if the one required to fill is given a yes, then it has to be returned, and if the one 
+required to fill is given a no, then it will be optional to be re turned. Because of upgrading or configuration or other 
+cases, the actually returned parameters might not be totally consistent with those in the document, and the actually 
+received parameters shall prevail. 
+6. Other notes  
+(1) The problem of capital and small letter of parameters  
+Please pay attention to the problem of capital and small letter required in the document, such as “after SHA256 
+signature, the character of the character string needs to be converted to uppercase”.  
+(2) The problem of format of parameters  
+All introduced parameters are of the type of character string, and please pay attention to the specific requirements 
+in different places of the document.  
+(3) The problem of time stamp  
+Please use Linux time stamp, and note that its format is character string.  
+(4)  The problem of order number payment made by the same merchant  
+7. If the payment of order of the merchant fails, then it ’s required to generate a new order number to re -initiate 
+payment, and the original order number needs to be invoked for closing to avoid repeated payment; After an order 
+is placed in the system, if the payment of users is time out, the system will exit and no longer accept the payment 
+to avoid ongoing payment of users, and please invoke the close order interface.  
+Notes: after an order is generated, to immediately invoke the close order interface will not be allowed, because the 
+shortest invocation interval is 5 mins. 
+ 
+
+===== PAGE 38 =====
+38 / 38 
+ 
+8. Interface integration reference info 
+ 
+Merchant Presented 
+ Payment  Retrieve  Notification Refund Refund Retrieve  Close 
+Wechat Yes Yes Yes Yes Yes Yes 
+Alipay Yes Yes Yes Yes No Yes 
+Union Pay Yes Yes Yes Yes No No 
+Gcash Offline Yes Yes No Yes No Yes 
+Gcash Online Yes Yes Yes Yes No No 
+Grab Offline Yes Yes Yes Yes No Yes 
+Grab Online Yes Yes Yes Yes No No 
+Instapay Bank Yes Yes Yes No No No 
+Instapay QR Yes Yes Yes No No No 
+ 
+ 
