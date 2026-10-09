@@ -5,6 +5,8 @@ import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 final class StationFilters {
   const StationFilters({
     this.connector,
+    this.vehicleConnectors = const [],
+    this.amenity,
     this.minimumPowerW,
     this.availability,
     this.operatorId,
@@ -13,6 +15,8 @@ final class StationFilters {
   });
 
   final String? connector;
+  final List<String> vehicleConnectors;
+  final String? amenity;
   final int? minimumPowerW;
   final StationAvailability? availability;
   final String? operatorId;
@@ -20,6 +24,8 @@ final class StationFilters {
   final bool openNow;
 
   Map<String, Object> toQuery() => {
+    if (amenity != null && amenity!.isNotEmpty) 'amenity': amenity!,
+    if (vehicleConnectors.isNotEmpty) 'connectors[]': vehicleConnectors,
     if (connector != null && connector!.isNotEmpty) 'connector': connector!,
     'min_power_w': ?minimumPowerW,
     'availability': ?availability?.name,
@@ -32,6 +38,9 @@ final class StationFilters {
   StationFilters copyWith({
     String? connector,
     bool clearConnector = false,
+    List<String>? vehicleConnectors,
+    String? amenity,
+    bool clearAmenity = false,
     int? minimumPowerW,
     bool clearMinimumPower = false,
     StationAvailability? availability,
@@ -40,6 +49,8 @@ final class StationFilters {
     String? siteType,
     bool? openNow,
   }) => StationFilters(
+    amenity: clearAmenity ? null : amenity ?? this.amenity,
+    vehicleConnectors: vehicleConnectors ?? this.vehicleConnectors,
     connector: clearConnector ? null : connector ?? this.connector,
     minimumPowerW: clearMinimumPower
         ? null

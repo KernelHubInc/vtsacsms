@@ -210,6 +210,34 @@ final class MasterDataAssetFoundationTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_connector_filters_match_one_connector_and_hours_include_overnight_carryover(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-07T17:00:00Z'));
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('precise-connectors');
+        $this->withinTenant($tenant, $actor, function () use ($tenant): void {
+            $site = $this->site($tenant, $this->operator($tenant, 'PRECISE'), 'PRECISE', 14.5995, 120.9842, true);
+            $station = $this->station($tenant, $site, 'CP-PRECISE', true);
+            $evse = Evse::query()->create(['charging_station_id' => $station->getKey(), 'evse_number' => 1, 'lifecycle_status' => 'active']);
+            $current = ChargingCurrentType::query()->create(['code' => 'dc', 'name' => 'DC']);
+            foreach ([['ccs2', 150000, ConnectorAvailability::Occupied], ['type_2', 22000, ConnectorAvailability::Available], ['type_2', 22000, ConnectorAvailability::Available]] as $index => [$code, $power, $status]) {
+                $standard = ConnectorStandard::query()->firstOrCreate(['code' => $code], ['name' => $code]);
+                $connector = Connector::query()->create(['evse_id' => $evse->getKey(), 'connector_standard_id' => $standard->getKey(), 'charging_current_type_id' => $current->getKey(), 'connector_number' => $index + 1, 'qr_identifier' => 'QR-PRECISE-'.$index, 'maximum_power_w' => $power, 'lifecycle_status' => 'active']);
+                ConnectorStatus::query()->create(['connector_id' => $connector->getKey(), 'status' => $status, 'observed_at' => now('UTC'), 'stale_after_seconds' => 300]);
+            }
+            SiteOperatingHour::query()->create(['site_id' => $site->getKey(), 'day_of_week' => 3, 'opens_at' => '22:00:00', 'closes_at' => '02:00:00', 'is_closed' => false]);
+            SiteOperatingHour::query()->create(['site_id' => $site->getKey(), 'day_of_week' => 4, 'is_closed' => true]);
+        });
+        $this->getJson('/api/v1/public/stations?connector=ccs2&availability=available')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/public/stations?connector=type_2&min_power_w=100000')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/public/stations?'.http_build_query(['connectors' => ['Type 2'], 'availability' => 'available', 'open_now' => true]))
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonCount(3, 'data.0.connectors')
+            ->assertJsonPath('data.0.available_connector_count', 2)->assertJsonPath('data.0.hours_known', true)
+            ->assertJsonPath('data.0.open_now', true);
+        $this->travelTo(CarbonImmutable::parse('2026-10-07T19:00:00Z'));
+        $this->getJson('/api/v1/public/stations?open_now=true')->assertOk()->assertJsonCount(0, 'data');
+    }
+
     private function operator(Tenant $tenant, string $code): Organization
     {
         return Organization::query()->create(['tenant_id' => $tenant->getKey(), 'name' => "Operator {$code}", 'code' => $code, 'type' => OrganizationType::ChargePointOperator, 'is_active' => true]);

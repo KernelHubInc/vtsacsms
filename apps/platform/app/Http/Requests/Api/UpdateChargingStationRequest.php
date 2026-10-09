@@ -20,6 +20,7 @@ final class UpdateChargingStationRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:160'],
+            'ocpp_password' => ['sometimes', 'string', 'min:16', 'max:72', 'regex:/\A[\x21-\x7E]+\z/'],
             'charger_model_id' => ['sometimes', 'nullable', 'ulid', 'exists:charger_models,id'],
             'ocpp_version_id' => ['sometimes', 'nullable', 'ulid', 'exists:ocpp_versions,id'],
             'ocpp_security_profile_id' => ['sometimes', 'nullable', 'ulid', 'exists:ocpp_security_profiles,id'],

@@ -27,6 +27,7 @@ final class FakeAuthRepository implements AuthRepository {
   bool verificationEmailSent = true;
   int verificationEmailsSent = 0;
   AppFailure? currentUserFailure;
+  Completer<UserProfile>? currentUserCompleter;
   UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
@@ -36,6 +37,7 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    if (currentUserCompleter case final pending?) return pending.future;
     if (currentUserFailure case final failure?) {
       throw failure;
     }
@@ -77,6 +79,12 @@ final class FakeAuthRepository implements AuthRepository {
     required String name,
     required String email,
     required String password,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
   }) async {
     registrationRequested = true;
     return RegistrationResult(verificationEmailSent: verificationEmailSent);
@@ -383,12 +391,13 @@ buildTestDependencies({
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
   KycRepository? kycRepository,
+  TokenStore? tokenStore,
 }) async {
   SharedPreferences.setMockInitialValues({
     'onboarding_complete_v1': onboardingComplete,
   });
   final preferences = await SharedPreferences.getInstance();
-  final tokens = MemoryTokenStore();
+  final tokens = tokenStore ?? MemoryTokenStore();
   if (signedIn) {
     await tokens.write(
       TokenBundle(

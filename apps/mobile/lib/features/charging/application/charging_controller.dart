@@ -295,7 +295,10 @@ final class ChargingController extends ChangeNotifier {
 
   Future<void> refresh() async {
     final current = _session;
-    if (current == null || !_network.isOnline || _syncing) {
+    if (!_isAuthenticated() ||
+        current == null ||
+        !_network.isOnline ||
+        _syncing) {
       return;
     }
     _syncing = true;
@@ -436,12 +439,15 @@ final class ChargingController extends ChangeNotifier {
     _session = null;
     _preparation = null;
     _selectedPaymentMethod = null;
+    _history = const [];
+    _historyCursor = null;
     _phase = ChargingFlowPhase.idle;
     _failure = null;
     notifyListeners();
   }
 
   Future<void> _applySession(ChargingSession authoritative) async {
+    if (!_isAuthenticated()) return;
     final current = _session;
     if (current != null &&
         current.id == authoritative.id &&

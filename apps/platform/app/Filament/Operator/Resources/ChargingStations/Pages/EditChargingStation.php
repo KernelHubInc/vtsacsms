@@ -8,11 +8,32 @@ use App\Filament\Operator\Resources\ChargingStations\ChargingStationResource;
 use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
+use App\Models\User;
+use App\Modules\Identity\Application\ChargerCredentials;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
 
 final class EditChargingStation extends EditRecord
 {
     protected static string $resource = ChargingStationResource::class;
+
+    protected ?bool $hasDatabaseTransactions = true;
+
+    /** @param array<string, mixed> $data */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        $password = (string) ($data['ocpp_password'] ?? '');
+        unset($data['ocpp_password']);
+        $record = parent::handleRecordUpdate($record, $data);
+        if ($password !== '') {
+            $user = auth()->user();
+            abort_unless($user instanceof User, 403);
+            app(ChargerCredentials::class)->setPassword($user, (string) $record->getKey(), $password);
+        }
+        $this->data['ocpp_password'] = null;
+
+        return $record;
+    }
 
     /** @var array<string, mixed> */
     private array $before = [];

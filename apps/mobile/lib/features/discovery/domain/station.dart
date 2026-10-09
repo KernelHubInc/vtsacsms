@@ -34,15 +34,35 @@ final class StationConnector {
     required this.standard,
     required this.name,
     required this.maximumPowerW,
+    this.id,
+    this.availability = "unknown",
+    this.observedAt,
   });
 
   factory StationConnector.fromJson(Map<String, dynamic> json) =>
       StationConnector(
+        id: json['id'] as String?,
+        availability: json['availability'] as String? ?? 'unknown',
+        observedAt: DateTime.tryParse(
+          json['status_observed_at'] as String? ?? '',
+        ),
         standard: json['standard']! as String,
         name: json['name']! as String,
         maximumPowerW: json['maximum_power_w']! as int,
       );
 
+  final String? id;
+  final String availability;
+  final DateTime? observedAt;
+  String get statusLabel => switch (availability) {
+    "available" => "Available",
+    "occupied" => "In use",
+    "reserved" => "Reserved",
+    "faulted" => "Fault reported",
+    "offline" || "unavailable" => "Offline",
+    "stale" => "Status stale",
+    _ => "Status unknown",
+  };
   final String standard;
   final String name;
   final int maximumPowerW;
@@ -70,6 +90,7 @@ final class Station {
     required this.maximumPowerW,
     required this.openNow,
     required this.connectors,
+    this.hoursKnown = false,
     this.connectionStatus = 'unknown',
     this.lastSeenAt,
     this.address,
@@ -105,6 +126,7 @@ final class Station {
         : DateTime.parse(json['status_observed_at']! as String).toUtc(),
     maximumPowerW: json['maximum_power_w']! as int,
     openNow: json['open_now']! as bool,
+    hoursKnown: json['hours_known'] == true,
     connectors: (json['connectors']! as List<Object?>)
         .map((item) => StationConnector.fromJson(item! as Map<String, dynamic>))
         .toList(growable: false),
@@ -116,7 +138,11 @@ final class Station {
         const [],
     amenities:
         (json['amenities'] as List<Object?>?)
-            ?.map((item) => item.toString())
+            ?.map(
+              (item) => item is Map
+                  ? (item['name'] ?? item['code'] ?? '').toString()
+                  : item.toString(),
+            )
             .toList(growable: false) ??
         const [],
   );
@@ -139,6 +165,7 @@ final class Station {
   final DateTime? statusObservedAt;
   final int maximumPowerW;
   final bool openNow;
+  final bool hoursKnown;
   final List<StationConnector> connectors;
   final double? distanceM;
   final List<String> operatingHours;

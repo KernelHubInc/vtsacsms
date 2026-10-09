@@ -12,6 +12,8 @@ import 'package:vtsa_mobile/core/platform/platform_services.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/data/api_auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/data/device_authenticator.dart';
+import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
 import 'package:vtsa_mobile/features/charging/application/charging_controller.dart';
 import 'package:vtsa_mobile/features/charging/data/active_session_store.dart';
@@ -26,8 +28,10 @@ import 'package:vtsa_mobile/features/favorites/domain/favorites_repository.dart'
 import 'package:vtsa_mobile/features/kyc/data/api_kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/application/vehicles_controller.dart';
+import 'package:vtsa_mobile/features/vehicles/data/api_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle_repository.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 final class AppDependencies {
   AppDependencies({
@@ -47,6 +51,7 @@ final class AppDependencies {
     required this.pushRegistration,
     required this.featureFlags,
     this.kycRepository,
+    this.walletRepository,
   });
 
   factory AppDependencies.fromParts({
@@ -64,6 +69,7 @@ final class AppDependencies {
     DeviceLocationService location = const UnavailableDeviceLocationService(),
     FeatureFlags featureFlags = const FeatureFlags.fromDefines(),
     KycRepository? kycRepository,
+    WalletRepository? walletRepository,
   }) {
     late final AuthController auth;
     String ownerId() =>
@@ -104,6 +110,7 @@ final class AppDependencies {
       pushRegistration: push,
       featureFlags: featureFlags,
       kycRepository: kycRepository,
+      walletRepository: walletRepository,
     );
   }
 
@@ -112,8 +119,15 @@ final class AppDependencies {
     final preferences = await SharedPreferences.getInstance();
     const secureStorage = FlutterSecureStorage(
       aOptions: AndroidOptions(storageNamespace: 'vtsa_auth'),
+      iOptions: IOSOptions(
+        accessibility: KeychainAccessibility.unlocked_this_device,
+      ),
     );
-    final tokens = SecureTokenStore(secureStorage);
+    final tokens = QuickUnlockStore(
+      tokens: SecureTokenStore(secureStorage),
+      settings: SecureUnlockSettingsStore(secureStorage),
+      device: NativeDeviceAuthenticator(),
+    );
     final client = ApiClient(
       baseUrl: localEnvironment.apiBaseUrl,
       tokenStore: tokens,
@@ -133,10 +147,14 @@ final class AppDependencies {
         environment: environment,
       ),
       stationRepository: ApiStationRepository(client),
-      vehicleRepository: LocalVehicleRepository(preferences),
+      vehicleRepository: ApiVehicleRepository(
+        client,
+        legacy: LocalVehicleRepository(preferences),
+      ),
       favoritesRepository: LocalFavoritesRepository(preferences),
       chargingRepository: ApiChargingRepository(client),
       kycRepository: ApiKycRepository(client),
+      walletRepository: ApiWalletRepository(client),
       directions: ExternalDirectionsService(),
       location: GeolocatorDeviceLocationService(),
     );
@@ -160,6 +178,7 @@ final class AppDependencies {
   final PushRegistrationService pushRegistration;
   final FeatureFlags featureFlags;
   final KycRepository? kycRepository;
+  final WalletRepository? walletRepository;
 
   Future<void> initialize() async {
     await Future.wait([

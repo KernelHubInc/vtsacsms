@@ -22,6 +22,7 @@ class DiscoveryScreen extends StatefulWidget {
 class _DiscoveryScreenState extends State<DiscoveryScreen> {
   bool _showMap = true;
   bool _locating = false;
+  String? _vehicleId;
   MapPosition? _userPosition;
 
   @override
@@ -51,6 +52,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       widget.dependencies.discovery,
       widget.dependencies.favorites,
       widget.dependencies.network,
+      widget.dependencies.vehicles,
     ]),
     builder: (context, _) {
       final discovery = widget.dependencies.discovery;
@@ -142,8 +144,66 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   ),
                   const Spacer(),
                   Text(
-                    '${discovery.stations.length} nearby',
+                    '${discovery.stations.length} stations',
                     style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: VtsaSpacing.md),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _locating
+                        ? null
+                        : () => _locateUser(nearest: true),
+                    icon: const Icon(Icons.near_me_outlined),
+                    label: const Text('Nearest first'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      hint: const Text('All vehicles'),
+                      value:
+                          widget.dependencies.vehicles.vehicles.any(
+                            (v) => v.id == _vehicleId,
+                          )
+                          ? _vehicleId
+                          : null,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('All connectors'),
+                        ),
+                        ...widget.dependencies.vehicles.vehicles.map(
+                          (v) => DropdownMenuItem(
+                            value: v.id,
+                            enabled: v.connectorStandards.isNotEmpty,
+                            child: Text(
+                              v.connectorStandards.isEmpty
+                                  ? '${v.nickname} · add connectors'
+                                  : v.nickname,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (id) {
+                        setState(() => _vehicleId = id);
+                        final vehicle = widget.dependencies.vehicles.vehicles
+                            .where((v) => v.id == id)
+                            .firstOrNull;
+                        discovery.updateFilters(
+                          discovery.filters.copyWith(
+                            clearConnector: true,
+                            vehicleConnectors:
+                                vehicle?.connectorStandards.toList() ?? [],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -224,7 +284,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     },
   );
 
-  Future<void> _locateUser() async {
+  Future<void> _locateUser({bool nearest = false}) async {
     setState(() => _locating = true);
     try {
       final position = await widget.dependencies.location.currentPosition();
@@ -239,7 +299,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         );
         return;
       }
-      setState(() => _userPosition = position);
+      setState(() {
+        _userPosition = position;
+        if (nearest) _showMap = false;
+      });
+      if (nearest) {
+        await widget.dependencies.discovery.loadNearby(
+          latitude: position.latitude,
+          longitude: position.longitude,
+          radiusM: 50000,
+        );
+      }
     } on Exception {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -262,10 +332,16 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             .toSet()
             .toList()
           ..sort();
+    if (working.connector != null && !connectors.contains(working.connector)) {
+      connectors.add(working.connector!);
+    }
     final operators = {
       for (final station in widget.dependencies.discovery.stations)
         station.operatorId: station.operatorName,
     };
+    if (working.operatorId != null) {
+      operators.putIfAbsent(working.operatorId!, () => 'Selected operator');
+    }
     final selected = await showModalBottomSheet<StationFilters>(
       context: context,
       isScrollControlled: true,
@@ -370,6 +446,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       ],
                       onChanged: (value) => setSheetState(
                         () => working = StationFilters(
+                          amenity: working.amenity,
+                          vehicleConnectors: working.vehicleConnectors,
                           connector: working.connector,
                           minimumPowerW: working.minimumPowerW,
                           availability: working.availability,
@@ -407,6 +485,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     ],
                     onChanged: (value) => setSheetState(
                       () => working = StationFilters(
+                        amenity: working.amenity,
+                        vehicleConnectors: working.vehicleConnectors,
                         connector: working.connector,
                         minimumPowerW: working.minimumPowerW,
                         availability: working.availability,
@@ -416,9 +496,35 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: VtsaSpacing.md),
+                  DropdownButtonFormField<String>(
+                    initialValue: working.amenity,
+                    decoration: const InputDecoration(labelText: 'Amenity'),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('Any')),
+                      DropdownMenuItem(value: 'food', child: Text('Food')),
+                      DropdownMenuItem(
+                        value: 'shopping',
+                        child: Text('Shopping'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'restroom',
+                        child: Text('Restrooms'),
+                      ),
+                    ],
+                    onChanged: (value) => setSheetState(
+                      () => working = working.copyWith(
+                        amenity: value,
+                        clearAmenity: value == null,
+                      ),
+                    ),
+                  ),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Open now'),
+                    subtitle: const Text(
+                      'Uses published hours in the station’s local time. Stations without hours are excluded.',
+                    ),
                     value: working.openNow,
                     onChanged: (value) => setSheetState(
                       () => working = working.copyWith(openNow: value),
@@ -452,12 +558,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       ),
     );
     if (selected != null) {
+      if (selected.vehicleConnectors.isEmpty) setState(() => _vehicleId = null);
       await widget.dependencies.discovery.updateFilters(selected);
     }
   }
 
   int _filterCount(StationFilters filters) => [
     filters.connector,
+    filters.amenity,
+    filters.vehicleConnectors.isNotEmpty ? true : null,
     filters.minimumPowerW,
     filters.availability,
     filters.operatorId,
@@ -494,10 +603,13 @@ class _StationList extends StatelessWidget {
     if (discovery.stations.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(VtsaSpacing.md),
-        child: VtsaEmptyState(
-          icon: Icons.ev_station_outlined,
-          title: 'No chargers in this view',
-          description: 'Move the map or relax a filter to search another area.',
+        child: SingleChildScrollView(
+          child: VtsaEmptyState(
+            icon: Icons.ev_station_outlined,
+            title: 'No chargers in this view',
+            description:
+                'Move the map or relax a filter to search another area.',
+          ),
         ),
       );
     }

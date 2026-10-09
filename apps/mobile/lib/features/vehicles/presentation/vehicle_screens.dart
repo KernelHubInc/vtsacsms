@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle.dart';
@@ -38,6 +39,11 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
         ],
         body: controller.isLoading
             ? const VtsaSkeleton(lines: 5)
+            : controller.failure != null
+            ? VtsaErrorState(
+                title: 'Could not load vehicles',
+                description: controller.failure!.message,
+              )
             : controller.vehicles.isEmpty
             ? VtsaEmptyState(
                 icon: Icons.directions_car_outlined,
@@ -102,6 +108,9 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
   late final TextEditingController _variant;
   final Set<String> _connectors = {};
   bool _default = false;
+  bool _platePending = false;
+  bool _busy = false;
+  final _plate = TextEditingController();
   Vehicle? _existing;
 
   @override
@@ -116,10 +125,13 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
     _variant = TextEditingController(text: _existing?.variant);
     _connectors.addAll(_existing?.connectorStandards ?? const {});
     _default = _existing?.isDefault ?? false;
+    _plate.text = _existing?.plateNumber ?? "";
+    _platePending = _existing?.platePending ?? false;
   }
 
   @override
   void dispose() {
+    _plate.dispose();
     _nickname.dispose();
     _manufacturer.dispose();
     _model.dispose();
@@ -141,14 +153,26 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
         ),
         const SizedBox(height: VtsaSpacing.md),
         VtsaTextField(
-          label: 'Manufacturer',
+          label: 'Manufacturer (optional)',
           controller: _manufacturer,
-          required: true,
         ),
         const SizedBox(height: VtsaSpacing.md),
-        VtsaTextField(label: 'Model', controller: _model, required: true),
+        VtsaTextField(label: 'Model (optional)', controller: _model),
         const SizedBox(height: VtsaSpacing.md),
         VtsaTextField(label: 'Variant', controller: _variant),
+        const SizedBox(height: VtsaSpacing.md),
+        if (!_platePending)
+          VtsaTextField(
+            label: 'Plate number',
+            controller: _plate,
+            required: true,
+          ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Plate pending'),
+          value: _platePending,
+          onChanged: (value) => setState(() => _platePending = value ?? false),
+        ),
         const SizedBox(height: VtsaSpacing.lg),
         Text(
           'Connector compatibility',
@@ -156,7 +180,7 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
         ),
         const SizedBox(height: VtsaSpacing.xs),
         Text(
-          'Select standards listed by the vehicle manufacturer. This is guidance, not a guarantee of charging support.',
+          'Select standards listed by the vehicle manufacturer. Leave blank if unknown. Compatibility does not guarantee a free connector.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: context.vtsaColors.textMuted),
@@ -184,13 +208,17 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
           onChanged: (value) => setState(() => _default = value),
         ),
         const SizedBox(height: VtsaSpacing.lg),
-        VtsaButton(label: 'Save vehicle', onPressed: _save),
+        VtsaButton(
+          label: 'Save vehicle',
+          loading: _busy,
+          onPressed: _busy ? null : _save,
+        ),
         if (_existing != null) ...[
           const SizedBox(height: VtsaSpacing.sm),
           VtsaButton(
             label: 'Remove vehicle',
             variant: VtsaButtonVariant.danger,
-            onPressed: _remove,
+            onPressed: _busy ? null : _remove,
           ),
         ],
       ],
@@ -198,27 +226,36 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
   );
 
   Future<void> _save() async {
+    if (_busy) return;
     if (_nickname.text.trim().isEmpty ||
-        _manufacturer.text.trim().isEmpty ||
-        _model.text.trim().isEmpty ||
-        _connectors.isEmpty) {
+        (!_platePending &&
+            !RegExp(
+              r'^[A-Z0-9][A-Z0-9 -]{0,19}$',
+            ).hasMatch(_plate.text.trim().toUpperCase()))) {
       showVtsaToast(
         context,
-        message: 'Complete the vehicle details and select a connector.',
+        message: 'Enter a nickname and valid plate, or select Plate pending.',
       );
       return;
     }
-    await widget.dependencies.vehicles.save(
-      id: _existing?.id,
-      nickname: _nickname.text,
-      manufacturer: _manufacturer.text,
-      model: _model.text,
-      variant: _variant.text.isEmpty ? null : _variant.text,
-      connectorStandards: _connectors,
-      isDefault: _default,
-    );
-    if (mounted) {
-      context.pop();
+    setState(() => _busy = true);
+    try {
+      await widget.dependencies.vehicles.save(
+        id: _existing?.id,
+        nickname: _nickname.text,
+        manufacturer: _manufacturer.text,
+        model: _model.text,
+        variant: _variant.text.isEmpty ? null : _variant.text,
+        plateNumber: _plate.text,
+        platePending: _platePending,
+        connectorStandards: _connectors,
+        isDefault: _default,
+      );
+      if (mounted) context.pop();
+    } on AppFailure catch (error) {
+      if (mounted) showVtsaToast(context, message: error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -227,16 +264,21 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       context: context,
       title: 'Remove ${_existing!.nickname}?',
       description:
-          'This removes locally saved compatibility information for this account on this device.',
+          'This removes the vehicle from your account. Another saved vehicle will become default if needed.',
       confirmLabel: 'Remove',
       dangerous: true,
     );
     if (!confirmed) {
       return;
     }
-    await widget.dependencies.vehicles.remove(_existing!.id);
-    if (mounted) {
-      context.pop();
+    setState(() => _busy = true);
+    try {
+      await widget.dependencies.vehicles.remove(_existing!.id);
+      if (mounted) context.pop();
+    } on AppFailure catch (error) {
+      if (mounted) showVtsaToast(context, message: error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 }

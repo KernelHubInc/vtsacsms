@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart'
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
+import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.dependencies, super.key});
@@ -129,13 +130,21 @@ class RegistrationScreen extends StatefulWidget {
 }
 
 class _RegistrationScreenState extends State<RegistrationScreen> {
-  final _name = TextEditingController();
+  final _first = TextEditingController();
+  final _middle = TextEditingController();
+  final _last = TextEditingController();
+  final _plate = TextEditingController();
+  DateTime? _birthDate;
+  bool _platePending = false;
   final _email = TextEditingController();
   final _password = TextEditingController();
 
   @override
   void dispose() {
-    _name.dispose();
+    _first.dispose();
+    _middle.dispose();
+    _last.dispose();
+    _plate.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
@@ -146,18 +155,54 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     eyebrow: 'NEW DRIVER',
     title: 'Make Power Solutions yours.',
     intro:
-        'Create an account for favorites and vehicle compatibility. Charging remains outside this release.',
+        'Start with your details and vehicle plate. You must be 18 or older. You can add vehicle specifications later.',
     child: AnimatedBuilder(
       animation: widget.dependencies.auth,
       builder: (context, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           VtsaTextField(
-            label: 'Full name',
-            controller: _name,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.name],
+            label: 'First name',
+            controller: _first,
             required: true,
+            autofillHints: const [AutofillHints.givenName],
+          ),
+          const SizedBox(height: VtsaSpacing.md),
+          VtsaTextField(
+            label: 'Middle name (optional)',
+            controller: _middle,
+            autofillHints: const [AutofillHints.middleName],
+          ),
+          const SizedBox(height: VtsaSpacing.md),
+          VtsaTextField(
+            label: 'Last name',
+            controller: _last,
+            required: true,
+            autofillHints: const [AutofillHints.familyName],
+          ),
+          const SizedBox(height: VtsaSpacing.md),
+          DriverDateField(
+            label: 'Date of birth',
+            value: _birthDate,
+            onChanged: (date) => setState(() => _birthDate = date),
+          ),
+          const SizedBox(height: VtsaSpacing.md),
+          if (!_platePending)
+            VtsaTextField(
+              label: 'Vehicle plate number',
+              controller: _plate,
+              required: true,
+              hint: 'Use the plate on your vehicle. You can update it later.',
+            ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Plate pending'),
+            subtitle: const Text(
+              'For a newly registered vehicle awaiting its plate.',
+            ),
+            value: _platePending,
+            onChanged: (value) =>
+                setState(() => _platePending = value ?? false),
           ),
           const SizedBox(height: VtsaSpacing.md),
           VtsaTextField(
@@ -171,7 +216,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           const SizedBox(height: VtsaSpacing.md),
           VtsaTextField(
             label: 'Password',
-            hint: 'Use at least 12 characters.',
+            hint:
+                '12+ characters, with uppercase, lowercase, a number and a symbol.',
             controller: _password,
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
@@ -180,8 +226,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           const SizedBox(height: VtsaSpacing.lg),
           if (widget.dependencies.auth.failure != null) ...[
             VtsaErrorState(
-              title: 'Could not create account',
-              description: widget.dependencies.auth.failure!.message,
+              title: 'Account creation was not successful',
+              description:
+                  'Check your details and try again. If you already have an account, sign in or reset your password.',
               correlationId: widget.dependencies.auth.failure!.correlationId,
             ),
             const SizedBox(height: VtsaSpacing.md),
@@ -201,17 +248,42 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   );
 
   Future<void> _submit() async {
-    if (_name.text.trim().isEmpty ||
-        !_email.text.contains('@') ||
-        _password.text.length < 12) {
+    if (_first.text.trim().isEmpty ||
+        _last.text.trim().isEmpty ||
+        _first.text.trim().length > 80 ||
+        _middle.text.trim().length > 80 ||
+        _last.text.trim().length > 80 ||
+        _birthDate == null ||
+        !isAdult(_birthDate!, DateTime.now().toUtc()) ||
+        (!_platePending &&
+            !RegExp(
+              r'^[A-Z0-9][A-Z0-9 -]{0,19}$',
+            ).hasMatch(_plate.text.trim().toUpperCase())) ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim()) ||
+        _password.text.length < 12 ||
+        !RegExp('[A-Z]').hasMatch(_password.text) ||
+        !RegExp('[a-z]').hasMatch(_password.text) ||
+        !RegExp('[0-9]').hasMatch(_password.text) ||
+        !RegExp(r'[^a-zA-Z0-9]').hasMatch(_password.text)) {
       showVtsaToast(
         context,
-        message: 'Complete all fields and use a 12-character password.',
+        message:
+            'Enter your names, an adult date of birth, a plate or Plate pending, a valid email and the required password.',
       );
       return;
     }
     final created = await widget.dependencies.auth.register(
-      name: _name.text,
+      name: [
+        _first.text.trim(),
+        _middle.text.trim(),
+        _last.text.trim(),
+      ].where((s) => s.isNotEmpty).join(' '),
+      firstName: _first.text,
+      middleName: _middle.text,
+      lastName: _last.text,
+      birthDate: dateOnly(_birthDate!),
+      plateNumber: _plate.text,
+      platePending: _platePending,
       email: _email.text,
       password: _password.text,
     );

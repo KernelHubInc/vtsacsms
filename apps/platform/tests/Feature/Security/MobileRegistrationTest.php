@@ -7,7 +7,9 @@ namespace Tests\Feature\Security;
 use App\Foundation\Demo\DemoEnvironment;
 use App\Models\User;
 use App\Modules\Identity\Notifications\VerifyEmailNotification;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -34,7 +36,8 @@ final class MobileRegistrationTest extends TestCase
         config()->set('features.demo_mode', true);
         $this->seedRegistrationScope();
 
-        $this->postJson('/api/v1/auth/register', [
+        $this->postJson('/api/v2/auth/register', [
+            'birth_date' => '1990-01-01', 'plate_pending' => true, 'first_name' => 'Test', 'last_name' => 'Driver',
             'name' => 'Mail Failure Driver',
             'email' => 'mail.failure@example.test',
             'password' => 'SafePassword!2026',
@@ -71,7 +74,8 @@ final class MobileRegistrationTest extends TestCase
         app()->detectEnvironment(static fn (): string => 'staging');
 
         try {
-            $this->postJson('/api/v1/auth/register', [
+            $this->postJson('/api/v2/auth/register', [
+                'birth_date' => '1990-01-01', 'plate_pending' => true, 'first_name' => 'Test', 'last_name' => 'Driver',
                 'name' => 'New Mobile Driver',
                 'email' => 'new.driver@example.test',
                 'password' => 'SafePassword!2026',
@@ -114,7 +118,7 @@ final class MobileRegistrationTest extends TestCase
             ['user' => $user->public_id, 'hash' => sha1($user->email)],
         );
         $this->get($verificationUrl, ['Accept' => 'text/html'])->assertOk()->assertSee('Email verified');
-        $this->withToken($token)->getJson('/api/v1/me')->assertOk();
+        $this->withToken($token)->getJson('/api/v1/me')->assertOk()->assertHeader('Cache-Control', 'no-store, private');
 
         $this->assertNotNull($user->fresh()?->email_verified_at);
         $this->assertDatabaseHas('audit_events', [
@@ -134,7 +138,8 @@ final class MobileRegistrationTest extends TestCase
         app()->detectEnvironment(static fn (): string => 'production');
 
         try {
-            $this->postJson('/api/v1/auth/register', [
+            $this->postJson('/api/v2/auth/register', [
+                'birth_date' => '1990-01-01', 'plate_pending' => true, 'first_name' => 'Test', 'last_name' => 'Driver',
                 'name' => 'Blocked Mobile Driver',
                 'email' => 'blocked.driver@example.test',
                 'password' => 'SafePassword!2026',
@@ -159,7 +164,8 @@ final class MobileRegistrationTest extends TestCase
         app()->detectEnvironment(static fn (): string => 'staging');
 
         try {
-            $this->postJson('/api/v1/auth/register', [
+            $this->postJson('/api/v2/auth/register', [
+                'birth_date' => '1990-01-01', 'plate_pending' => true, 'first_name' => 'Test', 'last_name' => 'Driver',
                 'name' => 'Blocked Staging Driver',
                 'email' => 'blocked.staging@example.test',
                 'password' => 'SafePassword!2026',
@@ -183,6 +189,37 @@ final class MobileRegistrationTest extends TestCase
             'demo mode disabled' => [false, DemoEnvironment::TENANT_ID],
             'another tenant' => [true, '01J00000000000000000000001'],
         ];
+    }
+
+    public function test_registration_enforces_eighteenth_birthday_and_records_pending_vehicle(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->travelTo(CarbonImmutable::parse('2026-10-08T12:00:00Z'));
+        Notification::fake();
+        config()->set('features.demo_mode', true);
+        $this->seedRegistrationScope();
+        $payload = ['first_name' => 'Test', 'middle_name' => 'Middle', 'last_name' => 'Driver',
+            'email' => 'age-test@example.test', 'password' => 'SafePassword!2026', 'password_confirmation' => 'SafePassword!2026',
+            'tenant_id' => DemoEnvironment::TENANT_ID, 'plate_pending' => true];
+        foreach (['2008-10-09', '2027-01-01', '2000-02-30', 'not-a-date'] as $birth) {
+            $this->postJson('/api/v2/auth/register', $payload + ['birth_date' => $birth])->assertUnprocessable()
+                ->assertJsonPath('error.message', 'Account creation was not successful.');
+        }
+        $this->postJson('/api/v2/auth/register', $payload + ['birth_date' => '2008-10-08'])->assertCreated();
+        $user = User::query()->where('email', 'age-test@example.test')->sole();
+        $this->assertSame('Test Middle Driver', $user->name);
+        $this->assertSame('2008-10-08', $user->birth_date);
+        $this->assertNotSame('2008-10-08', $user->getRawOriginal('birth_date'));
+        $this->assertDatabaseHas('driver_vehicles', ['is_default' => true, 'plate_pending' => true, 'plate_number' => null]);
+        $this->postJson('/api/v2/auth/register', $payload + ['birth_date' => '2008-10-08'])->assertUnprocessable()
+            ->assertJsonPath('error.message', 'Account creation was not successful.')->assertDontSee('already been taken');
+    }
+
+    public function test_legacy_registration_requires_update_instead_of_bypassing_age_rule(): void
+    {
+        $this->postJson('/api/v1/auth/register', ['name' => 'Old client'])->assertStatus(426)
+            ->assertJsonPath('error.code', 'app_update_required');
+        $this->assertDatabaseCount('users', 0);
     }
 
     private string $fleetOrganizationId;

@@ -66,7 +66,15 @@ class StationDetailScreen extends StatelessWidget {
                     _ => 'Connection unconfirmed',
                   }),
                 ),
-                Chip(label: Text(station.openNow ? 'Open now' : 'Closed now')),
+                Chip(
+                  label: Text(
+                    !station.hoursKnown
+                        ? 'Hours not provided'
+                        : station.openNow
+                        ? 'Open now'
+                        : 'Closed now',
+                  ),
+                ),
                 Chip(label: Text('Up to ${station.maximumPowerLabel}')),
               ],
             ),
@@ -108,6 +116,8 @@ class StationDetailScreen extends StatelessWidget {
             Text(
               vehicle == null
                   ? 'Add a vehicle to see compatibility.'
+                  : vehicle.connectorStandards.isEmpty
+                  ? 'Add connector standards to ${vehicle.nickname} to check compatibility.'
                   : 'Compared with ${vehicle.nickname}. Confirm the physical connector before use.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: context.vtsaColors.textMuted,

@@ -20,9 +20,47 @@ from vtsa_ocpp_gateway.app import create_app
 from vtsa_ocpp_gateway.config import Settings
 from vtsa_ocpp_gateway.models import AuthorizationDecision, ChargerIdentity, JsonObject
 from vtsa_ocpp_gateway.runtime import GatewayRuntime
+from vtsa_ocpp_gateway.security import ChargerIdentityError, ChargerIdentityValidator
 from vtsa_ocpp_gateway.simulator import ChargerSimulator, build_parser, run_scenario
 from vtsa_ocpp_gateway.store import MemoryGatewayStore
 from vtsa_ocpp_gateway.telemetry import EventPublisher, GatewayMetrics
+
+
+async def test_dynamic_station_connects_and_boots_without_gateway_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    enrolled: set[str] = set()
+
+    def authenticate(
+        self: ChargerIdentityValidator, identity: str, password: str, protocol: str
+    ) -> ChargerIdentity:
+        if identity not in enrolled or password != "synthetic-password" or protocol != "ocpp1.6":
+            raise ChargerIdentityError("Rejected")
+        return ChargerIdentity(
+            identity, "01J00000000000000000000001", "01J00000000000000000000002", "basic"
+        )
+
+    monkeypatch.setattr(ChargerIdentityValidator, "_authenticate_core", authenticate)
+    settings = Settings(
+        require_tls=False,
+        raw_message_logging=False,
+        core_auth_url="http://platform:8000/api/internal/v1/ocpp/authenticate",
+        internal_api_token="synthetic-service-token",
+    )
+    runtime = GatewayRuntime(settings, store=MemoryGatewayStore())
+    async with _live_gateway(settings, runtime) as endpoint:
+        simulator = ChargerSimulator(
+            endpoint + "/ocpp", "NEW-CP", "ocpp1.6", password="synthetic-password"
+        )
+        with pytest.raises(InvalidStatus):
+            await simulator.connect()
+        enrolled.add("NEW-CP")
+        await simulator.connect()
+        try:
+            assert (await simulator.boot())["status"] == "Accepted"
+            assert "currentTime" in await simulator.heartbeat()
+        finally:
+            await simulator.close()
 
 
 async def test_connectivity_scenario_uses_enrollment_and_never_starts_charging(

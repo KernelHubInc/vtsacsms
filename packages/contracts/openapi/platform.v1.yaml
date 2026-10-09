@@ -34,7 +34,51 @@ tags:
     description: Tenant- and site-scoped incidents, work orders, evidence, technician activity, and maintenance reporting.
   - name: Payment Webhooks
     description: Signature-verified provider callbacks with tenant-bound destination identifiers and replay protection.
+  - name: Wallet
+    description: Verified driver prepaid balances and idempotent QR Ph top-ups.
 paths:
+  /api/internal/v1/ocpp/authenticate:
+    post:
+      summary: Authenticate a charger against current station and tenant state
+      operationId: authenticateOcppCharger
+      tags: [Identity]
+      description: Gateway-only HTTPS query. No device passwords or hashes are returned. Unknown or inactive stations and incorrect credentials fail closed.
+      security: [{ocppServiceBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identity, password, protocol]
+              properties:
+                identity: {type: string, maxLength: 120, pattern: '^[A-Za-z0-9._-]+$'}
+                password: {type: string, writeOnly: true, maxLength: 1024}
+                protocol: {type: string, enum: [ocpp1.6, ocpp2.0.1]}
+      responses:
+        '200':
+          description: Verified station binding; response must not be cached.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [tenant_id, charger_id, charge_point_identity]
+                    properties:
+                      tenant_id: {$ref: '#/components/schemas/Ulid'}
+                      charger_id: {$ref: '#/components/schemas/Ulid'}
+                      charge_point_identity: {type: string}
+        '403':
+          description: Invalid service credential or charger authentication denied.
+        '422':
+          description: Invalid request; credentials are never echoed.
+        '429':
+          description: Authentication rate limit reached.
+        '503':
+          description: Core unavailable; gateway must fail closed.
   /api/v1/app/config:
     get:
       operationId: getAppConfiguration
@@ -499,6 +543,82 @@ paths:
             text/csv:
               schema: {type: string}
         '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v2/auth/register:
+    post:
+      operationId: registerAdultDriver
+      tags: [Identity]
+      summary: Create a staging consumer account with an adult birth date and default vehicle
+      description: Available only in demo-enabled development and staging. Replaces v1 registration, which returns 426 app_update_required. Existing sign-in endpoints are unchanged.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [first_name, last_name, birth_date, email, password, password_confirmation, tenant_id, plate_pending]
+              properties:
+                first_name: {type: string, maxLength: 80}
+                middle_name: {type: [string, 'null'], maxLength: 80}
+                last_name: {type: string, maxLength: 80}
+                birth_date: {type: string, format: date, description: At least 18 years old on the current UTC date; earliest 1900-01-01.}
+                email: {type: string, format: email, maxLength: 254}
+                password: {type: string, minLength: 12, writeOnly: true}
+                password_confirmation: {type: string, writeOnly: true}
+                tenant_id: {$ref: '#/components/schemas/Ulid'}
+                plate_pending: {type: boolean}
+                plate_number: {type: [string, 'null'], maxLength: 20, description: Required when plate_pending is false; omit when true.}
+      responses:
+        '201': {description: Account and default vehicle committed; verification_email_sent indicates mail delivery initiation.}
+        '404': {description: Registration is disabled for this environment or tenant.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/vehicles:
+    get:
+      operationId: listDriverVehicles
+      tags: [Assets]
+      summary: List only the verified authenticated driver's vehicles in the current tenant
+      responses:
+        '200':
+          description: Account garage; no-store response.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/DriverVehicle'}}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/vehicles/{vehicle}:
+    parameters:
+      - {name: vehicle, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    put:
+      operationId: saveDriverVehicle
+      tags: [Assets]
+      summary: Create or update an owned vehicle with a client-generated idempotent ULID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DriverVehicle'}
+      responses:
+        '200': {description: Saved; first vehicle automatically becomes default.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Vehicle is not owned by this driver.}
+        '409': {description: Identifier conflict; refresh and retry with a new vehicle identifier.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+    delete:
+      operationId: removeDriverVehicle
+      tags: [Assets]
+      summary: Remove an owned vehicle and promote the next saved vehicle if needed
+      responses:
+        '200': {description: Vehicle removed.}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Vehicle not found for this driver.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
   /api/v1/public/stations:
     get:
       operationId: searchPublicStations
@@ -513,6 +633,8 @@ paths:
         - {name: south, in: query, schema: {type: number, minimum: -90, maximum: 90}}
         - {name: east, in: query, schema: {type: number, minimum: -180, maximum: 180}}
         - {name: north, in: query, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: 'connectors[]', in: query, style: form, explode: true, schema: {type: array, maxItems: 5, items: {type: string, maxLength: 40}}}
+        - {name: amenity, in: query, schema: {type: string, maxLength: 60}}
         - {name: connector, in: query, schema: {type: string, maxLength: 40}}
         - {name: min_power_w, in: query, schema: {type: integer, minimum: 0, maximum: 1000000}}
         - {name: availability, in: query, schema: {type: string, enum: [available, busy, faulted, offline, stale, unknown]}}
@@ -1180,8 +1302,123 @@ paths:
         '200':
           description: Open work, SLA, downtime, availability, MTTA, MTTR, repeat failure, cost, parts, and warranty metrics.
         '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/wallet:
+    get:
+      operationId: getPrepaidWallet
+      summary: Read the current account wallet and paginated balance activity
+      tags: [Wallet]
+      parameters:
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: No-store wallet summary. Simulated and live books are separate.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/PrepaidWallet'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/wallet/topups:
+    get:
+      operationId: listWalletTopups
+      summary: List owned top-ups for the current wallet book
+      tags: [Wallet]
+      parameters:
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Cursor-paginated top-ups, newest first; no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [items, next_cursor]
+                    properties:
+                      items: {type: array, items: {$ref: '#/components/schemas/WalletTopup'}}
+                      next_cursor: {type: [string, 'null']}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: createWalletTopup
+      summary: Create a QR top-up with a stable retry key and server-enforced KYC policy
+      tags: [Wallet]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_minor, idempotency_key]
+              properties:
+                amount_minor: {type: integer, minimum: 1, maximum: 100000000, description: PHP centavos; deployment limits also apply.}
+                idempotency_key: {$ref: '#/components/schemas/Ulid'}
+      responses:
+        '200':
+          description: Persisted order, including pending or unknown outcome; not proof of payment.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/WalletTopup'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {description: Idempotency key already used for another amount.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {description: Collection is disabled or configuration is not approved.}
+  /api/v1/wallet/topups/{topup}:
+    parameters:
+      - {name: topup, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    get:
+      operationId: getWalletTopup
+      summary: Read an owned payment request without initiating provider collection
+      tags: [Wallet]
+      responses:
+        '200':
+          description: Authoritative stored status; late verified payments can resolve expired requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: '#/components/schemas/WalletTopup'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Request not owned by the current tenant and subject.}
+  /api/v1/webhooks/aub/qrph:
+    post:
+      operationId: confirmAubQrphPayment
+      summary: Verify signed AUB XML and atomically confirm a matching prepaid top-up
+      tags: [Payment Webhooks]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema: {type: string, maxLength: 65536, description: Flat XML signed according to AUB canonical SHA256 rules.}
+      responses:
+        '200':
+          description: Durable confirmation or identical already-processed confirmation.
+          content:
+            text/plain:
+              schema: {type: string, const: success}
+        '400': {description: "Invalid signature, schema or financial binding."}
+        '404': {description: Callback not enabled or order not found for the configured merchant tenant.}
+        '409': {description: Conflicting payment evidence requires review.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
 components:
   securitySchemes:
+    ocppServiceBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque gateway/core service credential
     sanctumBearer:
       type: http
       scheme: bearer
@@ -1242,6 +1479,46 @@ components:
       schema:
         $ref: '#/components/schemas/Ulid'
   schemas:
+    WalletTopup:
+      type: object
+      required: [id, amount_minor, currency, mode, status, qr_content, expires_at, created_at]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        amount_minor: {type: integer, minimum: 1}
+        currency: {type: string, const: PHP}
+        mode: {type: string, enum: [simulated, live]}
+        status: {type: string, enum: [creating, pending, unknown, review_required, paid, expired]}
+        qr_content: {type: [string, 'null'], description: EMV QR content only for a pending unexpired live order; never a payment URL.}
+        expires_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: [string, 'null'], format: date-time}
+    PrepaidWallet:
+      type: object
+      required: [currency, balance_minor, reserved_minor, available_minor, mode, book, topups_enabled, minimum_minor, maximum_minor, history]
+      properties:
+        currency: {type: string, const: PHP}
+        balance_minor: {type: integer, minimum: 0}
+        reserved_minor: {type: integer, minimum: 0}
+        available_minor: {type: integer, minimum: 0}
+        mode: {type: string, enum: [disabled, simulated, live]}
+        book: {type: string, enum: [simulated, live]}
+        topups_enabled: {type: boolean}
+        minimum_minor: {type: integer}
+        maximum_minor: {type: integer}
+        history:
+          type: object
+          required: [items, next_cursor]
+          properties:
+            next_cursor: {type: [string, 'null']}
+            items:
+              type: array
+              items:
+                type: object
+                required: [id, kind, amount_minor, created_at]
+                properties:
+                  id: {$ref: '#/components/schemas/Ulid'}
+                  kind: {type: string, enum: [topup, reserved, released, spent]}
+                  amount_minor: {type: integer, minimum: 0}
+                  created_at: {type: [string, 'null'], format: date-time}
     Ulid:
       type: string
       pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
@@ -1697,6 +1974,19 @@ components:
     AssetLifecycleStatus:
       type: string
       enum: [draft, active, maintenance, retired]
+    DriverVehicle:
+      type: object
+      required: [nickname, plate_pending, connector_standards, is_default]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        nickname: {type: string, maxLength: 80}
+        plate_pending: {type: boolean}
+        plate_number: {type: [string, 'null'], maxLength: 20}
+        manufacturer: {type: string, maxLength: 80}
+        model: {type: string, maxLength: 80}
+        variant: {type: [string, 'null'], maxLength: 80}
+        connector_standards: {type: array, maxItems: 5, uniqueItems: true, items: {type: string, enum: ['Type 2', CCS2, CHAdeMO, 'GB/T', NACS]}}
+        is_default: {type: boolean}
     PublicStation:
       type: object
       additionalProperties: false
@@ -1737,6 +2027,12 @@ components:
       type: object
       additionalProperties: false
       properties:
+        ocpp_password:
+          type: string
+          writeOnly: true
+          minLength: 16
+          maxLength: 72
+          description: Set or rotate the station's OCPP Basic credential; never returned. Required for authenticated connectivity after commissioning.
         name: {type: string, maxLength: 160}
         charger_model_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
         ocpp_version_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}

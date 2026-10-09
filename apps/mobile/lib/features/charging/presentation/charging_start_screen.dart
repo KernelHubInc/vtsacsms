@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
-import 'package:vtsa_mobile/core/config/feature_flags.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -48,9 +47,9 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
         title: 'Charging controls are intentionally disabled',
         body: VtsaEmptyState(
           icon: Icons.electric_bolt_outlined,
-          title: FeatureFlags.milestoneTwoMessage,
+          title: 'Charging is not available yet',
           description:
-              'Milestone 1 supports station discovery, vehicles, compatibility, and favorites. No charger or payment request was sent.',
+              'You can explore stations and save compatible vehicles. Starting a charge will become available when charging and payment services are enabled.',
         ),
       );
     }

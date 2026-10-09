@@ -19,6 +19,7 @@ void main() {
   late FakeRealtimeGateway realtime;
   late FakePushRegistrationService push;
   late ChargingController controller;
+  late bool authenticated;
 
   setUp(() async {
     repository = FakeChargingRepository();
@@ -28,6 +29,7 @@ void main() {
     await network.start();
     realtime = FakeRealtimeGateway();
     push = FakePushRegistrationService();
+    authenticated = true;
     controller = ChargingController(
       repository: repository,
       store: store,
@@ -35,7 +37,7 @@ void main() {
       network: network,
       push: push,
       ownerId: () => 'driver-1',
-      isAuthenticated: () => true,
+      isAuthenticated: () => authenticated,
       now: () => DateTime.utc(2026, 7, 26, 3),
       pollInterval: const Duration(hours: 1),
     );
@@ -404,12 +406,43 @@ void main() {
     () async {
       await _start(controller);
       expect(store.reference, isNotNull);
+      repository.historyResult = ChargingHistoryPage(
+        sessions: [sampleChargingSession()],
+        nextCursor: 'next-page',
+      );
+      await controller.loadHistory();
+      expect(controller.history, isNotEmpty);
 
       await controller.onSignedOut();
 
       expect(store.reference, isNull);
       expect(controller.session, isNull);
       expect(controller.phase, ChargingFlowPhase.idle);
+      expect(controller.history, isEmpty);
+      expect(controller.hasMoreHistory, isFalse);
+    },
+  );
+
+  test(
+    'locked sessions ignore polling and realtime updates until unlock',
+    () async {
+      await _start(controller);
+      final initial = controller.session!;
+      final completed = sampleChargingSession(
+        id: initial.id,
+        state: ChargingSessionState.completed,
+        aggregateVersion: 10,
+      );
+      authenticated = false;
+      repository.sessions[initial.id] = completed;
+      await controller.refresh();
+      realtime.emit(completed);
+      await _flush();
+      expect(controller.session, initial);
+      expect(store.reference?.ownerId, 'driver-1');
+      authenticated = true;
+      await controller.refresh();
+      expect(controller.session, completed);
     },
   );
 }

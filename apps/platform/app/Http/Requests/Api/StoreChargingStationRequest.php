@@ -25,6 +25,7 @@ final class StoreChargingStationRequest extends FormRequest
             'ocpp_version_id' => ['nullable', 'ulid', 'exists:ocpp_versions,id'],
             'ocpp_security_profile_id' => ['nullable', 'ulid', 'exists:ocpp_security_profiles,id'],
             'name' => ['required', 'string', 'max:160'],
+            'ocpp_password' => ['sometimes', 'string', 'min:16', 'max:72', 'regex:/\A[\x21-\x7E]+\z/'],
             'charge_point_identity' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9._:-]+$/', 'unique:charging_stations,charge_point_identity'],
             'serial_number' => ['required', 'string', 'max:160', Rule::unique('charging_stations', 'serial_number')->where('tenant_id', app(CurrentTenant::class)->get()->tenantId)],
             'qr_identifier' => ['required', 'string', 'max:120', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:charging_stations,qr_identifier'],

@@ -15,6 +15,10 @@ final class UserResource extends JsonResource
         return [
             'id' => $this->resource->public_id,
             'name' => $this->resource->name,
+            'first_name' => $this->resource->first_name,
+            'middle_name' => $this->resource->middle_name,
+            'last_name' => $this->resource->last_name,
+            'birth_date' => $this->resource->birth_date,
             'email' => $this->resource->email,
             'email_verified' => $this->resource->hasVerifiedEmail(),
             'mobile_verified' => $this->resource->mobile_verified_at !== null,

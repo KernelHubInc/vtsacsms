@@ -243,3 +243,7 @@ station presence independently of connector/session events. No wire schema chang
 The read projection exposes only connection status and last-seen time to public
 station discovery; credentials and connection IDs remain private. See
 [OCPP live projection](ocpp-gateway.md#live-station-projection-2026-10-04).
+
+### Prepaid wallet postings
+
+Real prepaid credits/spends reuse `billing.ledger_transaction.posted.v1` with event_type `prepaid_credit` / `prepaid_spend` and reference_type `qr_topup` / `prepaid_reservation`. No new event schema. Simulated activity emits no financial ledger event. Payments confirmation and Billing posting commit in one local transaction via the Billing application contract; future external consumers must deduplicate the existing ledger event ID.

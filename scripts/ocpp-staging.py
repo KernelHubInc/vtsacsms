@@ -67,6 +67,41 @@ def configuration(overlay=True):
     )
 
 
+def deployed_platform_image(container):
+    details = json.loads(
+        run(["docker", "inspect", container], capture=True)
+    )[0]
+    image = details["Image"]
+    try:
+        return run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+            capture=True,
+        ).strip()
+    except ValueError:
+        # Containerd may expose a config digest that Docker cannot tag directly.
+        candidate = run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", details["Config"]["Image"]],
+            capture=True,
+        ).strip()
+    probe = run(
+        ["docker", "create", "--network", "none", "--entrypoint", "/bin/true", candidate],
+        capture=True,
+    ).strip()
+    try:
+        actual = json.loads(run(["docker", "inspect", probe], capture=True))[0]
+        manifest = (details.get("ImageManifestDescriptor") or {}).get("digest")
+        same_manifest = manifest and manifest == (
+            actual.get("ImageManifestDescriptor") or {}
+        ).get("digest")
+        if actual["Image"] != image and not same_manifest:
+            raise ValueError(
+                "The platform image tag has changed since deployment. Deploy the intended platform image before updating consumers."
+            )
+        return candidate
+    finally:
+        run(["docker", "rm", probe], capture=True)
+
+
 def runtime_configuration(config):
     # Compose escapes dollars for re-use as Compose input, even in JSON output.
     for service in config["services"].values():
@@ -186,7 +221,7 @@ def add_registration(registry, identity, entry):
     return {**registry, identity: entry}
 
 
-def save_registry(registry, expected):
+def save_registry(registry, expected, updates=None):
     lock = PRIVATE.with_name(PRIVATE.name + ".lock")
     descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(descriptor)
@@ -209,6 +244,13 @@ def save_registry(registry, expected):
             raise ValueError(
                 "Expected one single-line registry in the generated private configuration."
             )
+        for key, value in (updates or {}).items():
+            line = dotenv({key: value}).rstrip("\n")
+            pattern = rf"^{re.escape(key)}=.*$"
+            if re.search(pattern, content, flags=re.MULTILINE):
+                content = re.sub(pattern, lambda _: line, content, flags=re.MULTILINE)
+            else:
+                content = content.rstrip("\n") + "\n" + line + "\n"
         backup = PRIVATE.with_name(PRIVATE.name + ".backup." + secrets.token_hex(6))
         with os.fdopen(
             os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600),
@@ -239,6 +281,8 @@ def save_registry(registry, expected):
 
 
 def enroll(config):
+    if config["services"]["ocpp-gateway"]["environment"].get("OCPP_CORE_AUTH_URL"):
+        raise ValueError("Dynamic enrollment is enabled. Create the station and set its OCPP password in admin.")
     expected = PRIVATE.read_text(encoding="utf-8")
     environment = require_staging(config)
     registry = json.loads(
@@ -279,6 +323,19 @@ def enroll(config):
     print(
         "Run 'python3 scripts/ocpp-staging.py gateway-up' to apply. Existing devices will reconnect."
     )
+
+
+def activate_enrollment(config):
+    expected = PRIVATE.read_text(encoding="utf-8")
+    environment = require_staging(config)
+    url = str(environment.get("APP_URL", "")).rstrip("/")
+    if urlsplit(url).scheme != "https" or not urlsplit(url).hostname:
+        raise ValueError("Dynamic enrollment requires the staging HTTPS APP_URL.")
+    registry = json.loads(config["services"]["ocpp-gateway"]["environment"]["OCPP_CHARGER_REGISTRY_JSON"])
+    run(compose() + ["exec", "-T", "platform", "php", "artisan", "ocpp:import-registry", "--no-interaction"],
+        capture=True, input_text=json.dumps(registry))
+    save_registry(registry, expected, {"OCPP_CORE_AUTH_URL": url + "/api/internal/v1/ocpp/authenticate"})
+    print("Existing credentials imported without replacement. Dynamic enrollment configured; run gateway-up to apply.")
 
 
 def validate_service_status(raw):
@@ -415,6 +472,7 @@ def main():
         choices=[
             "prepare",
             "enroll",
+            "activate-enrollment",
             "check",
             "up",
             "gateway-up",
@@ -442,6 +500,8 @@ def main():
     validate(config)
     if action == "enroll":
         enroll(config)
+    elif action == "activate-enrollment":
+        activate_enrollment(config)
     elif action == "verify":
         verify(config)
     elif action == "gateway-up":
@@ -488,9 +548,7 @@ def main():
                 "The running platform uses other Compose files. Preserve those overrides before deploying OCPP."
             )
         # Consumers use the deployed application image; container-only edits are not an image.
-        platform_image = run(
-            compose() + ["images", "-q", "platform"], capture=True
-        ).strip()
+        platform_image = deployed_platform_image(container)
         if not platform_image or "\n" in platform_image:
             raise ValueError(
                 "Start the existing staging platform first; expected one application image."

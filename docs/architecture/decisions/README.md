@@ -23,6 +23,10 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0017](0017-isolate-kyc-evidence-processing.md) | Isolate private KYC evidence processing; Identity owns status | Accepted for development |
 | [0018](0018-private-kyc-deployment-and-review-policy.md) | Private KYC deployments and explicit review policy | Assurance choice superseded by 0019 |
 | [0019](0019-optical-kyc-and-live-capture.md) | Optical KYC and a self-hosted live camera challenge | Accepted; production acceptance gated |
+| [0020](0020-mobile-pin-and-biometric-unlock.md) | Device-local mobile PIN and biometric unlock | Accepted; physical-device release verification required |
+| [0021](0021-driver-onboarding-and-server-garages.md) | Adult onboarding and server-owned driver garages | Accepted for staging |
+| [0022](0022-prepaid-balances-and-aub-qrph.md) | Prepaid balances and AUB QR Ph collections | Accepted for simulation; live acceptance gated |
+| [0023](0023-authenticate-ocpp-against-platform-stations.md) | Authenticate OCPP against current platform stations and Identity credentials | Accepted |
 
 ## ADR Template
 

@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 
-enum AuthStatus { checking, guest, authenticated }
+enum AuthStatus { checking, guest, locked, authenticated }
 
 final class AuthController extends ChangeNotifier {
   factory AuthController({
@@ -22,6 +23,13 @@ final class AuthController extends ChangeNotifier {
   bool _busy = false;
   bool _verificationRequired = false;
   RegistrationResult? _registration;
+  bool _passwordSignIn = false;
+  QuickUnlockStore? get quickUnlock =>
+      _tokens is QuickUnlockStore ? _tokens : null;
+  bool get canConfigureQuickUnlock =>
+      _passwordSignIn &&
+      _status == AuthStatus.authenticated &&
+      !needsEmailVerification;
 
   AuthStatus get status => _status;
   UserProfile? get user => _user;
@@ -33,6 +41,23 @@ final class AuthController extends ChangeNotifier {
   RegistrationResult? get registration => _registration;
 
   Future<void> restore() async {
+    try {
+      await quickUnlock?.initialize();
+    } on Object {
+      _status = AuthStatus.locked;
+      _failure = const AppFailure(
+        kind: FailureKind.unknown,
+        message:
+            'Saved sign-in could not be read. Try again or sign in with your password.',
+      );
+      notifyListeners();
+      return;
+    }
+    if (quickUnlock?.locked == true) {
+      _status = AuthStatus.locked;
+      notifyListeners();
+      return;
+    }
     if (await _tokens.read() == null) {
       _user = null;
       _verificationRequired = false;
@@ -62,6 +87,7 @@ final class AuthController extends ChangeNotifier {
   }
 
   Future<bool> login({required String email, required String password}) async {
+    if (_busy) return false;
     _setBusy(true);
     try {
       final result = await _repository.login(email: email, password: password);
@@ -69,6 +95,7 @@ final class AuthController extends ChangeNotifier {
       _user = result.user;
       _verificationRequired = !result.user.emailVerified;
       _status = AuthStatus.authenticated;
+      _passwordSignIn = true;
       return true;
     } on AppFailure catch (failure) {
       _failure = failure;
@@ -85,6 +112,12 @@ final class AuthController extends ChangeNotifier {
     required String name,
     required String email,
     required String password,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
   }) async {
     _setBusy(true);
     _registration = null;
@@ -93,6 +126,12 @@ final class AuthController extends ChangeNotifier {
         name: name,
         email: email,
         password: password,
+        firstName: firstName,
+        middleName: middleName,
+        lastName: lastName,
+        birthDate: birthDate,
+        plateNumber: plateNumber,
+        platePending: platePending,
       );
       return true;
     } on AppFailure catch (failure) {
@@ -136,6 +175,7 @@ final class AuthController extends ChangeNotifier {
     } finally {
       await _tokens.clear();
       _user = null;
+      _passwordSignIn = false;
       _verificationRequired = false;
       _status = AuthStatus.guest;
       _setBusy(false);
@@ -173,6 +213,7 @@ final class AuthController extends ChangeNotifier {
   }
 
   void sessionExpired() {
+    _passwordSignIn = false;
     _user = null;
     _verificationRequired = false;
     _status = AuthStatus.guest;
@@ -181,6 +222,113 @@ final class AuthController extends ChangeNotifier {
       message: 'Your session has ended. Sign in again to continue.',
     );
     notifyListeners();
+  }
+
+  void lock() {
+    final unlock = quickUnlock;
+    if (unlock == null) return;
+    unlock.lock();
+    _passwordSignIn = false;
+    if (!unlock.enabled || _status == AuthStatus.guest) {
+      notifyListeners();
+      return;
+    }
+    _user = null;
+    _status = AuthStatus.locked;
+    _failure = null;
+    notifyListeners();
+  }
+
+  Future<bool> configureQuickUnlock(
+    String pin, {
+    required bool biometrics,
+  }) async {
+    if (_busy || !canConfigureQuickUnlock || quickUnlock == null) return false;
+    _setBusy(true);
+    try {
+      await quickUnlock!.configure(pin, biometrics: biometrics);
+      if (quickUnlock!.locked) lock();
+      return quickUnlock!.enabled;
+    } on AppFailure catch (failure) {
+      _failure = failure;
+      return false;
+    } on Object {
+      _failure = const AppFailure(
+        kind: FailureKind.unknown,
+        message: 'Quick unlock could not be set up. Please try again.',
+      );
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<bool> unlock({String? pin}) async {
+    final unlock = quickUnlock;
+    if (_busy || unlock == null || _status != AuthStatus.locked) return false;
+    _setBusy(true);
+    final generation = unlock.generation;
+    try {
+      if (!await unlock.unlock(pin: pin)) {
+        _failure = const AppFailure(
+          kind: FailureKind.forbidden,
+          message:
+              'Could not unlock. Try your app PIN or sign in with your password.',
+        );
+        return false;
+      }
+      // Local proof never overrides expiry, revocation, membership or verification.
+      final user = await _repository.currentUser();
+      if (generation != unlock.generation) return false;
+      _user = user;
+      _verificationRequired = !user.emailVerified;
+      _status = AuthStatus.authenticated;
+      return true;
+    } on AppFailure catch (failure) {
+      if (failure.code == 'email_unverified' &&
+          generation == unlock.generation) {
+        _verificationRequired = true;
+        _status = AuthStatus.authenticated;
+        return true;
+      }
+      if (failure.kind == FailureKind.unauthenticated ||
+          failure.kind == FailureKind.forbidden ||
+          !unlock.enabled) {
+        await unlock.clear();
+        _status = AuthStatus.guest;
+      }
+      _failure = failure;
+      return false;
+    } on Object {
+      _failure = const AppFailure(
+        kind: FailureKind.unknown,
+        message:
+            'Unlock is unavailable. Try your app PIN or sign in with your password.',
+      );
+      return false;
+    } finally {
+      if (_status != AuthStatus.authenticated) unlock.lock();
+      _setBusy(false);
+    }
+  }
+
+  Future<void> usePassword() async {
+    if (_busy) return;
+    _setBusy(true);
+    try {
+      await _tokens.clear();
+      _user = null;
+      _passwordSignIn = false;
+      _verificationRequired = false;
+      _status = AuthStatus.guest;
+    } on Object {
+      _failure = const AppFailure(
+        kind: FailureKind.unknown,
+        message: 'Could not clear this session. Please try again.',
+      );
+    } finally {
+      _setBusy(false);
+    }
   }
 
   void _setBusy(bool value) {

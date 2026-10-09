@@ -16,8 +16,12 @@ void main() {
       client.dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (request, handler) {
-            expect(request.path, '/api/v1/auth/register');
+            expect(request.path, '/api/v2/auth/register');
             expect(request.extra['anonymous'], isTrue);
+            expect((request.data as Map)['first_name'], 'Test');
+            expect((request.data as Map)['birth_date'], '1990-01-01');
+            expect((request.data as Map)['plate_pending'], isTrue);
+            expect((request.data as Map).containsKey('plate_number'), isFalse);
             handler.resolve(
               Response(
                 requestOptions: request,
@@ -37,6 +41,10 @@ void main() {
       );
       final result = await repository.register(
         name: 'Test driver',
+        firstName: ' Test ',
+        lastName: 'driver',
+        birthDate: '1990-01-01',
+        platePending: true,
         email: 'driver@example.test',
         password: 'TestOnlyPassword!2026',
       );

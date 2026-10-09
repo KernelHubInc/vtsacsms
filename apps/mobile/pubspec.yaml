@@ -27,6 +27,9 @@ dependencies:
   url_launcher: ^6.3.2
   image_picker: ^1.2.3
   camera: ^0.12.1
+  local_auth: 3.0.2
+  cryptography: 2.9.0
+  qr_flutter: 4.1.0
 
 dev_dependencies:
   camera_platform_interface: 2.14.0

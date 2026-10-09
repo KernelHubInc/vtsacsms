@@ -10,7 +10,12 @@ use App\Foundation\Features\FeatureFlags;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\RegisterRequest;
 use App\Models\User;
+use App\Modules\Assets\Application\DriverVehicles;
+use App\Modules\Identity\Domain\ActorType;
+use App\Modules\Tenancy\Application\CurrentTenant;
+use App\Modules\Tenancy\Application\TenantContext;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -18,6 +23,14 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 final class RegistrationController extends Controller
 {
+    public function legacy(Request $request): JsonResponse
+    {
+        return response()->json(['error' => [
+            'code' => 'app_update_required', 'message' => 'Update the app to create an account.',
+            'correlation_id' => $request->attributes->get('correlation_id'), 'errors' => [],
+        ]], 426)->header('Cache-Control', 'no-store');
+    }
+
     public function __invoke(RegisterRequest $request, FeatureFlags $flags): JsonResponse
     {
         abort_unless(
@@ -30,6 +43,10 @@ final class RegistrationController extends Controller
         $user = DB::transaction(function () use ($request): User {
             $user = User::query()->create([
                 'name' => $request->validated('name'),
+                'first_name' => $request->validated('first_name'),
+                'middle_name' => $request->validated('middle_name'),
+                'last_name' => $request->validated('last_name'),
+                'birth_date' => $request->validated('birth_date'),
                 'email' => mb_strtolower((string) $request->validated('email')),
                 'password' => $request->validated('password'),
                 'activated_at' => now('UTC'),
@@ -61,6 +78,13 @@ final class RegistrationController extends Controller
                 'created_at' => now('UTC'),
                 'updated_at' => now('UTC'),
             ]);
+
+            app(CurrentTenant::class)->run(new TenantContext(
+                DemoEnvironment::TENANT_ID, ActorType::Human, (string) $user->public_id, (string) Str::ulid(),
+            ), fn () => app(DriverVehicles::class)->save((string) $user->public_id, (string) Str::ulid(), [
+                'nickname' => 'My vehicle', 'plate_number' => $request->validated('plate_number'),
+                'plate_pending' => $request->boolean('plate_pending'), 'is_default' => true,
+            ]));
 
             return $user;
         });

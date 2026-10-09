@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
+import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 import 'package:vtsa_mobile/features/kyc/application/kyc_controller.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_verification.dart';
@@ -172,18 +173,29 @@ void main() {
     await tap('Get started');
     await tap('I have read and agree to this verification consent.');
     await tap('Continue');
-    for (final entry in [
-      'SYNTHETIC PERSON',
-      '1990-01-01',
+    await tester.enterText(
+      find.widgetWithText(TextField, 'First name (required)'),
+      'SYNTHETIC',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Last name (required)'),
+      'PERSON',
+    );
+    tester
+        .widget<DriverDateField>(find.byType(DriverDateField))
+        .onChanged(DateTime(1990, 1, 1));
+    final nationality = find.byType(DropdownButtonFormField<String>).last;
+    tester.widget<DropdownButtonFormField<String>>(nationality).onChanged!(
       'PH',
-      'PH',
-    ].asMap().entries) {
-      await tester.enterText(find.byType(TextField).at(entry.key), entry.value);
-    }
+    );
+    await tester.pumpAndSettle();
     await tap('Choose identity document');
     await tap('Passport');
     await tester.enterText(find.byType(TextField).at(0), 'TEST-123456');
-    await tester.enterText(find.byType(TextField).at(1), '2035-01-01');
+    tester
+        .widget<DriverDateField>(find.byType(DriverDateField))
+        .onChanged(DateTime(2035, 1, 1));
+    await tester.pumpAndSettle();
     await tap('Continue to photos');
     for (var image = 0; image < 2; image++) {
       await tap('Capture');

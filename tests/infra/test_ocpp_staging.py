@@ -23,6 +23,53 @@ HASH = "$argon2id$v=19$m=65536,t=3,p=4$c3ludGhldGlj$aGFzaA"
 
 
 class OcppStagingTest(unittest.TestCase):
+    def test_dynamic_activation_imports_before_changing_configuration(self):
+        registry = {"CP-FIRST": {"tenant_id": TENANT, "charger_id": CHARGER, "enabled": True, "basic_password_hash": HASH}}
+        config = {"services": {"ocpp-gateway": {"environment": {"OCPP_CHARGER_REGISTRY_JSON": json.dumps(registry)}}}}
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory) / ".env.staging.ocpp"
+            original = setup.dotenv({"OCPP_CHARGER_REGISTRY_JSON": json.dumps(registry), "GATEWAY_INTERNAL_API_TOKEN": "unchanged"})
+            private.write_text(original)
+            with patch.object(setup, "PRIVATE", private), patch.object(setup, "require_staging", return_value={"APP_URL": "https://staging.example.test"}), patch.object(setup, "run", side_effect=ValueError("import failed")):
+                with self.assertRaises(ValueError):
+                    setup.activate_enrollment(config)
+            self.assertEqual(private.read_text(), original)
+            with patch.object(setup, "PRIVATE", private), patch.object(setup, "require_staging", return_value={"APP_URL": "https://staging.example.test"}), patch.object(setup, "run") as run:
+                setup.activate_enrollment(config)
+            self.assertIn("OCPP_CORE_AUTH_URL='https://staging.example.test/api/internal/v1/ocpp/authenticate'", private.read_text())
+            self.assertIn("GATEWAY_INTERNAL_API_TOKEN='unchanged'", private.read_text())
+            self.assertEqual(json.loads(run.call_args.kwargs["input_text"]), registry)
+            self.assertTrue(run.call_args.kwargs["capture"])
+
+    def test_deployed_image_uses_direct_image_id_when_available(self):
+        details = [{"Image": "sha256:running", "Config": {"Image": "platform:latest"}}]
+        with patch.object(setup, "run", side_effect=[json.dumps(details), "sha256:running\n"]) as run:
+            self.assertEqual(setup.deployed_platform_image("platform-1"), "sha256:running")
+        self.assertEqual(run.call_count, 2)
+
+    def test_containerd_image_is_verified_without_starting_a_probe(self):
+        details = [{"Image": "sha256:config", "Config": {"Image": "platform:latest"}, "ImageManifestDescriptor": {"digest": "sha256:manifest"}}]
+        probe = [{"Image": "sha256:index", "ImageManifestDescriptor": {"digest": "sha256:manifest"}}]
+        with patch.object(setup, "run", side_effect=[
+            json.dumps(details), ValueError("not taggable"), "sha256:index\n",
+            "probe-1\n", json.dumps(probe), "probe-1\n",
+        ]) as run:
+            self.assertEqual(setup.deployed_platform_image("platform-1"), "sha256:index")
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertIn(["docker", "create", "--network", "none", "--entrypoint", "/bin/true", "sha256:index"], commands)
+        self.assertEqual(commands[-1], ["docker", "rm", "probe-1"])
+        self.assertFalse(any("start" in command for command in commands))
+
+    def test_changed_platform_tag_is_rejected_and_probe_removed(self):
+        details = [{"Image": "sha256:running", "Config": {"Image": "platform:latest"}}]
+        with patch.object(setup, "run", side_effect=[
+            json.dumps(details), ValueError("not taggable"), "sha256:new-index",
+            "probe-1", json.dumps([{"Image": "sha256:other-config"}]), "probe-1",
+        ]) as run:
+            with self.assertRaisesRegex(ValueError, "tag has changed"):
+                setup.deployed_platform_image("platform-1")
+        self.assertEqual(run.call_args.args[0], ["docker", "rm", "probe-1"])
+
     def test_existing_override_is_preserved_before_the_security_overlay(self):
         override = Path("/etc/vtsa-csms/compose.staging-kyc-dns.yaml")
         with patch.object(setup, "EXTRA_COMPOSE_FILES", [override]):

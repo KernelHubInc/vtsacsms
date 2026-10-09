@@ -41,6 +41,8 @@ class GatewayRuntime:
             settings.charger_registry_json,
             settings.allow_unauthenticated_development,
             settings.trusted_client_certificate_fingerprint_header,
+            settings.core_auth_url,
+            settings.internal_api_token,
         )
         self.registry = ConnectionRegistry(self.store, settings, self.metrics)
 

@@ -6,6 +6,7 @@ import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
+import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 
 import 'support/fakes.dart';
 
@@ -152,20 +153,33 @@ void main() {
       await tester.tap(find.text('Create an account'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextField, 'Full name (required)'),
-        'Ada Driver',
+        find.widgetWithText(TextField, 'First name (required)'),
+        'Ada',
       );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Last name (required)'),
+        'Driver',
+      );
+      tester
+          .widget<DriverDateField>(find.byType(DriverDateField))
+          .onChanged(DateTime(1990, 1, 1));
+      await tester.ensureVisible(find.text('Plate pending'));
+      await tester.tap(find.text('Plate pending'));
+      await tester.pump();
       await tester.enterText(
         find.widgetWithText(TextField, 'Email address (required)'),
         'ada@example.test',
       );
       await tester.enterText(
         find.widgetWithText(TextField, 'Password (required)'),
-        'test-only-password',
+        'TestOnlyPassword!2026',
       );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.widgetWithText(FilledButton, 'Create account'),
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
       await tester.pumpAndSettle();
       expect(fixture.auth.registrationRequested, isTrue);

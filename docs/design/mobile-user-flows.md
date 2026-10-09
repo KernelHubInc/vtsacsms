@@ -10,6 +10,12 @@ MOB-AUTH-001: A guest opens Sign in, including on first launch. Registration, pa
 
 An unverified session remains on email verification, with resend, check status, and change-account actions. Verified drivers complete or skip the first-run introduction, then browse. Returning sessions restore into Explore. A successful sign-in after onboarding opens Account, where Identity verification is available. Logout and rejected sessions return to Sign in and remove the browsing back stack. Direct-link targets are not retained through sign-in; the driver opens them again after authentication. Public website discovery and server authorization contracts are unchanged.
 
+## PIN and fingerprint unlock
+
+MOB-AUTH-002: After password sign-in and email verification, open **Account > PIN & fingerprint**. Enter and confirm a separate six-digit app PIN; optionally confirm fingerprint/Face ID through the phone's native prompt. Biometric enrollment is managed in phone settings. Setup is available on Android/iOS only.
+
+When enrolled, reopening or returning to the app shows a locked screen with app PIN, optional biometric unlock and password recovery. Five incorrect PIN attempts remove local setup and require password sign-in. Server expiry, revocation and email verification remain authoritative; an offline device stays locked until it can validate the session. Password fallback removes local setup. To change/remove a PIN, sign out from the security screen and sign in with the account password again. See [ADR-0020](../architecture/decisions/0020-mobile-pin-and-biometric-unlock.md).
+
 ## Guided identity verification
 
 MOB-KYC-002: Explain the process before collecting evidence. Show five named stages: consent, personal details, document selection, photos/face check, and final review. The capture checklist identifies each required side, uploaded evidence, and the next unfinished capture.
@@ -108,3 +114,11 @@ The four bottom destinations are Explore, Activity, Wallet, and Account. A cente
 ## Validation needed
 
 Test with drivers who use assistive technology, low-connectivity environments, unfamiliar charger hardware, and multiple payment outcomes. Navigation provider, tariff disclosure content, receipt terminology, and push provider remain open.
+
+## Feature review update, 2026-10-08
+
+Signup now collects separate names, date of birth (minimum 18), and a plate or Plate pending. See [staging acceptance](../runbooks/mobile-feature-review-testing.md) and [ADR 0021](../architecture/decisions/0021-driver-onboarding-and-server-garages.md) for account garages, versioned signup, KYC guidance, vehicle filtering, connector status, and deferred payment/queue work.
+
+### Wallet / QR Ph top-up
+
+Wallet shows available/reserved amounts, activity and resumable top-up requests. Create uses an exact PHP amount and stable retry ULID. The detail screen polls backend confirmation, hides expired QR codes, and never accepts a client assertion of payment. Simulated mode clearly labels funds as test-only and has no payable QR. QR Ph on one phone uses screenshot import only where the payment app supports it.

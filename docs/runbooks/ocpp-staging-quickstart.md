@@ -2,7 +2,7 @@
 
 This procedure extends the existing `/opt/vtsa-csms/.env.staging` + `infra/compose.yaml` deployment from the staging mobile/KYC work. The helper also retains `infra/compose.kyc.yaml` so the prior KYC settings remain injected. The intended public endpoint is **`wss://staging.evcspowersolutions.com/ocpp/<charge-point-id>`**, using the site's existing host Nginx TLS certificate. It does not require another hostname. The charger's model and actual charge-point ID are still operator inputs.
 
-Scope: authenticated connectivity, boot, heartbeat, status and protocol evidence into Laravel. Remote commands remain disabled. This is a single-gateway staging topology, not the separate multi-node cluster runbook. No database migration or reset is required. The gateway never writes core tables.
+Scope: authenticated connectivity, boot, heartbeat, status and protocol evidence into Laravel. Remote commands remain disabled. This is a single-gateway staging topology, not the separate multi-node cluster runbook. Live connection reporting requires migration `2026_10_04_000001_create_charging_station_connections` before deploying the updated backend. Follow the [rollout procedure](../architecture/ocpp-gateway.md#rollout), including backup of the actual staging database, which may be on a separate VPS. No database reset is required. The gateway never writes core tables.
 
 ## Verified simulator deployment — 2026-10-04
 
@@ -208,3 +208,27 @@ If reverting core settings, confirm `FEATURE_OCPP=false` and `FEATURE_REMOTE_CHA
 Known limit: the current Redis Streams consumers read new messages; abandoned pending messages are not automatically reclaimed. Inspect consumer errors and stream pending counts after failures. Redis AOF is not the production durability/replay solution. Staging connection validation can proceed, but crash/replay recovery and hardware charging acceptance remain release gates for production.
 
 Configuration references: [Docker Compose merge/override semantics](https://docs.docker.com/reference/compose-file/merge/) and [Nginx WebSocket proxying](https://nginx.org/en/docs/http/websocket.html).
+
+## Dynamic enrollment activation (ADR 0023)
+
+After deploying this release's platform and gateway images and applying `2026_10_09_000001_create_identity_charger_credentials`, activate authoritative platform authentication. Keep a current backup of the actual staging database (which may be on the separate database VPS); do not assume the local Compose PostgreSQL container is the database. Do not rerun initial `prepare`.
+
+For this staging deployment, retain the existing DNS override:
+
+```bash
+cd /opt/vtsa-csms
+sudo python3 scripts/ocpp-staging.py activate-enrollment \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml &&
+sudo python3 scripts/ocpp-staging.py gateway-up \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml &&
+sudo python3 scripts/ocpp-staging.py verify \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml
+```
+
+`activate-enrollment` imports existing Basic hashes via stdin into Identity without overwriting existing credentials, creates a private environment backup, and sets `OCPP_CORE_AUTH_URL` to the HTTPS APP_URL plus `/api/internal/v1/ocpp/authenticate`. The core must receive the matching `OCPP_GATEWAY_INTERNAL_TOKEN`; the existing overlay already supplies it. DNS, the server certificate chain and HTTPS reachability must work from the gateway container. Deployment requires the **new gateway image**: `gateway-up` recreates but does not build it. The additive table is initially empty until credentials are imported or set through admin/API.
+
+After activation, create an admin station with its exact ID, OCPP version, and generated or chosen OCPP connection password. Copy the password before saving; it cannot be retrieved later. Set the station active when commissioning is complete. Existing stations use Edit to set/rotate a password; blank keeps the current credential. The device uses its exact charge-point ID as the Basic username and its own password. Additional enrollments require no env changes, Nginx changes or restart. Draft CSV imports require this commissioning step. The station API supports a write-only `ocpp_password` on create/update.
+
+The old manual `enroll` command refuses changes in dynamic mode to prevent editing an unused registry. Dynamic mode currently uses Basic authentication over WSS, without requiring a client certificate. Client-certificate-only or disabled legacy entries are refused during migration and require deliberate handling. Core outages, invalid credentials, wrong protocol and inactive assets/tenants reject new connections. Existing sockets keep their binding until disconnected.
+
+Verify an enrolled simulator with `scripts/test-ocpp-staging.ps1`, and verify a newly created, separately identified test station without restarting the gateway. Never connect the simulator with an ID currently used by a physical charger. An unenrolled 403 proves rejection only. Roll back the mode by restoring the protected environment backup and recreating the gateway; this restores the old registry and will not include newly enrolled stations. Keep the additive table and credential data for roll-forward; do not drop it as a routine rollback.

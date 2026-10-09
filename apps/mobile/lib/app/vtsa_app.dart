@@ -21,6 +21,7 @@ class VtsaApp extends StatefulWidget {
 
 class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
   late final GoRouter _router;
+  bool _obscured = false;
 
   @override
   void initState() {
@@ -42,6 +43,11 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    setState(() => _obscured = state != AppLifecycleState.resumed);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      widget.dependencies.auth.lock();
+    }
     if (state == AppLifecycleState.resumed) {
       widget.dependencies.discovery.startAutoRefresh(
         canRefresh: () => widget.dependencies.network.isOnline,
@@ -80,6 +86,18 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
       darkTheme: VtsaTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: _router,
+      builder: (context, child) => Stack(
+        children: [
+          ?child,
+          if (_obscured)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: const Center(child: Icon(Icons.lock_outline, size: 48)),
+              ),
+            ),
+        ],
+      ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

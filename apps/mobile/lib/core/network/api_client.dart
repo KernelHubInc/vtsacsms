@@ -43,7 +43,22 @@ final class ApiClient {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    // Retries can retain old headers; never reuse credentials across an app lock.
+    options.headers.remove('Authorization');
+    options.headers.remove('X-Tenant-ID');
     final tokens = await _tokens.read();
+    if (_tokens case LockableTokenStore(
+      locked: true,
+    ) when options.extra['anonymous'] != true) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.cancel,
+          message: 'Unlock your account to continue.',
+        ),
+      );
+      return;
+    }
     options.headers['X-Request-ID'] = _ids.next();
     options.headers['X-Correlation-ID'] =
         options.extra['correlation_id'] ?? _ids.next();

@@ -8,6 +8,10 @@ final class UserProfile {
     required this.email,
     required this.emailVerified,
     this.mobileNumber,
+    this.firstName,
+    this.middleName,
+    this.lastName,
+    this.birthDate,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -17,6 +21,10 @@ final class UserProfile {
     emailVerified:
         json['email_verified'] == true || json['email_verified_at'] != null,
     mobileNumber: json['mobile_number'] as String?,
+    firstName: json['first_name'] as String?,
+    middleName: json['middle_name'] as String?,
+    lastName: json['last_name'] as String?,
+    birthDate: json['birth_date'] as String?,
   );
 
   final String id;
@@ -24,4 +32,5 @@ final class UserProfile {
   final String email;
   final bool emailVerified;
   final String? mobileNumber;
+  final String? firstName, middleName, lastName, birthDate;
 }

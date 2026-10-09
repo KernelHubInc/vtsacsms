@@ -8,6 +8,12 @@ Features use `presentation`, `application`, `domain`, and `data` directories. Pr
 
 The public discovery repository sends bounded server queries to `/api/v1/public/stations`; it never downloads the complete network. Charging state is a replaceable projection of the server: command acceptance is not treated as physical start or stop evidence. Local recovery stores only the account ID, session ULID, and save time. Canonical energy remains integer watt-hours, power integer watts, durations integer seconds, money integer minor units plus currency, and timestamps UTC.
 
+## PIN and fingerprint unlock
+
+After password sign-in and email verification, open **Account > PIN & fingerprint** to create a separate six-digit app PIN and optionally confirm fingerprint/Face ID. The native app locks on restart/background. Five incorrect PINs, sign-out or password fallback remove setup. Expired/revoked sessions require password sign-in; offline quick unlock stays locked until the server can validate the session. Browser/desktop builds do not offer setup. No API or database migration is required.
+
+PIN verifiers and attempt limits use secure storage; biometric data remains with the OS. See [ADR-0020](../../docs/architecture/decisions/0020-mobile-pin-and-biometric-unlock.md) for security boundaries and required physical Android/iOS verification. Changing the PIN requires signing out and signing in with the password again.
+
 ## Configure
 
 Copy `dart_defines.example.json` to an ignored local file such as `dart_defines.local.json` and set:
@@ -69,3 +75,11 @@ Do not route the app to operator endpoints or weaken their policies. The mobile 
 Vehicles and favorites use account-scoped, non-sensitive local preferences in this release. Access tokens use platform secure storage. Raw credentials, card data, and map-provider credentials are never persisted by the app.
 
 Camera access is requested only after the in-app rationale. Android declares the camera as optional so manual code entry remains usable on camera-less devices. The selected push provider remains open; the app consumes provider-neutral start, stop, fault, payment, and completion hints and always refreshes authoritative server state.
+
+## Feature review testing build
+
+Build 1.0.6 (7) uses `/api/v2/auth/register` and authenticated `/api/v1/vehicles`. Deploy the matching backend migration before testing signup/vehicle sync. Existing local vehicles remain visible until edited and saved to the server. See [acceptance and deployment notes](../../docs/runbooks/mobile-feature-review-testing.md). AUB top-ups, pre-submit OCR autofill, and queue/booking workflows remain unavailable.
+
+## Prepaid wallet testing build
+
+Build 1.0.7 (8) adds a Wallet screen backed by `/api/v1/wallet`: balances, activity, top-up requests and server-confirmed status. Its staging build enables simulated payments and keeps real payments disabled. Deploy the matching backend and wallet migration before testing. Simulated funds cannot pay for live charging; no payable QR is generated in simulation. See [prepaid wallet staging](../../docs/runbooks/prepaid-wallet-staging.md) for configuration and confirmation commands.

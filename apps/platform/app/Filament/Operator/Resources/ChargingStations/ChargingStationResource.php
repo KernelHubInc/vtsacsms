@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Modules\Assets\Application\AccessibleStationsQuery;
 use App\Modules\Assets\Domain\AssetLifecycleStatus;
 use App\Modules\Assets\Domain\Models\ChargingStation;
+use App\Modules\Assets\Domain\Models\OcppVersion;
 use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Tenancy\Application\CurrentTenant;
@@ -28,6 +29,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
 use UnitEnum;
 
@@ -60,8 +62,20 @@ final class ChargingStationResource extends Resource
             TextInput::make('charge_point_identity')
                 ->required()
                 ->maxLength(120)
+                ->regex('/\A[A-Za-z0-9._-]+\z/')
                 ->unique(ignoreRecord: true)
                 ->disabledOn('edit'),
+            Select::make('ocpp_version_id')->label('OCPP version')
+                ->options(fn (): array => OcppVersion::query()->whereIn('code', ['1.6J', '2.0.1'])->pluck('code', 'id')->all())
+                ->default(fn () => OcppVersion::query()->where('code', '1.6J')->value('id'))
+                ->required(fn (string $operation): bool => $operation === 'create'),
+            TextInput::make('ocpp_password')->label('OCPP connection password')
+                ->password()->revealable()->autocomplete('new-password')
+                ->default(fn (): string => Str::random(32))
+                ->minLength(16)->maxLength(72)->regex('/\A[\x21-\x7E]+\z/')
+                ->required(fn (string $operation): bool => $operation === 'create')
+                ->dehydrated(fn (?string $state): bool => filled($state))
+                ->helperText('Copy this password into the charger. On edit, leave blank to keep the current password. Active stations become eligible when saved; use the charge-point ID as the username.'),
             TextInput::make('serial_number')
                 ->required()
                 ->maxLength(160)
@@ -79,12 +93,19 @@ final class ChargingStationResource extends Resource
                 ->unique(ignoreRecord: true)
                 ->disabledOn('edit'),
             Select::make('lifecycle_status')->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()]))->required(),
-            Select::make('is_public')->options([0 => 'Private', 1 => 'Public'])->required(),
+            Select::make('is_public')->boolean(trueLabel: 'Public', falseLabel: 'Private')->required(),
         ])->columns(2);
     }
 
     public static function table(Table $table): Table
     {
+        $table->modifyQueryUsing(fn (Builder $query): Builder => $query
+            ->leftJoin('charging_station_connections as connection', function ($join): void {
+                $join->on('connection.charging_station_id', '=', 'charging_stations.id')
+                    ->on('connection.tenant_id', '=', 'charging_stations.tenant_id');
+            })
+            ->select('charging_stations.*', 'connection.connected as ocpp_connected', 'connection.last_seen_at as ocpp_last_seen_at'));
+
         return $table->poll('5s')->columns([
             TextColumn::make('name')->searchable()->sortable(),
             TextColumn::make('site.name')->label('Site')->sortable(),
@@ -138,12 +159,7 @@ final class ChargingStationResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $query = parent::getEloquentQuery()
-            ->leftJoin('charging_station_connections as connection', function ($join): void {
-                $join->on('connection.charging_station_id', '=', 'charging_stations.id')
-                    ->on('connection.tenant_id', '=', 'charging_stations.tenant_id');
-            })
-            ->select('charging_stations.*', 'connection.connected as ocpp_connected', 'connection.last_seen_at as ocpp_last_seen_at');
+        $query = parent::getEloquentQuery();
 
         return $user instanceof User
             ? $query->whereIn('charging_stations.id', app(AccessibleStationsQuery::class)->for($user)->select('charging_stations.id'))

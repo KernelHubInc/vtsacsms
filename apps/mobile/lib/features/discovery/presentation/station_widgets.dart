@@ -117,10 +117,22 @@ class StationCard extends StatelessWidget {
                     icon: station.openNow
                         ? Icons.schedule
                         : Icons.schedule_outlined,
-                    label: station.openNow ? 'Open now' : 'Closed now',
+                    label: !station.hoursKnown
+                        ? 'Hours not provided'
+                        : station.openNow
+                        ? 'Open now'
+                        : 'Closed now',
                   ),
                 ],
               ),
+              const SizedBox(height: VtsaSpacing.xs),
+              Text(
+                '${station.connectors.where((item) => item.availability == "available").length} of ${station.connectors.length} connectors reported available',
+              ),
+              if (station.distanceM != null)
+                Text(
+                  '${(station.distanceM! / 1000).toStringAsFixed(1)} km away · straight-line distance',
+                ),
               if (station.statusObservedAt != null) ...[
                 const SizedBox(height: VtsaSpacing.sm),
                 Text(
@@ -150,7 +162,9 @@ class ConnectorCompatibilityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compatible = vehicle?.supports(connector.standard);
+    final compatible = vehicle == null || vehicle!.connectorStandards.isEmpty
+        ? null
+        : vehicle!.supports(connector.standard);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(

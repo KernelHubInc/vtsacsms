@@ -21,6 +21,8 @@
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Power Solutions uses the camera to scan charger QR codes and, with your consent, capture identity documents and a selfie for verification.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to unlock your Power Solutions account when you enable quick unlock.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Power Solutions can access a selected photo only when you choose it for identity verification.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

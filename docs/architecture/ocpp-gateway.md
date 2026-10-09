@@ -22,6 +22,8 @@ Redis Streams is the approved phase-six event transport, not canonical business 
 
 ## Connection flow
 
+Dynamic enrollment (ADR 0023) replaces the injected registry when `OCPP_CORE_AUTH_URL` is configured. Each new handshake authenticates over HTTPS against the platform's versioned machine endpoint, deriving the tenant and station from current Assets records and Identity-owned credentials. Admin creation/credential rotation needs no gateway restart. Core rejection or outage fails closed, with no static fallback. Active sockets retain their existing binding until disconnected. Static certificate/Basic enrollment below remains available only when dynamic mode is unset.
+
 1. Negotiate exactly `ocpp2.0.1` or `ocpp1.6`; otherwise close with protocol error.
 2. Require TLS outside the explicit local-development mode.
 3. Validate the path identity syntax and bind it to the injected Assets registry projection.
@@ -135,6 +137,23 @@ Normal display latency is up to approximately ten seconds plus event processing/
 latency. This is bounded polling, not a browser push subscription or a hard real-time guarantee.
 
 ### Rollout
+
+Admin connection-status fields are added only to the station list query. Edit-page
+record binding uses the ordinary tenant-scoped asset query, so the connection
+projection's `id` cannot make the station lookup ambiguous or enter edit-form data.
+
+The staging database may be reached through its private network address rather than
+the local Compose `postgres` service. Back up the database identified by the running
+platform's `DB_HOST` and `DB_DATABASE`; backing up an unused local database is not
+sufficient. Confirm the migration is marked `Ran` before replacing the web services.
+The dashboard requires both `charging_station_connections` and the new connector
+status columns; deploying code without the migration causes an HTTP 500.
+
+On Docker's containerd image store, a container image ID may not be directly
+taggable. The staging helper resolves its original image reference and checks a
+stopped, network-disabled probe against the running container's image or manifest
+digest before sharing the image with consumers. A changed tag is rejected. The
+probe is removed and is never started.
 
 1. Install the committed Composer lockfile (Laravel 13.34.0, CommonMark 2.10.3,
    Flysystem 3.36.0 include fixes for four advisories found during this change).

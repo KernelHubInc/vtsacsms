@@ -7,11 +7,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
+import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 import 'package:vtsa_mobile/features/kyc/application/kyc_controller.dart';
 import 'package:vtsa_mobile/features/kyc/data/capture_cleanup.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_verification.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/countries.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/live_capture_screen.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/photo_capture_screen.dart';
 
@@ -21,11 +24,13 @@ class KycScreen extends StatefulWidget {
   const KycScreen({
     required this.repository,
     this.name = '',
+    this.profile,
     this.picker,
     super.key,
   });
   final KycRepository? repository;
   final String name;
+  final UserProfile? profile;
   final ImagePicker? picker;
 
   @override
@@ -36,6 +41,9 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
   KycController? controller;
   late final ImagePicker picker;
   final name = TextEditingController();
+  final firstName = TextEditingController();
+  final middleName = TextEditingController();
+  final lastName = TextEditingController();
   final birth = TextEditingController();
   final country = TextEditingController();
   final nationality = TextEditingController();
@@ -55,6 +63,11 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
     super.initState();
     picker = widget.picker ?? ImagePicker();
     name.text = widget.name;
+    firstName.text = widget.profile?.firstName ?? '';
+    middleName.text = widget.profile?.middleName ?? '';
+    lastName.text = widget.profile?.lastName ?? '';
+    birth.text = widget.profile?.birthDate ?? '';
+    country.text = 'PH';
     WidgetsBinding.instance.addObserver(this);
     if (widget.repository case final repository?) {
       controller = KycController(repository)..addListener(changed);
@@ -120,6 +133,9 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
     preview?.fillRange(0, preview!.length, 0);
     for (final field in [
       name,
+      firstName,
+      middleName,
+      lastName,
       birth,
       country,
       nationality,
@@ -451,44 +467,74 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
     child: Column(
       children: [
         const Text(
-          'Use the details printed on the document you will photograph.',
+          'Use the details printed on your ID. We compare them with your photos after submission.',
         ),
         const SizedBox(height: 16),
         VtsaTextField(
-          label: 'Full legal name',
-          controller: name,
+          label: 'First name',
+          controller: firstName,
           required: true,
         ),
         const SizedBox(height: 16),
-        VtsaTextField(
+        VtsaTextField(label: 'Middle name (optional)', controller: middleName),
+        const SizedBox(height: 16),
+        VtsaTextField(label: 'Last name', controller: lastName, required: true),
+        const SizedBox(height: 16),
+        DriverDateField(
           label: 'Date of birth',
-          controller: birth,
-          hint: 'YYYY-MM-DD',
-          required: true,
+          value: DateTime.tryParse(birth.text),
+          onChanged: (date) => setState(() => birth.text = dateOnly(date)),
         ),
         const SizedBox(height: 16),
-        VtsaTextField(
-          label: 'Issuing country',
-          controller: country,
-          hint: 'Two-letter code, for example PH',
-          required: true,
+        DropdownButtonFormField<String>(
+          initialValue: country.text.isEmpty ? null : country.text,
+          decoration: const InputDecoration(labelText: 'Issuing country'),
+          items: const [
+            DropdownMenuItem(value: 'PH', child: Text('Philippines')),
+          ],
+          onChanged: (value) => setState(() => country.text = value ?? 'PH'),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'This check currently supports Philippine-issued documents.',
+          ),
         ),
         const SizedBox(height: 16),
-        VtsaTextField(
-          label: 'Nationality',
-          controller: nationality,
-          hint: 'Two-letter code, required for a passport',
+        DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: nationality.text.isEmpty ? null : nationality.text,
+          decoration: const InputDecoration(
+            labelText: 'Nationality (required for passport)',
+          ),
+          items: kycCountries.entries
+              .map(
+                (entry) => DropdownMenuItem(
+                  value: entry.key,
+                  child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          onChanged: (value) => setState(() => nationality.text = value ?? ''),
         ),
         const SizedBox(height: 24),
         VtsaButton(
           label: 'Choose identity document',
           onPressed: () {
-            if (name.text.trim().length < 2 ||
+            name.text = [
+              firstName.text.trim(),
+              middleName.text.trim(),
+              lastName.text.trim(),
+            ].where((part) => part.isNotEmpty).join(' ');
+            if (firstName.text.trim().isEmpty ||
+                lastName.text.trim().isEmpty ||
+                name.text.length > 180 ||
                 DateTime.tryParse(birth.text) == null ||
-                country.text.trim().length != 2) {
+                !isAdult(DateTime.parse(birth.text), DateTime.now().toUtc()) ||
+                country.text != 'PH') {
               setState(
                 () => captureError =
-                    'Enter your name, birth date (YYYY-MM-DD), and two-letter country code.',
+                    'Enter your legal first and last names, select your birth date (18 or older), and issuing country.',
               );
               return;
             }
@@ -536,11 +582,12 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 16),
         if (selectedDocument['expiration_date'] == true)
-          VtsaTextField(
+          DriverDateField(
             label: 'Expiration date',
-            controller: expiration,
-            hint: 'YYYY-MM-DD',
-            required: true,
+            birthDate: false,
+            value: DateTime.tryParse(expiration.text),
+            onChanged: (date) =>
+                setState(() => expiration.text = dateOnly(date)),
           ),
         const SizedBox(height: 24),
         VtsaButton(
@@ -549,6 +596,18 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
           onPressed: document == null
               ? null
               : () async {
+                  if ((selectedDocument['document_number'] == true &&
+                          number.text.trim().isEmpty) ||
+                      (selectedDocument['expiration_date'] == true &&
+                          DateTime.tryParse(expiration.text) == null) ||
+                      (selectedDocument['nationality'] == true &&
+                          nationality.text.isEmpty)) {
+                    setState(
+                      () => captureError =
+                          'Enter the document number, expiration date and nationality required by this document.',
+                    );
+                    return;
+                  }
                   final success = await kyc.start(document!, {
                     'full_name': name.text.trim(),
                     'birth_date': birth.text.trim(),
@@ -563,6 +622,9 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
                   if (success && mounted) {
                     for (final field in [
                       name,
+                      firstName,
+                      middleName,
+                      lastName,
                       birth,
                       country,
                       nationality,

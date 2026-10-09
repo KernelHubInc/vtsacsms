@@ -33,6 +33,8 @@ final class PublicStationSearchRequest extends FormRequest
             'south' => ['nullable', 'numeric', 'between:-90,90', 'required_with:west,east,north'],
             'east' => ['nullable', 'numeric', 'between:-180,180', 'required_with:west,south,north', 'gt:west'],
             'north' => ['nullable', 'numeric', 'between:-90,90', 'required_with:west,south,east', 'gt:south'],
+            'connectors' => ['sometimes', 'array', 'max:5'],
+            'connectors.*' => ['string', 'max:40'],
             'connector' => ['nullable', 'string', 'max:40'],
             'current' => ['nullable', 'in:AC,DC'],
             'query' => ['nullable', 'string', 'max:100'],
@@ -67,6 +69,9 @@ final class PublicStationSearchRequest extends FormRequest
             if (isset($values[$filter]) && $values[$filter] !== '') {
                 $filters[$filter] = $values[$filter];
             }
+        }
+        if (isset($values['connectors'])) {
+            $filters['connectors'] = $values['connectors'];
         }
         if (isset($values['min_power_w'])) {
             $filters['min_power_w'] = (int) $values['min_power_w'];

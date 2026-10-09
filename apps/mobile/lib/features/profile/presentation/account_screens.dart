@@ -71,6 +71,13 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: VtsaSpacing.md),
+              if (dependencies.auth.quickUnlock?.device.supported == true)
+                _AccountTile(
+                  icon: Icons.fingerprint,
+                  title: 'PIN & fingerprint',
+                  subtitle: 'Set up quick unlock on this phone',
+                  onTap: () => context.push('/account/security'),
+                ),
               _AccountTile(
                 icon: Icons.verified_user_outlined,
                 title: 'Identity verification',

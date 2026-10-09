@@ -114,6 +114,8 @@ Target values are deliberately deferred until expected scale, markets, and SLAs 
 - notification delivery rate, support response/resolution time, and customer satisfaction;
 - tenant-isolation incidents, privileged-access reviews, and audit completeness.
 
+MOB-AUTH-002: Android/iOS drivers may opt into a separate six-digit app PIN and optional OS-enrolled biometrics after password sign-in and email verification. Unlock is device-local, locks on restart/background, enforces a persistent five-attempt PIN limit and cannot bypass server session expiry, revocation, tenant scope or verification. Password recovery remains available. See [mobile user flows](../design/mobile-user-flows.md) and [ADR-0020](../architecture/decisions/0020-mobile-pin-and-biometric-unlock.md).
+
 ## 8. Canonical Data Conventions
 
 | Concept | Canonical representation |
@@ -263,3 +265,15 @@ The layout is a proposal, not an instruction to scaffold applications during Pha
 - [x] Root engineering standards cover coding, testing, security, documentation, and migrations.
 - [ ] Product, security, operations, finance, and engineering stakeholders approve the baseline.
 - [ ] Open implementation gates receive owners and target dates before Phase 1 starts.
+
+## Mobile feature review acceptance (FR-01–FR-11)
+
+The 2026-10-06 feature review is tracked in [mobile staging acceptance](../runbooks/mobile-feature-review-testing.md). The product owner confirmed minimum signup age 18 and a Plate pending option. Wallet payments, pre-submit OCR autofill and booking/queue workflows are explicitly deferred; no production AUB transaction is part of this release.
+
+### Prepaid wallet increment (2026-10-08)
+
+REQ-WALLET-001 through REQ-WALLET-005 in ADR-0022 specify PHP prepaid balances, QR Ph top-ups, account/tenant isolation, idempotent confirmation and default-off live collection. Initial acceptance is simulated staging only. Mobile includes history, expiry and payment status. Physical charging consumption, cards, hosted wallet checkout, cash-out, refund operations and live reconciliation approval remain separately gated.
+
+## Dynamic OCPP enrollment (FR-OCPP-ENROLL-01)
+
+Creating a station in admin provisions its per-device OCPP credential in the same transaction. Active stations with a supported OCPP version and active tenant can authenticate immediately through the shared `/ocpp/{device-id}` endpoint once dynamic mode is enabled. The operator copies the generated or chosen password into the device; identity alone grants no access. Existing stations can be provisioned by setting the password in Edit. Draft CSV imports require commissioning. Rotation and lifecycle restrictions apply to new connections. See ADR 0023 for trust boundaries and rollout.

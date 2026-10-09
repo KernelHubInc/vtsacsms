@@ -102,3 +102,5 @@ Registry entries contain ULID `tenant_id` and `charger_id`, `enabled`, and eithe
 ```
 
 See [the external simulator testing runbook](../../docs/local/OCPP-SIMULATOR-TESTING.md), [SUPPORTED_MESSAGES.md](SUPPORTED_MESSAGES.md), [the gateway architecture](../../docs/architecture/ocpp-gateway.md), and [the certificate rotation runbook](../../docs/runbooks/ocpp-certificate-rotation.md).
+
+Dynamic enrollment: set `OCPP_CORE_AUTH_URL` to the platform HTTPS `/api/internal/v1/ocpp/authenticate` endpoint after following ADR 0023 and the staging activation runbook. In this mode each new Basic-authenticated connection is checked against current platform station and tenant state; no gateway restart is needed per station. The service token must match the core's `OCPP_GATEWAY_INTERNAL_TOKEN`. No static fallback is used during an authentication outage. Existing sockets are not reauthenticated by this change.

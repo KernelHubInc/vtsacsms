@@ -177,7 +177,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     label: 'Final cost',
                     value: formatMoney(session.finalCost),
                   ),
-                  _Fact(label: 'Payment', value: session.paymentState.name),
+                  _Fact(
+                    label: 'Payment',
+                    value: session.paymentState.name.replaceAllMapped(
+                      RegExp(r'[A-Z]'),
+                      (match) => ' ${match[0]!.toLowerCase()}',
+                    ),
+                  ),
                 ],
               ),
             ),

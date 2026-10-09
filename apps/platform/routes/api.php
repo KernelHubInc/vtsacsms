@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use App\Foundation\Features\Feature;
 use App\Http\Controllers\Api\V1\AppConfigurationController;
+use App\Http\Controllers\Api\V1\AubQrWebhookController;
+use App\Http\Controllers\Api\V1\ChargerAuthenticationController;
 use App\Http\Controllers\Api\V1\ChargingSessionController;
 use App\Http\Controllers\Api\V1\ChargingStationController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\DriverVehicleController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\IdentityContextController;
@@ -39,6 +42,7 @@ use App\Http\Controllers\Api\V1\StockTransferController;
 use App\Http\Controllers\Api\V1\TariffController;
 use App\Http\Controllers\Api\V1\TariffVersionController;
 use App\Http\Controllers\Api\V1\VendorInvoiceController;
+use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WorkOrderPartsController;
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\EnsureKycEnabled;
@@ -50,6 +54,9 @@ use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\RequireSanctumPermission;
 use App\Modules\Organizations\Domain\PermissionKey;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/internal/v1/ocpp/authenticate', ChargerAuthenticationController::class)
+    ->middleware('throttle:300,1')->name('api.internal.v1.ocpp.authenticate');
 
 Route::get('/v1/public/stations', PublicStationSearchController::class)
     ->middleware('throttle:60,1')->name('api.v1.public.stations.index');
@@ -84,8 +91,11 @@ Route::post('/v1/webhooks/payments/{tenant}/{configuration}', PaymentWebhookCont
         'throttle:payment.webhooks',
     ])->name('api.v1.webhooks.payments');
 
+Route::post('/v2/auth/register', RegistrationController::class)
+    ->middleware('throttle:auth.login')->name('api.v2.auth.register');
+
 Route::prefix('v1/auth')->group(function (): void {
-    Route::post('/register', RegistrationController::class)
+    Route::post('/register', [RegistrationController::class, 'legacy'])
         ->middleware('throttle:auth.login')->name('api.v1.auth.register');
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:auth.login')->name('api.v1.auth.login');
@@ -108,6 +118,9 @@ Route::prefix('v1')->middleware([
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
 
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
+        Route::get('/vehicles', [DriverVehicleController::class, 'index'])->name('api.v1.vehicles.index');
+        Route::put('/vehicles/{vehicle}', [DriverVehicleController::class, 'store'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.store');
+        Route::delete('/vehicles/{vehicle}', [DriverVehicleController::class, 'destroy'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.destroy');
         Route::get('/me', SanctumIdentityController::class)->name('api.v1.me');
         Route::post('/auth/mobile/verification', [MobileVerificationController::class, 'start'])
             ->middleware('throttle:auth.verify')->name('api.v1.auth.mobile.start');
@@ -431,4 +444,14 @@ Route::prefix('v1')->middleware([
     Route::get('/identity/context', IdentityContextController::class)
         ->middleware(RequirePermission::class.':'.PermissionKey::IdentityContextView->value)
         ->name('api.v1.identity.context');
+});
+
+Route::post('/v1/webhooks/aub/qrph', AubQrWebhookController::class)
+    ->middleware('throttle:120,1')->name('api.v1.webhooks.aub.qrph');
+Route::prefix('v1/wallet')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class, 'throttle:30,1'])->group(function (): void {
+    $controller = WalletController::class;
+    Route::get('/', [$controller, 'index']);
+    Route::get('/topups', [$controller, 'topups']);
+    Route::post('/topups', [$controller, 'create']);
+    Route::get('/topups/{topup}', [$controller, 'show'])->whereUlid('topup');
 });

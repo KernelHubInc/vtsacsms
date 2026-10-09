@@ -6,8 +6,60 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
+import 'support/quick_unlock_fakes.dart';
 
 void main() {
+  test(
+    'locked background requests never reach the server or expire the session',
+    () async {
+      final store = QuickUnlockStore(
+        tokens: MemoryTokenStore(),
+        settings: MemoryUnlockSettings(),
+        device: FakeDeviceAuthenticator(),
+      );
+      final adapter = _ScriptedAdapter();
+      var expired = false;
+      final client = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test'),
+        tokenStore: store,
+        dio: Dio()..httpClientAdapter = adapter,
+      )..onSessionExpired = () => expired = true;
+      await expectLater(
+        client.dio.get<void>('/api/v1/me'),
+        throwsA(
+          isA<DioException>().having(
+            (error) => error.type,
+            'type',
+            DioExceptionType.cancel,
+          ),
+        ),
+      );
+      expect(adapter.requests, isEmpty);
+      expect(expired, isFalse);
+    },
+  );
+  test('retries remove credentials retained before a local lock', () async {
+    final tokens = MemoryTokenStore()
+      ..value = TokenBundle(
+        accessToken: 'saved-token',
+        expiresAt: DateTime.utc(2030),
+        tenantId: 'tenant-a',
+        deviceId: 'device-a',
+      );
+    final adapter = _ScriptedAdapter()
+      ..responses.addAll([const _Reply(503, '{}'), const _Reply(200, '{}')]);
+    final client = ApiClient(
+      baseUrl: Uri.parse('https://api.example.test'),
+      tokenStore: tokens,
+      dio: Dio()..httpClientAdapter = adapter,
+      retryDelay: (_) => tokens.clear(),
+    );
+    await client.dio.get<void>('/api/v1/me');
+    expect(adapter.requests.last.headers.containsKey('Authorization'), isFalse);
+    expect(adapter.requests.last.headers.containsKey('X-Tenant-ID'), isFalse);
+  });
+
   test(
     'expired session without refresh token clears storage and notifies auth',
     () async {

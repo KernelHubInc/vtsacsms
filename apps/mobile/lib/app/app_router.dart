@@ -4,6 +4,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/consumer_shell.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_screens.dart';
+import 'package:vtsa_mobile/features/auth/presentation/quick_unlock_screens.dart';
 import 'package:vtsa_mobile/features/charging/presentation/activity_screens.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_start_screen.dart';
 import 'package:vtsa_mobile/features/charging/presentation/live_charging_screen.dart';
@@ -13,6 +14,7 @@ import 'package:vtsa_mobile/features/kyc/presentation/kyc_screen.dart';
 import 'package:vtsa_mobile/features/onboarding/presentation/onboarding_screens.dart';
 import 'package:vtsa_mobile/features/profile/presentation/account_screens.dart';
 import 'package:vtsa_mobile/features/vehicles/presentation/vehicle_screens.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_screen.dart';
 
 GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
   initialLocation: '/splash',
@@ -27,6 +29,9 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
       return state.matchedLocation == '/splash' ? null : '/splash';
     }
     final location = state.matchedLocation;
+    if (dependencies.auth.status == AuthStatus.locked) {
+      return location == '/unlock' ? null : '/unlock';
+    }
     const authRoutes = {
       '/login',
       '/register',
@@ -47,10 +52,21 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
         state.matchedLocation == '/onboarding') {
       return '/explore';
     }
-    if (authRoutes.contains(location)) return '/account';
+    if (authRoutes.contains(location) || location == '/unlock') {
+      return '/account';
+    }
     return null;
   },
   routes: [
+    GoRoute(
+      path: '/unlock',
+      builder: (context, state) => UnlockScreen(dependencies: dependencies),
+    ),
+    GoRoute(
+      path: '/account/security',
+      builder: (context, state) =>
+          QuickUnlockSettingsScreen(dependencies: dependencies),
+    ),
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
       path: '/onboarding',
@@ -99,12 +115,10 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
         ),
         GoRoute(
           path: '/wallet',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: FoundationDestinationScreen(
-              title: 'Wallet',
-              icon: Icons.account_balance_wallet_outlined,
-              description:
-                  'Payment methods and billing documents remain outside this mobile phase.',
+          pageBuilder: (context, state) => NoTransitionPage(
+            child: WalletScreen(
+              repository: dependencies.walletRepository,
+              allowRealPayments: dependencies.featureFlags.realPayments,
             ),
           ),
         ),
@@ -169,6 +183,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
       builder: (context, state) => KycScreen(
         repository: dependencies.kycRepository,
         name: dependencies.auth.user?.name ?? '',
+        profile: dependencies.auth.user,
       ),
     ),
     GoRoute(

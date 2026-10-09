@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
 import json
 import re
+import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,15 +39,39 @@ class ChargerIdentityValidator:
         registry_json: str,
         allow_development: bool,
         trusted_certificate_fingerprint_header: str | None = None,
+        core_auth_url: str | None = None,
+        core_auth_token: str | None = None,
     ) -> None:
         self._registry = self._parse_registry(registry_json)
         self._allow_development = allow_development
         self._trusted_certificate_fingerprint_header = trusted_certificate_fingerprint_header
         self._password_hasher = PasswordHasher()
+        self._core_auth_url = core_auth_url
+        self._core_auth_token = core_auth_token
+        self._core_auth_slots = asyncio.Semaphore(16)
 
-    async def validate(self, websocket: WebSocket, charge_point_identity: str) -> ChargerIdentity:
+    async def validate(
+        self, websocket: WebSocket, charge_point_identity: str, protocol: str = "ocpp1.6"
+    ) -> ChargerIdentity:
         if not CHARGE_POINT_ID_PATTERN.fullmatch(charge_point_identity):
             raise ChargerIdentityError("Invalid charger identity format")
+
+        if self._core_auth_url:
+            credentials = self._basic_credentials(websocket)
+            if (
+                credentials is None
+                or credentials[0] != charge_point_identity
+                or len(credentials[1]) > 1024
+            ):
+                raise ChargerIdentityError("Charger authentication failed")
+            try:
+                # Never fall back to stale static credentials when core rejects or is unavailable.
+                async with asyncio.timeout(4), self._core_auth_slots:
+                    return await asyncio.to_thread(
+                        self._authenticate_core, charge_point_identity, credentials[1], protocol
+                    )
+            except Exception:
+                raise ChargerIdentityError("Charger authentication failed") from None
 
         registration = self._registry.get(charge_point_identity)
         if registration is None:
@@ -80,6 +106,40 @@ class ChargerIdentityValidator:
                 )
 
         raise ChargerIdentityError("Charger authentication failed")
+
+    def _authenticate_core(self, identity: str, password: str, protocol: str) -> ChargerIdentity:
+        if not self._core_auth_url or not self._core_auth_token:
+            raise ChargerIdentityError("Core authentication is not configured")
+        request = urllib.request.Request(
+            self._core_auth_url,
+            data=json.dumps(
+                {"identity": identity, "password": password, "protocol": protocol}
+            ).encode(),
+            headers={
+                "Authorization": f"Bearer {self._core_auth_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        # No redirects or environment proxies: never forward device/service credentials elsewhere.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        with opener.open(request, timeout=3) as response:
+            if response.status != 200:
+                raise ChargerIdentityError("Core authentication failed")
+            result = json.loads(response.read(8193))
+        binding = result.get("data") if isinstance(result, dict) else None
+        if not isinstance(binding, dict) or binding.get("charge_point_identity") != identity:
+            raise ChargerIdentityError("Invalid core binding")
+        tenant, charger = binding.get("tenant_id"), binding.get("charger_id")
+        if (
+            not isinstance(tenant, str)
+            or not isinstance(charger, str)
+            or not ULID_PATTERN.fullmatch(tenant)
+            or not ULID_PATTERN.fullmatch(charger)
+        ):
+            raise ChargerIdentityError("Invalid core binding")
+        return ChargerIdentity(identity, tenant, charger, "basic")
 
     @staticmethod
     def _parse_registry(raw: str) -> dict[str, ChargerRegistration]:
@@ -123,7 +183,7 @@ class ChargerIdentityValidator:
     @staticmethod
     def _basic_credentials(websocket: WebSocket) -> tuple[str, str] | None:
         authorization = websocket.headers.get("authorization", "")
-        if not authorization.startswith("Basic "):
+        if not authorization.startswith("Basic ") or len(authorization) > 4096:
             return None
         try:
             decoded = base64.b64decode(authorization[6:], validate=True).decode("utf-8")
@@ -148,3 +208,10 @@ class ChargerIdentityValidator:
         if not re.fullmatch(r"[0-9A-Fa-f]{64}", fingerprint):
             raise ChargerIdentityError("Client certificate fingerprint header is invalid")
         return fingerprint.casefold()
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> None:
+        return None

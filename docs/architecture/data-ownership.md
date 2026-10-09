@@ -35,7 +35,7 @@
 | **Tenancy** | Tenant lifecycle, entitlements, tenant policy defaults, locale/default settings | Identity actor for audit, commercial subscription reference if later adopted | Organization hierarchy, users' credentials, tenant business records |
 | **Organizations** | Organization hierarchy, memberships, role assignments, teams, delegated scopes | Identity subject, tenant lifecycle/entitlements | Login credentials, locations, business transaction data |
 | **Locations** | Site/address, geometry, timezone, access/hours, amenities, publication state | Owning organization, asset/public availability projections | Charger identity/configuration, live connector state, tariffs |
-| **Assets** | Charger/EVSE/connector/component identity and hierarchy, capabilities, serial/model, commissioning, location/custody history, lifecycle/operational state | Location, organization, Inventory serial handoff, Maintenance recommendations | Live connections, sessions, work orders, stock balances |
+| **Assets** | Tenant/subject-scoped driver garages and vehicle compatibility, charger/EVSE/connector/component identity and hierarchy, capabilities, serial/model, commissioning, location/custody history, lifecycle/operational state | Location, organization, Inventory serial handoff, Maintenance recommendations | Live connections, sessions, work orders, stock balances |
 | **Charging** | Connection/status projection, charging authorization, protocol-normalized readings, connector reservations, commands, sessions, anomaly review, immutable CDR evidence | Identity/organization access, Assets capabilities/state, tariff eligibility/version/snapshot, payment authorization outcome | Asset lifecycle, tariff definitions, provider payments, invoices |
 | **Tariffs** | Tariff, immutable published versions/components/discounts, applicability, schedules, effective periods, deterministic rating semantics and breakdown | Location/asset/org applicability | Sessions, CDRs, invoices, payments, tax registration facts |
 | **Payments** | Provider/customer/token references, payment intent/attempt, authorization/capture/refund/dispute state, webhook receipt evidence | Payer identity, billable reference, currency/amount request | Raw PAN/CVV, invoice numbering, payout allocation |
@@ -74,6 +74,8 @@
 - Maintenance reserves and consumes parts through Inventory contracts; typed notes are not stock movements.
 
 ### Identity, Organizations, and Tenancy
+
+- Identity owns `identity_charger_credentials`; Assets owns station identity/version/lifecycle. `GatewayStationQuery`, `GatewayTenantQuery` and `ChargerCredentials` compose the versioned OCPP authentication query without cross-context writes (ADR 0023). Admin provisioning is an explicit transaction; secrets are excluded from events and asset audit snapshots.
 
 - Identity proves who/what authenticated.
 - Identity also owns tenant-scoped KYC lifecycle, consent, review and eligibility through `KycService` / `KycEligibility`. The isolated Python processor owns encrypted evidence and processing/outbox records, never core status tables (ADR 0017). Charging and Payments use the eligibility contract; the future wallet workflow must do the same.
@@ -173,3 +175,7 @@ ADR 0013 makes these directions durable. Cross-context calls stay narrow and loc
 ## KYC review policy
 
 Identity owns tenant-scoped `kyc_settings` and the immutable-per-attempt `kyc_verifications.review_mode` and `assurance_profile` snapshots. The processor owns evidence, encrypted expiring live-challenge state and computed checks; it cannot change administrative review policy or core identity eligibility. Only the reference selfie is retained; other camera frames and face features are transient processing data, not a biometric-template database. See [ADR 0019](decisions/0019-optical-kyc-and-live-capture.md).
+
+### Prepaid balances (ADR-0022)
+
+Payments owns `qr_topups`, provider confirmation and QR Ph protocols. Billing owns `prepaid_accounts`, immutable `prepaid_entries`, reservations and financial postings through `PrepaidWallet`. Simulated funds never post to accounting exports. Identity retains KYC eligibility. No cross-context model writes.

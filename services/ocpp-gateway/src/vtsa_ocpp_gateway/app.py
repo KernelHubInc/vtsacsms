@@ -160,7 +160,9 @@ def create_app(settings: Settings | None = None, runtime: GatewayRuntime | None 
             await websocket.close(code=1008, reason="TLS is required")
             return
         try:
-            identity = await gateway.identity_validator.validate(websocket, charge_point_identity)
+            identity = await gateway.identity_validator.validate(
+                websocket, charge_point_identity, selected
+            )
         except ChargerIdentityError:
             await websocket.close(code=1008, reason="Charger authentication failed")
             return

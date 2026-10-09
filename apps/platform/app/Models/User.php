@@ -40,6 +40,10 @@ use Laravel\Sanctum\HasApiTokens;
 #[Fillable([
     'public_id',
     'name',
+    'first_name',
+    'middle_name',
+    'last_name',
+    'birth_date',
     'email',
     'password',
     'security_version',
@@ -51,7 +55,7 @@ use Laravel\Sanctum\HasApiTokens;
     'mfa_required',
     'mfa_enrolled_at',
 ])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'birth_date'])]
 class User extends Authenticatable implements FilamentUser, MustVerifyEmailContract
 {
     /** @use HasFactory<UserFactory> */
@@ -75,6 +79,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmailContr
             'email_verified_at' => 'datetime',
             'activated_at' => 'immutable_datetime',
             'mobile_number' => 'encrypted',
+            'birth_date' => 'encrypted',
             'mobile_verified_at' => 'immutable_datetime',
             'mfa_required' => 'boolean',
             'mfa_enrolled_at' => 'immutable_datetime',

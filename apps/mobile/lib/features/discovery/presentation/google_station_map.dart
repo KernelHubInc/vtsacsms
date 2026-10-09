@@ -199,12 +199,14 @@ class MapUnavailableState extends StatelessWidget {
   final String description;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: VtsaEmptyState(
-      icon: Icons.map_outlined,
-      title: title,
-      description: description,
-      action: VtsaButton(label: 'View as list', onPressed: onShowList),
+  Widget build(BuildContext context) => SingleChildScrollView(
+    child: Center(
+      child: VtsaEmptyState(
+        icon: Icons.map_outlined,
+        title: title,
+        description: description,
+        action: VtsaButton(label: 'View as list', onPressed: onShowList),
+      ),
     ),
   );
 }

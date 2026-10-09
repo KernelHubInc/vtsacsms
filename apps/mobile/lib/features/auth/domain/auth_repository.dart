@@ -10,6 +10,12 @@ abstract interface class AuthRepository {
     required String name,
     required String email,
     required String password,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
   });
   Future<void> requestPasswordReset(String email);
   Future<void> resendEmailVerification();

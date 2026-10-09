@@ -192,6 +192,10 @@ Implemented: stable human subject ULIDs; active tenant and membership checks; te
 
 Not yet implemented: public self-registration, a production MFA challenge/enrollment provider, step-up, SSO, machine identities, platform emergency access, token refresh/rotation, external audit anchoring/SIEM, PostgreSQL RLS, and business-module resource policies. These remain mandatory before the affected production surfaces are released.
 
+### Mobile quick unlock (MOB-AUTH-002)
+
+[ADR-0020](decisions/0020-mobile-pin-and-biometric-unlock.md) defines optional Android/iOS app PIN and biometric gating of existing secure-stored Sanctum credentials. Local proof does not create a server login, extend expiry or satisfy privileged MFA. Persist salted PBKDF2 verifiers and attempt budgets in secure storage; never collect biometric templates or persist raw PINs/passwords. Protected routes and API credentials remain unavailable while locked. Five incorrect PIN attempts clear local setup; server rejection requires password recovery, and offline validation fails closed. This is an application gate, not hardware-bound token encryption or rooted-device protection. Existing server authentication/revocation auditing is unchanged.
+
 ## 17. Phase 12 Procurement and Inventory Controls
 
 - Procurement and inventory permissions are separate (`view`, `operate`, `approve`, `adjust`, and `export` capabilities); policies deny by default and intersect tenant, lifecycle, and warehouse scope.
@@ -211,3 +215,15 @@ Not yet implemented: public self-registration, a production MFA challenge/enroll
 - Technician skill credentials are tenant-scoped and expiry-checked. A technician assignment also requires a current tenant membership.
 - Asset restriction and stock changes cannot bypass their owning contexts. Maintenance contracts validate tenant/site identity before Assets mutation, while Inventory enforces reservations and immutable movement custody.
 - SLA, assignment, safety, verification, RMA, cost, asset action, transition, and audit evidence retain actors/correlation without logging raw OCPP frames, access tokens, private attachments, or payment data.
+
+## Driver onboarding privacy
+
+Birth dates and vehicle plates introduced by [ADR 0021](decisions/0021-driver-onboarding-and-server-garages.md) are encrypted at rest and omitted from audit payloads. Verified self-profile and tenant/subject-scoped garage APIs return no-store responses. Erasure spans Identity profile fields and the Assets garage contract. Public connector availability does not expose driver or session identities.
+
+### Prepaid wallet boundary
+
+See ADR-0022. Wallet reads/mutations require verified Sanctum identity and tenant context; top-ups additionally enforce configured KYC eligibility. AUB SHA256 verifies canonical decoded XML fields from the original bounded body; it is not a raw-body HMAC. Duplicate fields/DTD/entities are rejected, merchant/order/amount/currency are bound, and transaction uniqueness prevents replay credits. Only hashes and necessary provider references are retained. No mobile mark-paid route exists. Live collection defaults off and simulation is isolated from financial exports.
+
+## Dynamic OCPP device authentication
+
+ADR 0023 assigns durable charger password hashes to Identity and eligibility to Assets/Tenancy query contracts. The service-authenticated core endpoint returns bindings, never hashes. Deployed gateway calls use verified HTTPS and refuse redirects; core failure never falls back to the static registry. Admin/API provisioning requires asset-management scope and writes secret-free audits. Do not log request bodies for the authentication endpoint or `ocpp_password` in forms. Existing sockets require explicit disconnection for emergency credential revocation; new handshakes see rotations and lifecycle changes immediately.
