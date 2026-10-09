@@ -227,3 +227,8 @@ See ADR-0022. Wallet reads/mutations require verified Sanctum identity and tenan
 ## Dynamic OCPP device authentication
 
 ADR 0023 assigns durable charger password hashes to Identity and eligibility to Assets/Tenancy query contracts. The service-authenticated core endpoint returns bindings, never hashes. Deployed gateway calls use verified HTTPS and refuse redirects; core failure never falls back to the static registry. Admin/API provisioning requires asset-management scope and writes secret-free audits. Do not log request bodies for the authentication endpoint or `ocpp_password` in forms. Existing sockets require explicit disconnection for emergency credential revocation; new handshakes see rotations and lifecycle changes immediately.
+
+
+### URL-only registered chargers (ADR 0024)
+
+The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).

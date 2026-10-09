@@ -179,3 +179,8 @@ Identity owns tenant-scoped `kyc_settings` and the immutable-per-attempt `kyc_ve
 ### Prepaid balances (ADR-0022)
 
 Payments owns `qr_topups`, provider confirmation and QR Ph protocols. Billing owns `prepaid_accounts`, immutable `prepaid_entries`, reservations and financial postings through `PrepaidWallet`. Simulated funds never post to accounting exports. Identity retains KYC eligibility. No cross-context model writes.
+
+
+### URL-only registered chargers (ADR 0024)
+
+The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).

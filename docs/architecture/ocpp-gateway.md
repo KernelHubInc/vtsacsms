@@ -176,3 +176,8 @@ There is no historical inbox replay/backfill: the next live message initializes 
 The gateway still requires enrollment, TLS and device authentication. Configuring a URL
 alone does not bypass these requirements. No automatic asset creation or remote command
 allowlist change is part of this update.
+
+
+### URL-only registered chargers (ADR 0024)
+
+The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).

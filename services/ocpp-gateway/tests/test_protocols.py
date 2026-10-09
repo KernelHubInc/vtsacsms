@@ -63,6 +63,41 @@ async def test_dynamic_station_connects_and_boots_without_gateway_restart(
             await simulator.close()
 
 
+async def test_url_only_station_connects_and_boots_without_password_or_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    enrolled: set[str] = set()
+
+    def authenticate(
+        self: ChargerIdentityValidator, identity: str, password: str | None, protocol: str
+    ) -> ChargerIdentity:
+        if identity not in enrolled or password is not None or protocol != "ocpp1.6":
+            raise ChargerIdentityError("Rejected")
+        return ChargerIdentity(
+            identity, "01J00000000000000000000001", "01J00000000000000000000002", "registered"
+        )
+
+    monkeypatch.setattr(ChargerIdentityValidator, "_authenticate_core", authenticate)
+    settings = Settings(
+        require_tls=False,
+        raw_message_logging=False,
+        core_registration_url="http://platform:8000/api/internal/v1/ocpp/resolve",
+        internal_api_token="synthetic-service-token",
+    )
+    runtime = GatewayRuntime(settings, store=MemoryGatewayStore())
+    async with _live_gateway(settings, runtime) as endpoint:
+        simulator = ChargerSimulator(endpoint + "/ocpp", "NEW-CP", "ocpp1.6")
+        with pytest.raises(InvalidStatus):
+            await simulator.connect()
+        enrolled.add("NEW-CP")
+        await simulator.connect()
+        try:
+            assert (await simulator.boot())["status"] == "Accepted"
+            assert "currentTime" in await simulator.heartbeat()
+        finally:
+            await simulator.close()
+
+
 async def test_connectivity_scenario_uses_enrollment_and_never_starts_charging(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -100,7 +135,7 @@ async def test_connectivity_scenario_uses_enrollment_and_never_starts_charging(
     assert "gateway.ocpp.heartbeat.received.v1" in event_types
     assert not any("transaction" in str(event_type) for event_type in event_types)
     assert all(event["tenant_id"] == registry["SIM-CONNECTIVITY"]["tenant_id"] for event in events)
-    assert "PASS: authenticated OCPP connectivity" in capsys.readouterr().out
+    assert "PASS: OCPP connectivity" in capsys.readouterr().out
 
 
 class HangingConnection:

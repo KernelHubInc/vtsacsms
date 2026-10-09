@@ -276,4 +276,9 @@ REQ-WALLET-001 through REQ-WALLET-005 in ADR-0022 specify PHP prepaid balances, 
 
 ## Dynamic OCPP enrollment (FR-OCPP-ENROLL-01)
 
-Creating a station in admin provisions its per-device OCPP credential in the same transaction. Active stations with a supported OCPP version and active tenant can authenticate immediately through the shared `/ocpp/{device-id}` endpoint once dynamic mode is enabled. The operator copies the generated or chosen password into the device; identity alone grants no access. Existing stations can be provisioned by setting the password in Edit. Draft CSV imports require commissioning. Rotation and lifecycle restrictions apply to new connections. See ADR 0023 for trust boundaries and rollout.
+This original credential-based requirement is superseded for URL-only deployments by FR-OCPP-ENROLL-02 and ADR 0024. The legacy Basic-auth endpoint and optional station API credential provisioning remain available for compatibility. The current admin form does not request device passwords.
+
+
+### FR-OCPP-ENROLL-02 - URL-only registered chargers
+
+An active station with an active tenant and matching OCPP version can connect to `/ocpp/{charge-point-id}` without a device password or client certificate in explicitly activated URL-only mode. Admin creation and editing require no OCPP password; existing stations need no re-save or credential record. Unknown/inactive IDs fail closed. Gateway-to-core service authentication remains required. This operator-approved mode provides registration checks, not proof of physical device identity (ADR 0024); it does not authorize charging or guarantee online status until communication occurs.

@@ -16,7 +16,6 @@ use App\Modules\Tenancy\Domain\Models\Tenant;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
@@ -44,40 +43,53 @@ final class ChargerEnrollmentTest extends TenantSecurityTestCase
         $this->authenticate('API-CP', 'synthetic-rotated-password')->assertOk();
     }
 
-    public function test_admin_creation_enrolls_without_gateway_registry_and_edit_rotates_without_leaking_secrets(): void
+    public function test_admin_creates_and_edits_registered_stations_without_passwords(): void
     {
         [$tenant, $user, $station] = $this->fixture();
         $this->actingAs($user);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $created = $this->withinTenant($tenant, $user, function () use ($station) {
             Livewire::test(CreateChargingStation::class)->fillForm([
-                'site_id' => $station->site_id, 'name' => 'Dynamic station',
-                'charge_point_identity' => 'DYNAMIC-NEW', 'serial_number' => 'DYNAMIC-SN',
-                'qr_identifier' => 'DYNAMIC-QR', 'lifecycle_status' => 'active', 'is_public' => false,
-                'ocpp_version_id' => $station->ocpp_version_id, 'ocpp_password' => self::PASSWORD,
+                'site_id' => $station->site_id, 'name' => 'URL-only station',
+                'charge_point_identity' => 'URL-ONLY', 'serial_number' => 'URL-SN',
+                'qr_identifier' => 'URL-QR', 'lifecycle_status' => 'active', 'is_public' => false,
+                'ocpp_version_id' => $station->ocpp_version_id,
             ])->call('create')->assertHasNoFormErrors();
 
-            return ChargingStation::query()->where('charge_point_identity', 'DYNAMIC-NEW')->firstOrFail();
+            return ChargingStation::query()->where('charge_point_identity', 'URL-ONLY')->firstOrFail();
         });
-        $this->authenticate('DYNAMIC-NEW')->assertOk()->assertJsonPath('data.charger_id', $created->getKey());
-        $oldHash = DB::table('identity_charger_credentials')->where('charging_station_id', $created->getKey())->value('password_hash');
-        $this->assertTrue(Hash::check(self::PASSWORD, $oldHash));
+        $this->resolve('URL-ONLY')->assertOk()->assertJsonPath('data.charger_id', $created->getKey())
+            ->assertJsonPath('data.tenant_id', $tenant->getKey())->assertJsonPath('data.authentication', 'registered');
+        $this->assertDatabaseCount('identity_charger_credentials', 0);
         $this->withinTenant($tenant, $user, function () use ($created): void {
             Livewire::test(EditChargingStation::class, ['record' => $created->getKey()])
-                ->assertFormSet(['ocpp_password' => null])->fillForm(['name' => 'Renamed'])
-                ->call('save')->assertHasNoFormErrors();
+                ->fillForm(['name' => 'Renamed'])->call('save')->assertHasNoFormErrors();
         });
-        $this->assertSame($oldHash, DB::table('identity_charger_credentials')->where('charging_station_id', $created->getKey())->value('password_hash'));
-        $this->withinTenant($tenant, $user, function () use ($created): void {
-            Livewire::test(EditChargingStation::class, ['record' => $created->getKey()])
-                ->fillForm(['ocpp_password' => 'synthetic-rotated-password'])
-                ->call('save')->assertHasNoFormErrors()->assertFormSet(['ocpp_password' => null]);
-        });
-        $this->authenticate('DYNAMIC-NEW')->assertForbidden();
-        $this->authenticate('DYNAMIC-NEW', 'synthetic-rotated-password')->assertOk();
-        $audit = json_encode(DB::table('audit_events')->get(), JSON_THROW_ON_ERROR);
-        $this->assertStringNotContainsString(self::PASSWORD, $audit);
-        $this->assertStringNotContainsString($oldHash, $audit);
+        $this->resolve('URL-ONLY')->assertOk();
+    }
+
+    public function test_url_only_registration_requires_service_token_active_asset_tenant_and_matching_protocol(): void
+    {
+        [$tenant, $user, $station] = $this->fixture();
+        $this->postJson('/api/internal/v1/ocpp/resolve', ['identity' => $station->charge_point_identity, 'protocol' => 'ocpp1.6'])->assertForbidden();
+        $this->resolve($station->charge_point_identity)->assertOk()->assertJsonPath('data.tenant_id', $tenant->getKey());
+        $this->resolve('UNKNOWN')->assertForbidden();
+        $this->resolve($station->charge_point_identity, 'ocpp2.0.1')->assertForbidden();
+        foreach (['draft', 'retired'] as $status) {
+            $this->withinTenant($tenant, $user, fn () => $station->update(['lifecycle_status' => $status]));
+            $this->resolve($station->charge_point_identity)->assertForbidden();
+        }
+        $this->withinTenant($tenant, $user, fn () => $station->update(['lifecycle_status' => 'active']));
+        $tenant->update(['status' => 'suspended']);
+        $this->resolve($station->charge_point_identity)->assertForbidden();
+    }
+
+    /** @return TestResponse<JsonResponse> */
+    private function resolve(string $identity, string $protocol = 'ocpp1.6'): TestResponse
+    {
+        return $this->withToken('synthetic-gateway-token')->postJson('/api/internal/v1/ocpp/resolve', [
+            'identity' => $identity, 'protocol' => $protocol,
+        ]);
     }
 
     public function test_authentication_enforces_password_protocol_asset_and_tenant_lifecycle(): void

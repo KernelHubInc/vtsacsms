@@ -41,6 +41,7 @@ class ChargerIdentityValidator:
         trusted_certificate_fingerprint_header: str | None = None,
         core_auth_url: str | None = None,
         core_auth_token: str | None = None,
+        core_registration_url: str | None = None,
     ) -> None:
         self._registry = self._parse_registry(registry_json)
         self._allow_development = allow_development
@@ -48,6 +49,7 @@ class ChargerIdentityValidator:
         self._password_hasher = PasswordHasher()
         self._core_auth_url = core_auth_url
         self._core_auth_token = core_auth_token
+        self._core_registration_url = core_registration_url
         self._core_auth_slots = asyncio.Semaphore(16)
 
     async def validate(
@@ -55,6 +57,16 @@ class ChargerIdentityValidator:
     ) -> ChargerIdentity:
         if not CHARGE_POINT_ID_PATTERN.fullmatch(charge_point_identity):
             raise ChargerIdentityError("Invalid charger identity format")
+
+        if self._core_registration_url:
+            try:
+                # URL-only chargers are bound through core; supplied device credentials are unused.
+                async with asyncio.timeout(4), self._core_auth_slots:
+                    return await asyncio.to_thread(
+                        self._authenticate_core, charge_point_identity, None, protocol
+                    )
+            except Exception:
+                raise ChargerIdentityError("Charger registration failed") from None
 
         if self._core_auth_url:
             credentials = self._basic_credentials(websocket)
@@ -107,14 +119,18 @@ class ChargerIdentityValidator:
 
         raise ChargerIdentityError("Charger authentication failed")
 
-    def _authenticate_core(self, identity: str, password: str, protocol: str) -> ChargerIdentity:
-        if not self._core_auth_url or not self._core_auth_token:
+    def _authenticate_core(
+        self, identity: str, password: str | None, protocol: str
+    ) -> ChargerIdentity:
+        url = self._core_registration_url if password is None else self._core_auth_url
+        if not url or not self._core_auth_token:
             raise ChargerIdentityError("Core authentication is not configured")
+        payload = {"identity": identity, "protocol": protocol}
+        if password is not None:
+            payload["password"] = password
         request = urllib.request.Request(
-            self._core_auth_url,
-            data=json.dumps(
-                {"identity": identity, "password": password, "protocol": protocol}
-            ).encode(),
+            url,
+            data=json.dumps(payload).encode(),
             headers={
                 "Authorization": f"Bearer {self._core_auth_token}",
                 "Content-Type": "application/json",
@@ -139,7 +155,11 @@ class ChargerIdentityValidator:
             or not ULID_PATTERN.fullmatch(charger)
         ):
             raise ChargerIdentityError("Invalid core binding")
-        return ChargerIdentity(identity, tenant, charger, "basic")
+        if password is None and binding.get("authentication") != "registered":
+            raise ChargerIdentityError("Core did not confirm registration mode")
+        return ChargerIdentity(
+            identity, tenant, charger, "registered" if password is None else "basic"
+        )
 
     @staticmethod
     def _parse_registry(raw: str) -> dict[str, ChargerRegistration]:

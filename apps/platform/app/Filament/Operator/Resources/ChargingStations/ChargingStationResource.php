@@ -29,7 +29,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
 use UnitEnum;
 
@@ -69,13 +68,6 @@ final class ChargingStationResource extends Resource
                 ->options(fn (): array => OcppVersion::query()->whereIn('code', ['1.6J', '2.0.1'])->pluck('code', 'id')->all())
                 ->default(fn () => OcppVersion::query()->where('code', '1.6J')->value('id'))
                 ->required(fn (string $operation): bool => $operation === 'create'),
-            TextInput::make('ocpp_password')->label('OCPP connection password')
-                ->password()->revealable()->autocomplete('new-password')
-                ->default(fn (): string => Str::random(32))
-                ->minLength(16)->maxLength(72)->regex('/\A[\x21-\x7E]+\z/')
-                ->required(fn (string $operation): bool => $operation === 'create')
-                ->dehydrated(fn (?string $state): bool => filled($state))
-                ->helperText('Copy this password into the charger. On edit, leave blank to keep the current password. Active stations become eligible when saved; use the charge-point ID as the username.'),
             TextInput::make('serial_number')
                 ->required()
                 ->maxLength(160)

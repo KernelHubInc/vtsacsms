@@ -8,7 +8,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
-final class AuthenticateChargerRequest extends FormRequest
+class AuthenticateChargerRequest extends FormRequest
 {
     public function authorize(): bool
     {

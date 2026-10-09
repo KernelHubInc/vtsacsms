@@ -57,6 +57,7 @@ services:
       OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED: "false"
       OCPP_REQUIRE_TLS: "true"
       OCPP_CORE_AUTH_URL: ${OCPP_CORE_AUTH_URL:-}
+      OCPP_CORE_REGISTRATION_URL: ${OCPP_CORE_REGISTRATION_URL:-}
       # Only the local trusted proxy and this Compose network can reach the listener.
       GATEWAY_FORWARDED_ALLOW_IPS: "*"
       GATEWAY_RAW_MESSAGE_LOGGING: "false"

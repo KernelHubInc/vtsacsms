@@ -1,6 +1,6 @@
 # ADR 0023: Authenticate OCPP connections against platform stations
 
-- Status: Accepted
+- Status: Superseded for URL-only deployments by [ADR 0024](0024-url-only-registered-chargers.md); retained for Basic-auth compatibility
 - Date: 2026-10-09
 - Owners: Identity, Assets, Platform Engineering
 

@@ -23,6 +23,23 @@ HASH = "$argon2id$v=19$m=65536,t=3,p=4$c3ludGhldGlj$aGFzaA"
 
 
 class OcppStagingTest(unittest.TestCase):
+    def test_url_only_activation_checks_platform_and_preserves_private_configuration(self):
+        config = {"services": {"ocpp-gateway": {"environment": {"OCPP_CHARGER_REGISTRY_JSON": "{}"}}}}
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory) / ".env.staging.ocpp"
+            original = setup.dotenv({"OCPP_CORE_AUTH_URL": "https://old/authenticate", "OCPP_CHARGER_REGISTRY_JSON": "{}", "GATEWAY_INTERNAL_API_TOKEN": "unchanged"})
+            private.write_text(original)
+            with patch.object(setup, "PRIVATE", private), patch.object(setup, "require_staging", return_value={"APP_URL": "https://staging.example.test"}):
+                with patch.object(setup, "run", return_value="[]"), self.assertRaises(ValueError):
+                    setup.activate_url_only(config)
+                self.assertEqual(private.read_text(), original)
+                with patch.object(setup, "run", return_value=json.dumps([{"uri": "api/internal/v1/ocpp/resolve"}])):
+                    setup.activate_url_only(config)
+            content = private.read_text()
+            self.assertIn("OCPP_CORE_REGISTRATION_URL='https://staging.example.test/api/internal/v1/ocpp/resolve'", content)
+            self.assertIn("OCPP_CORE_AUTH_URL=''", content)
+            self.assertIn("GATEWAY_INTERNAL_API_TOKEN='unchanged'", content)
+
     def test_dynamic_activation_imports_before_changing_configuration(self):
         registry = {"CP-FIRST": {"tenant_id": TENANT, "charger_id": CHARGER, "enabled": True, "basic_password_hash": HASH}}
         config = {"services": {"ocpp-gateway": {"environment": {"OCPP_CHARGER_REGISTRY_JSON": json.dumps(registry)}}}}
@@ -214,6 +231,19 @@ class OcppStagingTest(unittest.TestCase):
         self.assertEqual(
             result["GATEWAY_INTERNAL_API_TOKEN"], "existing-synthetic-token"
         )
+
+    def test_url_only_mode_does_not_require_legacy_credentials(self):
+        config = self.render()
+        gateway = config["services"]["ocpp-gateway"]["environment"]
+        gateway["OCPP_CHARGER_REGISTRY_JSON"] = "{}"
+        with self.assertRaises(ValueError):
+            setup.validate(config)
+        setup.validate(config, registration_only=True)
+        gateway["OCPP_CORE_REGISTRATION_URL"] = "https://staging.example.test/api/internal/v1/ocpp/resolve"
+        setup.validate(config)
+        gateway["OCPP_DEVELOPMENT_ALLOW_UNAUTHENTICATED"] = "true"
+        with self.assertRaises(ValueError):
+            setup.validate(config)
 
     def test_rejects_production_and_cross_stream_mismatch(self):
         config = self.render()

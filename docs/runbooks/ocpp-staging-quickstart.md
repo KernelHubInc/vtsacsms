@@ -209,7 +209,9 @@ Known limit: the current Redis Streams consumers read new messages; abandoned pe
 
 Configuration references: [Docker Compose merge/override semantics](https://docs.docker.com/reference/compose-file/merge/) and [Nginx WebSocket proxying](https://nginx.org/en/docs/http/websocket.html).
 
-## Dynamic enrollment activation (ADR 0023)
+## Legacy Basic-auth activation (ADR 0023)
+
+For the current Authorisation = 0 device, use **URL-only deployment** below instead. This section describes the older credential-based setup; the current admin form no longer provisions passwords. The legacy station API can still provision credentials if retaining Basic mode.
 
 After deploying this release's platform and gateway images and applying `2026_10_09_000001_create_identity_charger_credentials`, activate authoritative platform authentication. Keep a current backup of the actual staging database (which may be on the separate database VPS); do not assume the local Compose PostgreSQL container is the database. Do not rerun initial `prepare`.
 
@@ -227,8 +229,41 @@ sudo python3 scripts/ocpp-staging.py verify \
 
 `activate-enrollment` imports existing Basic hashes via stdin into Identity without overwriting existing credentials, creates a private environment backup, and sets `OCPP_CORE_AUTH_URL` to the HTTPS APP_URL plus `/api/internal/v1/ocpp/authenticate`. The core must receive the matching `OCPP_GATEWAY_INTERNAL_TOKEN`; the existing overlay already supplies it. DNS, the server certificate chain and HTTPS reachability must work from the gateway container. Deployment requires the **new gateway image**: `gateway-up` recreates but does not build it. The additive table is initially empty until credentials are imported or set through admin/API.
 
-After activation, create an admin station with its exact ID, OCPP version, and generated or chosen OCPP connection password. Copy the password before saving; it cannot be retrieved later. Set the station active when commissioning is complete. Existing stations use Edit to set/rotate a password; blank keeps the current credential. The device uses its exact charge-point ID as the Basic username and its own password. Additional enrollments require no env changes, Nginx changes or restart. Draft CSV imports require this commissioning step. The station API supports a write-only `ocpp_password` on create/update.
+For legacy Basic mode, provision the station credential through the station API and set its OCPP version. Set the station active when commissioning is complete. The device uses its exact charge-point ID as the Basic username and its own password. Additional enrollments require no env changes, Nginx changes or restart. Draft CSV imports require this commissioning step. The station API supports a write-only `ocpp_password` on create/update.
 
 The old manual `enroll` command refuses changes in dynamic mode to prevent editing an unused registry. Dynamic mode currently uses Basic authentication over WSS, without requiring a client certificate. Client-certificate-only or disabled legacy entries are refused during migration and require deliberate handling. Core outages, invalid credentials, wrong protocol and inactive assets/tenants reject new connections. Existing sockets keep their binding until disconnected.
 
 Verify an enrolled simulator with `scripts/test-ocpp-staging.ps1`, and verify a newly created, separately identified test station without restarting the gateway. Never connect the simulator with an ID currently used by a physical charger. An unenrolled 403 proves rejection only. Roll back the mode by restoring the protected environment backup and recreating the gateway; this restores the old registry and will not include newly enrolled stations. Keep the additive table and credential data for roll-forward; do not drop it as a routine rollback.
+
+
+## URL-only deployment (current device setup, ADR 0024)
+
+This replaces the Basic-auth activation above for the manufacturer-confirmed Authorisation = 0 setup. Deploy the current platform image and rebuild the gateway image first. No additional schema migration or credential import is required. Keep WSS and gateway/core service authentication enabled. A registered ID is not proof of physical device identity; apply network restrictions where practical.
+
+After pulling this release, build only the gateway with the existing overlays, then activate:
+
+```bash
+cd /opt/vtsa-csms
+sudo docker compose --env-file .env.staging --env-file .env.staging.ocpp \
+  -f infra/compose.yaml -f infra/compose.kyc.yaml \
+  -f /etc/vtsa-csms/compose.staging-kyc-dns.yaml \
+  -f infra/compose.ocpp-staging.yaml build ocpp-gateway &&
+sudo python3 scripts/ocpp-staging.py activate-url-only \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml &&
+sudo python3 scripts/ocpp-staging.py gateway-up \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml &&
+sudo python3 scripts/ocpp-staging.py verify \
+  --compose-override /etc/vtsa-csms/compose.staging-kyc-dns.yaml
+```
+
+The helper checks the deployed platform endpoint before changing private configuration. It retains existing registry entries for rollback, clears `OCPP_CORE_AUTH_URL` and sets `OCPP_CORE_REGISTRATION_URL`. Recreating the gateway disconnects existing sockets briefly. Restoring the protected environment backup and recreating the gateway restores the old mode. `gateway-up` does not build images.
+
+Existing active `DEMO-CP-022` with version 1.6J needs no password, credential record or re-save. Its final connection URL is `wss://staging.evcspowersolutions.com/ocpp/DEMO-CP-022`. If the firmware appends its charge-point ID, enter only the base URL `/ocpp` in its URL field. The ID must appear once. Configure Authorisation = 0. Admin now has no OCPP password field.
+
+From local PowerShell, test an ID not currently connected by physical hardware:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-ocpp-staging.ps1 -Identity DEMO-CP-022 -Heartbeats 1
+```
+
+This clears any inherited simulator password for the test, sends BootNotification/Heartbeat without device credentials and starts no charging transaction. For a deliberately retained legacy Basic deployment only, the helper's `-UseBasicAuthentication` switch loads the existing encrypted simulator credential. URL-only mode ignores old device Authorization headers; the local UI simulator's shared password setting therefore cannot override the ID in the URL. Connection success still requires a correct URL, protocol and active registration. This release's local tests are not evidence that staging has been activated.

@@ -281,7 +281,7 @@ def save_registry(registry, expected, updates=None):
 
 
 def enroll(config):
-    if config["services"]["ocpp-gateway"]["environment"].get("OCPP_CORE_AUTH_URL"):
+    if any(config["services"]["ocpp-gateway"]["environment"].get(key) for key in ("OCPP_CORE_AUTH_URL", "OCPP_CORE_REGISTRATION_URL")):
         raise ValueError("Dynamic enrollment is enabled. Create the station and set its OCPP password in admin.")
     expected = PRIVATE.read_text(encoding="utf-8")
     environment = require_staging(config)
@@ -325,6 +325,20 @@ def enroll(config):
     )
 
 
+def activate_url_only(config):
+    expected = PRIVATE.read_text(encoding="utf-8")
+    environment = require_staging(config)
+    url = str(environment.get("APP_URL", "")).rstrip("/")
+    if urlsplit(url).scheme != "https" or not urlsplit(url).hostname:
+        raise ValueError("URL-only registration requires the staging HTTPS APP_URL.")
+    routes = json.loads(run(compose() + ["exec", "-T", "platform", "php", "artisan", "route:list", "--path=internal/v1/ocpp/resolve", "--json"], capture=True))
+    if not any(route.get("uri") == "api/internal/v1/ocpp/resolve" for route in routes):
+        raise ValueError("Deploy the platform registration endpoint before activating URL-only mode.")
+    registry = json.loads(config["services"]["ocpp-gateway"]["environment"]["OCPP_CHARGER_REGISTRY_JSON"])
+    save_registry(registry, expected, {"OCPP_CORE_AUTH_URL": "", "OCPP_CORE_REGISTRATION_URL": url + "/api/internal/v1/ocpp/resolve"})
+    print("URL-only registration configured. Devices need an active registered ID, not a password. Run gateway-up to apply.")
+
+
 def activate_enrollment(config):
     expected = PRIVATE.read_text(encoding="utf-8")
     environment = require_staging(config)
@@ -334,7 +348,7 @@ def activate_enrollment(config):
     registry = json.loads(config["services"]["ocpp-gateway"]["environment"]["OCPP_CHARGER_REGISTRY_JSON"])
     run(compose() + ["exec", "-T", "platform", "php", "artisan", "ocpp:import-registry", "--no-interaction"],
         capture=True, input_text=json.dumps(registry))
-    save_registry(registry, expected, {"OCPP_CORE_AUTH_URL": url + "/api/internal/v1/ocpp/authenticate"})
+    save_registry(registry, expected, {"OCPP_CORE_AUTH_URL": url + "/api/internal/v1/ocpp/authenticate", "OCPP_CORE_REGISTRATION_URL": ""})
     print("Existing credentials imported without replacement. Dynamic enrollment configured; run gateway-up to apply.")
 
 
@@ -406,7 +420,7 @@ sys.exit(asyncio.run(main()))
     run(compose() + ["exec", "-T", "ocpp-gateway", "python", "-c", probe, url])
 
 
-def validate(config):
+def validate(config, registration_only=False):
     require_staging(config)
     services = config["services"]
     gateway = services["ocpp-gateway"]["environment"]
@@ -429,21 +443,24 @@ def validate(config):
     ):
         raise ValueError("Gateway must publish only on 127.0.0.1:9002.")
     registry = json.loads(gateway["OCPP_CHARGER_REGISTRY_JSON"])
-    if not isinstance(registry, dict) or not registry:
-        raise ValueError("Enroll an existing staging charger first.")
-    for identity, entry in registry.items():
-        if not IDENTITY.fullmatch(identity) or not isinstance(entry, dict):
-            raise ValueError("Invalid charger registration.")
-        if not ULID.fullmatch(entry.get("tenant_id", "")) or not ULID.fullmatch(
-            entry.get("charger_id", "")
-        ):
-            raise ValueError("Invalid registry tenant or charging-station ULID.")
-        if entry.get("enabled") is not True or not entry.get(
-            "basic_password_hash", ""
-        ).startswith("$argon2id$"):
-            raise ValueError(
-                "Enrollment requires an enabled charger and an Argon2id password hash."
-            )
+    if not isinstance(registry, dict):
+        raise ValueError("Charger registry must be an object.")
+    if not registration_only and not gateway.get("OCPP_CORE_REGISTRATION_URL"):
+        if not isinstance(registry, dict) or not registry:
+            raise ValueError("Enroll an existing staging charger first.")
+        for identity, entry in registry.items():
+            if not IDENTITY.fullmatch(identity) or not isinstance(entry, dict):
+                raise ValueError("Invalid charger registration.")
+            if not ULID.fullmatch(entry.get("tenant_id", "")) or not ULID.fullmatch(
+                entry.get("charger_id", "")
+            ):
+                raise ValueError("Invalid registry tenant or charging-station ULID.")
+            if entry.get("enabled") is not True or not entry.get(
+                "basic_password_hash", ""
+            ).startswith("$argon2id$"):
+                raise ValueError(
+                    "Enrollment requires an enabled charger and an Argon2id password hash."
+                )
     for service in CORE + SERVICES[1:]:
         environment = services[service]["environment"]
         if (
@@ -473,6 +490,7 @@ def main():
             "prepare",
             "enroll",
             "activate-enrollment",
+            "activate-url-only",
             "check",
             "up",
             "gateway-up",
@@ -497,9 +515,11 @@ def main():
         prepare()
         return
     config = configuration()
-    validate(config)
+    validate(config, registration_only=action == "activate-url-only")
     if action == "enroll":
         enroll(config)
+    elif action == "activate-url-only":
+        activate_url_only(config)
     elif action == "activate-enrollment":
         activate_enrollment(config)
     elif action == "verify":

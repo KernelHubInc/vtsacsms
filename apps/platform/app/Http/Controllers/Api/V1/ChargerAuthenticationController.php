@@ -6,13 +6,26 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AuthenticateChargerRequest;
+use App\Http\Requests\Api\ResolveChargerRequest;
 use App\Modules\Identity\Application\ChargerCredentials;
+use App\Modules\Identity\Application\RegisteredChargers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 final class ChargerAuthenticationController extends Controller
 {
+    public function resolve(ResolveChargerRequest $request, RegisteredChargers $chargers): JsonResponse
+    {
+        $data = $request->validated();
+        $binding = $chargers->resolve($data['identity'], $data['protocol']);
+        if ($binding === null) {
+            return $this->failure($request, 403);
+        }
+
+        return response()->json(['data' => [...$binding, 'authentication' => 'registered']])->header('Cache-Control', 'no-store');
+    }
+
     public function __invoke(AuthenticateChargerRequest $request, ChargerCredentials $credentials): JsonResponse
     {
         $data = $request->validated();

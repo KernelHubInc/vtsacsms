@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/internal/v1/ocpp/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a URL-only charger against active station and tenant state
+         * @description Gateway-only HTTPS registration query. No device credential is required or verified. Unknown or inactive stations and mismatched protocols fail closed.
+         */
+        post: operations["resolveOcppCharger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/v1/ocpp/authenticate": {
         parameters: {
             query?: never;
@@ -1783,7 +1803,7 @@ export interface components {
             distance_m?: number | null;
         };
         ChargingStationMutableFields: {
-            /** @description Set or rotate the station's OCPP Basic credential; never returned. Required for authenticated connectivity after commissioning. */
+            /** @description Set or rotate the station's OCPP Basic credential; never returned. Used only by legacy Basic-auth mode; not needed for URL-only registration. */
             ocpp_password?: string;
             name?: string;
             charger_model_id?: components["schemas"]["Ulid"] | null;
@@ -1880,6 +1900,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    resolveOcppCharger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    identity: string;
+                    /** @enum {string} */
+                    protocol: "ocpp1.6" | "ocpp2.0.1";
+                };
+            };
+        };
+        responses: {
+            /** @description Registered station binding; response must not be cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            tenant_id: components["schemas"]["Ulid"];
+                            charger_id: components["schemas"]["Ulid"];
+                            charge_point_identity: string;
+                            /** @constant */
+                            authentication: "registered";
+                        };
+                    };
+                };
+            };
+            /** @description Invalid service credential or station registration denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request; credentials are never echoed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication rate limit reached. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Core unavailable; gateway must fail closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     authenticateOcppCharger: {
         parameters: {
             query?: never;

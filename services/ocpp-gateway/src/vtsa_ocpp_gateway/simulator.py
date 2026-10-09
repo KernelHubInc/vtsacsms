@@ -409,8 +409,6 @@ async def run_scenario(arguments: argparse.Namespace) -> None:
         password = getpass.getpass("Enrolled simulator OCPP password (hidden): ")
         if not password:
             raise ValueError("The enrolled simulator password is required")
-    if arguments.scenario == "connectivity" and not password and not arguments.certificate_file:
-        raise ValueError("Connectivity checks require an enrolled password or client certificate")
     simulator = ChargerSimulator(
         arguments.url,
         arguments.identity,
@@ -437,7 +435,7 @@ async def run_scenario(arguments: argparse.Namespace) -> None:
                 if not isinstance(heartbeat.get("currentTime"), str):
                     raise RuntimeError("Heartbeat response is missing currentTime")
                 print(f"Heartbeat {index + 1}/{arguments.heartbeats}: accepted", flush=True)
-            print("PASS: authenticated OCPP connectivity. No charging transaction was started.")
+            print("PASS: OCPP connectivity. No charging transaction was started.")
             return
         await simulator.change_status("Available")
         if arguments.scenario == "duplicate":

@@ -55,6 +55,7 @@ use App\Http\Middleware\RequireSanctumPermission;
 use App\Modules\Organizations\Domain\PermissionKey;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/internal/v1/ocpp/resolve', [ChargerAuthenticationController::class, 'resolve'])->middleware('throttle:300,1');
 Route::post('/internal/v1/ocpp/authenticate', ChargerAuthenticationController::class)
     ->middleware('throttle:300,1')->name('api.internal.v1.ocpp.authenticate');
 

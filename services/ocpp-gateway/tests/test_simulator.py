@@ -50,9 +50,19 @@ async def test_connectivity_stops_before_heartbeat_if_boot_is_not_accepted(
     simulator.close.assert_awaited_once()
 
 
-async def test_connectivity_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_connectivity_supports_url_only_chargers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SIMULATOR_BASIC_PASSWORD", raising=False)
-    arguments = build_parser().parse_args(["--scenario", "connectivity"])
+    simulator = AsyncMock(spec=ChargerSimulator)
+    simulator.boot.return_value = {"status": "Accepted", "interval": 30}
+    simulator.heartbeat.return_value = {"currentTime": "2026-10-10T00:00:00Z"}
 
-    with pytest.raises(ValueError, match="require an enrolled"):
-        await run_scenario(arguments)
+    def create(*args: object, **kwargs: object) -> AsyncMock:
+        assert kwargs["password"] is None
+        return simulator
+
+    monkeypatch.setattr("vtsa_ocpp_gateway.simulator.ChargerSimulator", create)
+    arguments = build_parser().parse_args(["--scenario", "connectivity", "--heartbeats", "1"])
+    await run_scenario(arguments)
+    simulator.heartbeat.assert_awaited_once()
+    simulator.start_session.assert_not_awaited()
+    simulator.close.assert_awaited_once()

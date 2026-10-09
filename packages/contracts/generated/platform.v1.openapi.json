@@ -75,6 +75,102 @@
     }
   ],
   "paths": {
+    "/api/internal/v1/ocpp/resolve": {
+      "post": {
+        "summary": "Resolve a URL-only charger against active station and tenant state",
+        "operationId": "resolveOcppCharger",
+        "tags": [
+          "Identity"
+        ],
+        "description": "Gateway-only HTTPS registration query. No device credential is required or verified. Unknown or inactive stations and mismatched protocols fail closed.",
+        "security": [
+          {
+            "ocppServiceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "identity",
+                  "protocol"
+                ],
+                "properties": {
+                  "identity": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "enum": [
+                      "ocpp1.6",
+                      "ocpp2.0.1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered station binding; response must not be cached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "tenant_id",
+                        "charger_id",
+                        "charge_point_identity",
+                        "authentication"
+                      ],
+                      "properties": {
+                        "tenant_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charger_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charge_point_identity": {
+                          "type": "string"
+                        },
+                        "authentication": {
+                          "type": "string",
+                          "const": "registered"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid service credential or station registration denied."
+          },
+          "422": {
+            "description": "Invalid request; credentials are never echoed."
+          },
+          "429": {
+            "description": "Authentication rate limit reached."
+          },
+          "503": {
+            "description": "Core unavailable; gateway must fail closed."
+          }
+        }
+      }
+    },
     "/api/internal/v1/ocpp/authenticate": {
       "post": {
         "summary": "Authenticate a charger against current station and tenant state",
@@ -5678,7 +5774,7 @@
             "writeOnly": true,
             "minLength": 16,
             "maxLength": 72,
-            "description": "Set or rotate the station's OCPP Basic credential; never returned. Required for authenticated connectivity after commissioning."
+            "description": "Set or rotate the station's OCPP Basic credential; never returned. Used only by legacy Basic-auth mode; not needed for URL-only registration."
           },
           "name": {
             "type": "string",

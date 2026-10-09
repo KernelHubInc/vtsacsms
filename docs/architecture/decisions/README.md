@@ -26,7 +26,8 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0020](0020-mobile-pin-and-biometric-unlock.md) | Device-local mobile PIN and biometric unlock | Accepted; physical-device release verification required |
 | [0021](0021-driver-onboarding-and-server-garages.md) | Adult onboarding and server-owned driver garages | Accepted for staging |
 | [0022](0022-prepaid-balances-and-aub-qrph.md) | Prepaid balances and AUB QR Ph collections | Accepted for simulation; live acceptance gated |
-| [0023](0023-authenticate-ocpp-against-platform-stations.md) | Authenticate OCPP against current platform stations and Identity credentials | Accepted |
+| [0023](0023-authenticate-ocpp-against-platform-stations.md) | Authenticate OCPP against current platform stations and Identity credentials | Superseded for URL-only deployments by 0024 |
+| [0024](0024-url-only-registered-chargers.md) | URL-only connections for registered chargers | Accepted by explicit operator request |
 
 ## ADR Template
 
