@@ -4,6 +4,125 @@
  */
 
 export interface paths {
+    "/api/v1/mobile/charging/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review connector pricing and a live prepaid spending limit */
+        post: operations["prepareCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/remote-start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve prepaid funds and request physical start */
+        post: operations["startCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recover only the caller's active or unsettled session */
+        get: operations["activeCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the caller's charging history */
+        get: operations["listCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one customer-owned session */
+        get: operations["getCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}/remote-stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request physical stop without asserting completion */
+        post: operations["stopCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a start only before command dispatch */
+        post: operations["cancelCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/internal/v1/ocpp/resolve": {
         parameters: {
             query?: never;
@@ -1722,6 +1841,11 @@ export interface components {
             connector_id?: components["schemas"]["Ulid"] | null;
             /** @description IANA timezone used for day/time rules */
             timezone: string;
+            /**
+             * @description New time tariffs count only metered energy-flow seconds.
+             * @enum {string}
+             */
+            time_basis?: "energy_flow";
             components: {
                 /** @enum {string} */
                 dimension: "energy" | "time" | "session" | "parking" | "idle";
@@ -1780,6 +1904,11 @@ export interface components {
             /** @enum {string} */
             availability: "available" | "busy" | "faulted" | "offline" | "stale" | "unknown";
             /**
+             * @description Preferred display status. Unlike legacy availability, unavailable does not imply loss of connectivity.
+             * @enum {string}
+             */
+            operational_status?: "available" | "busy" | "faulted" | "unavailable" | "offline" | "stale" | "unknown";
+            /**
              * @description Recent authenticated station communication, independent of connector availability
              * @enum {string}
              */
@@ -1798,6 +1927,17 @@ export interface components {
                 standard: string;
                 name: string;
                 maximum_power_w: number;
+                id?: components["schemas"]["Ulid"];
+                current_type?: string;
+                /** @enum {string} */
+                availability?: "available" | "occupied" | "reserved" | "unavailable" | "faulted" | "offline" | "stale" | "unknown";
+                /** Format: date-time */
+                status_observed_at?: string | null;
+                /**
+                 * @description Detailed device status; null when disconnected, stale, replaced or superseded by orchestration.
+                 * @enum {string|null}
+                 */
+                reported_status?: "available" | "preparing" | "charging" | "suspendedev" | "suspendedevse" | "finishing" | "occupied" | "reserved" | "unavailable" | "faulted" | null;
             }[];
             qr_identifier?: string;
             distance_m?: number | null;
@@ -1834,6 +1974,77 @@ export interface components {
             checks: {
                 [key: string]: string;
             };
+        };
+        CustomerChargePreparation: {
+            target: {
+                connector_id: string;
+                connector_name: string;
+                connector_standard: string;
+                maximum_power_w: number;
+                station_id: string;
+                station_name: string;
+                station_address: string | null;
+                readiness: string;
+                /** Format: date-time */
+                status_observed_at: string;
+            };
+            quote: {
+                id: string;
+                tariff_version_id: string;
+                name: string;
+                currency: string;
+                tax_inclusive: boolean;
+                lines: {
+                    dimension: string;
+                    price_minor: number;
+                    unit_quantity: number;
+                    description: string;
+                }[];
+                estimated_preauthorization: {
+                    amount_minor: number;
+                    /** @enum {string} */
+                    currency: "PHP";
+                };
+                /** Format: date-time */
+                expires_at: string;
+                tax_rate_basis_points: number;
+            };
+            payment_methods: {
+                /** @enum {string} */
+                id: "prepaid_wallet";
+                label: string;
+                is_default: boolean;
+            }[];
+        };
+        CustomerChargingSession: {
+            id: string;
+            state: string;
+            station_id: string;
+            station_name: string;
+            connector_id: string;
+            connector_name: string;
+            energy_wh: number;
+            duration_seconds: number;
+            energy_flow_seconds: number;
+            current_power_w: number | null;
+            currency: string | null;
+            estimated_cost_minor: number | null;
+            final_cost_minor: number | null;
+            /** Format: date-time */
+            requested_at: string;
+            started_at: string | null;
+            stopped_at: string | null;
+            start_deadline_at: string | null;
+            updated_at: string | null;
+            aggregate_version: number;
+            failure_reason: string | null;
+            anomaly_flags: string[];
+            /** @enum {string} */
+            payment_state: "authorized" | "captured" | "not_required" | "requires_action";
+            reserved_budget_minor: number;
+            refundable: boolean;
+            receipt: null;
+            invoice: null;
         };
     };
     responses: {
@@ -1900,6 +2111,344 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    prepareCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    charger_code: string;
+                    vehicle_id?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargePreparation"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startCustomerCharging: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    quote_id: string;
+                    connector_id: string;
+                    /** @enum {string} */
+                    payment_method_id: "prepaid_wallet";
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    activeCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"] | null;
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCustomerCharging: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"][];
+                        meta: {
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stopCustomerCharging: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     resolveOcppCharger: {
         parameters: {
             query?: never;

@@ -17,7 +17,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from vtsa_ocpp_gateway.config import Settings
 from vtsa_ocpp_gateway.connections import RegisteredConnection, WebSocketOcppConnection
-from vtsa_ocpp_gateway.ids import incoming_ulid, new_ulid
+from vtsa_ocpp_gateway.ids import ULID_PATTERN, incoming_ulid, new_ulid
 from vtsa_ocpp_gateway.logging import configure_logging
 from vtsa_ocpp_gateway.models import CommandRequest, JsonObject
 from vtsa_ocpp_gateway.runtime import GatewayRuntime
@@ -65,14 +65,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 
 class CommandBody(BaseModel):
-    command_id: str = Field(pattern=r"^[0-9A-HJKMNP-TV-Z]{26}$")
-    tenant_id: str = Field(pattern=r"^[0-9A-HJKMNP-TV-Z]{26}$")
-    charger_id: str = Field(pattern=r"^[0-9A-HJKMNP-TV-Z]{26}$")
+    command_id: str = Field(pattern=ULID_PATTERN.pattern)
+    tenant_id: str = Field(pattern=ULID_PATTERN.pattern)
+    charger_id: str = Field(pattern=ULID_PATTERN.pattern)
     charge_point_identity: str = Field(min_length=1, max_length=120)
     action: str = Field(min_length=1, max_length=80)
     payload: JsonObject = Field(default_factory=dict)
-    correlation_id: str = Field(pattern=r"^[0-9A-HJKMNP-TV-Z]{26}$")
-    actor_id: str = Field(pattern=r"^[0-9A-HJKMNP-TV-Z]{26}$")
+    correlation_id: str = Field(pattern=ULID_PATTERN.pattern)
+    actor_id: str = Field(pattern=ULID_PATTERN.pattern)
     reason_code: str = Field(pattern=r"^[a-z][a-z0-9_.-]{1,79}$")
     expected_state: JsonObject = Field(default_factory=dict)
     deadline_at: AwareDatetime
@@ -214,8 +214,8 @@ def create_app(settings: Settings | None = None, runtime: GatewayRuntime | None 
             )
             await logger.ainfo("ocpp_connection_opened")
             await charge_point.start()
-        except WebSocketDisconnect:
-            await logger.ainfo("ocpp_connection_closed")
+        except WebSocketDisconnect as error:
+            await logger.ainfo("ocpp_connection_closed", close_code=error.code)
         except asyncio.CancelledError:
             await logger.ainfo("ocpp_connection_cancelled")
         except ValueError as error:

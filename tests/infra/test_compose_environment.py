@@ -15,6 +15,24 @@ VARIABLES = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)", COMPOSE.read_text(encoding=
 
 
 class ComposeEnvironmentTest(unittest.TestCase):
+    def test_wallet_configuration_reaches_every_application_process(self):
+        values = self.template(".env.staging.example")
+        wallet = {
+            "WALLET_MODE": "live", "WALLET_MINIMUM_MINOR": "100",
+            "WALLET_MAXIMUM_MINOR": "50000", "AUB_QRPH_APPROVED": "true",
+            "AUB_TENANT_ID": "01J00000000000000000000001",
+            "AUB_MERCHANT_ID": "synthetic-merchant", "AUB_SIGNING_KEY": "synthetic-test-only",
+            "AUB_SERVER_IP": "192.0.2.1",
+            "AUB_NOTIFY_URL": "https://staging.example.test/api/v1/webhooks/aub/qrph",
+        }
+        values.update(wallet)
+        result = self.render(".env.staging", values)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        services = json.loads(result.stdout)["services"]
+        for service in ("platform", "worker", "scheduler", "ocpp-event-consumer", "ocpp-authorization-consumer"):
+            for key, value in wallet.items():
+                self.assertEqual(services[service]["environment"][key], value, f"{service}.{key}")
+
     def render(self, filename, values):
         environment = {key: value for key, value in os.environ.items()
                        if key not in VARIABLES and not key.startswith("COMPOSE_")}

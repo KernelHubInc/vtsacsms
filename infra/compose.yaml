@@ -161,7 +161,17 @@ services:
       MAP_MARKER_CLUSTERING: ${MAP_MARKER_CLUSTERING:-true}
       FEATURE_OCPP: ${FEATURE_OCPP:-false}
       FEATURE_REMOTE_CHARGING: ${FEATURE_REMOTE_CHARGING:-false}
+      MOBILE_CHARGING_MAXIMUM_RESERVATION_MINOR: ${MOBILE_CHARGING_MAXIMUM_RESERVATION_MINOR:-100}
       FEATURE_REAL_PAYMENTS: ${FEATURE_REAL_PAYMENTS:-false}
+      WALLET_MODE: ${WALLET_MODE:-disabled}
+      WALLET_MINIMUM_MINOR: ${WALLET_MINIMUM_MINOR:-100}
+      WALLET_MAXIMUM_MINOR: ${WALLET_MAXIMUM_MINOR:-100000}
+      AUB_QRPH_APPROVED: ${AUB_QRPH_APPROVED:-false}
+      AUB_TENANT_ID: ${AUB_TENANT_ID:-}
+      AUB_MERCHANT_ID: ${AUB_MERCHANT_ID:-}
+      AUB_SIGNING_KEY: ${AUB_SIGNING_KEY:-}
+      AUB_SERVER_IP: ${AUB_SERVER_IP:-}
+      AUB_NOTIFY_URL: ${AUB_NOTIFY_URL:-}
       FEATURE_SETTLEMENTS: ${FEATURE_SETTLEMENTS:-false}
       FEATURE_OCPI: ${FEATURE_OCPI:-false}
       FEATURE_STORE_LOCATOR: ${FEATURE_STORE_LOCATOR:-true}
@@ -192,7 +202,7 @@ services:
     build:
       context: ../apps/platform
       target: development
-    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    command: ["php", "artisan", "queue:work", "--queue=charging,default", "--sleep=1", "--tries=3", "--timeout=90"]
     environment: *platform-environment
     depends_on:
       platform:

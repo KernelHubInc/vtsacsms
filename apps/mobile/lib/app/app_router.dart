@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/consumer_shell.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:vtsa_mobile/features/auth/presentation/quick_unlock_screens.dart';
@@ -132,14 +133,22 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     ),
     GoRoute(
       path: '/charge',
-      builder: (context, state) =>
-          ChargingStartScreen(dependencies: dependencies),
+      builder: (context, state) => Theme(
+        data: DriverTheme.of(context),
+        child: ChargingStartScreen(
+          dependencies: dependencies,
+          initialCode: state.uri.queryParameters['code'],
+        ),
+      ),
     ),
     GoRoute(
       path: '/charging/:sessionId',
-      builder: (context, state) => LiveChargingScreen(
-        dependencies: dependencies,
-        sessionId: state.pathParameters['sessionId']!,
+      builder: (context, state) => Theme(
+        data: DriverTheme.of(context),
+        child: LiveChargingScreen(
+          dependencies: dependencies,
+          sessionId: state.pathParameters['sessionId']!,
+        ),
       ),
     ),
     GoRoute(
@@ -169,9 +178,12 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     ),
     GoRoute(
       path: '/stations/:stationId',
-      builder: (context, state) => StationDetailScreen(
-        dependencies: dependencies,
-        stationId: state.pathParameters['stationId']!,
+      builder: (context, state) => Theme(
+        data: DriverTheme.of(context),
+        child: StationDetailScreen(
+          dependencies: dependencies,
+          stationId: state.pathParameters['stationId']!,
+        ),
       ),
     ),
     GoRoute(

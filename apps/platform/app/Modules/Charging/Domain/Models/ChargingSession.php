@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property string $tenant_id
@@ -43,6 +44,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $meter_stop_wh
  * @property int $energy_wh
  * @property int $duration_seconds
+ * @property int $energy_flow_seconds
+ * @property bool $energy_flow_evidence_complete
  * @property int $parking_seconds
  * @property int $idle_seconds
  * @property int|null $estimated_cost_minor
@@ -52,6 +55,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $cancellation_reason
  * @property list<string> $anomaly_flags
  * @property int $aggregate_version
+ * @property-read CustomerChargingSession|null $customer
+ * @property-read MeterReading|null $latestPower
  */
 final class ChargingSession extends Model
 {
@@ -60,11 +65,28 @@ final class ChargingSession extends Model
 
     protected $guarded = [];
 
+    /** @return HasOne<CustomerChargingSession, $this> */
+    public function customer(): HasOne
+    {
+        return $this->hasOne(CustomerChargingSession::class, 'session_id');
+    }
+
+    /** @return HasOne<MeterReading, $this> */
+    public function latestPower(): HasOne
+    {
+        return $this->hasOne(MeterReading::class, 'session_id')->ofMany(
+            ['sampled_at' => 'max', 'id' => 'max'],
+            fn ($query) => $query->where('measurand', 'Power.Active.Import')->where('unit', 'W')->whereNull('phase'),
+        );
+    }
+
     protected function casts(): array
     {
         return [
             'origin' => ChargingSessionOrigin::class,
             'state' => ChargingSessionState::class,
+            'energy_flow_seconds' => 'integer',
+            'energy_flow_evidence_complete' => 'boolean',
             'authorization_status' => AuthorizationStatus::class,
             'tariff_snapshot' => 'array',
             'anomaly_flags' => 'array',

@@ -21,6 +21,21 @@ REQ-WALLET-005: Live collection requires the real-payment flag, approved AUB con
 
 ## Initial mobile scope
 
+### Observed provider compatibility — 2026-10-11
+
+A verified successful live QR Ph create response supplied `code_url` and a valid
+14-digit `expiration_date`, but omitted the documented `invoiceId`. Creation now
+allows that usable signed QR to be presented without an invoice. Merchant and
+signature checks, QR bounds and expiry validation remain enforced. Missing invoice
+is logged without payment payloads; invoice-dependent query remains unavailable
+and must not be attempted with a guessed portal identifier. Verified callbacks
+can still match the merchant order and credit exactly once. This compatibility
+exception does not infer paid status from QR creation or relax callback checks.
+
+On 2026-10-12, one PHP 1 paid top-up and exactly one corresponding live wallet
+credit were observed on staging. Provider settlement reconciliation and physical
+charging-wallet integration remain separate acceptance requirements.
+
 Balance, available/reserved amounts, cursor-paginated activity and top-ups, exact amount entry, recoverable idempotent retry, local QR rendering, expiry and status polling. Simulations have no payable QR. Do not expose secrets, provider response bodies or inferred payment success. Hosted GCash/GrabPay, cards, cash-out, transfers and automatic refunds are not implemented.
 
 Reservation/finalization is an internal Billing contract, tested but not connected to physical remote charging yet. Integration must use final Billing/Charging facts, verify KYC and never route simulated balances into live sessions. Charging availability and collection policy remain gated separately.

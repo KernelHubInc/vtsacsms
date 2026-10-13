@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -84,8 +86,26 @@ final class AppDependencies {
       network: network,
       push: push,
       ownerId: ownerId,
-      isAuthenticated: () => auth.status == AuthStatus.authenticated,
+      isAuthenticated: () =>
+          auth.status == AuthStatus.authenticated &&
+          !auth.needsEmailVerification,
     );
+    String? lastOwner;
+    auth.addListener(() {
+      if (auth.status == AuthStatus.guest) {
+        final previous = lastOwner;
+        lastOwner = null;
+        if (previous != null) {
+          unawaited(charging.onSignedOut(ownerId: previous));
+        }
+      } else if (auth.status == AuthStatus.authenticated && auth.user != null) {
+        final current = ownerId();
+        if (lastOwner != null && lastOwner != current) {
+          unawaited(charging.onSignedOut(ownerId: lastOwner));
+        }
+        lastOwner = current;
+      }
+    });
 
     return AppDependencies(
       environment: environment,

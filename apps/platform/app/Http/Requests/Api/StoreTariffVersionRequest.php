@@ -31,6 +31,7 @@ final class StoreTariffVersionRequest extends FormRequest
             'site_id' => ['nullable', 'ulid'],
             'connector_id' => ['nullable', 'ulid'],
             'timezone' => ['required', 'timezone:all'],
+            'time_basis' => ['sometimes', Rule::in(['energy_flow'])],
             'components' => ['required', 'array', 'min:1', 'max:100'],
             'components.*.dimension' => ['required', Rule::enum(TariffDimension::class)],
             'components.*.price_minor' => ['required', 'integer', 'min:0'],

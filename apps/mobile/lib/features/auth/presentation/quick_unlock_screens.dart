@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
+import 'package:vtsa_mobile/features/auth/presentation/auth_entry_scaffold.dart';
 
 class UnlockScreen extends StatefulWidget {
   const UnlockScreen({required this.dependencies, super.key});
@@ -61,75 +62,59 @@ class _UnlockScreenState extends State<UnlockScreen> {
     animation: widget.dependencies.auth,
     builder: (context, _) {
       final auth = widget.dependencies.auth;
-      return VtsaPageShell(
-        eyebrow: 'WELCOME BACK',
+      return AuthEntryScaffold(
         title: 'Unlock your drive.',
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                Icon(
-                  Icons.lock_outline_rounded,
-                  size: 52,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 24),
-                const Text('Enter your six-digit app PIN to continue.'),
-                const SizedBox(height: 20),
-                _PinField(
-                  controller: _pin,
-                  label: 'App PIN',
-                  enabled: !auth.isBusy,
-                  onSubmitted: (_) {
-                    if (_pin.text.length == 6) _unlock();
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (auth.failure != null) ...[
-                  Text(
-                    auth.failure!.message,
-                    semanticsLabel: auth.failure!.message,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                ValueListenableBuilder(
-                  valueListenable: _pin,
-                  builder: (context, value, _) => VtsaButton(
-                    label: 'Unlock with PIN',
-                    loading: auth.isBusy,
-                    onPressed: value.text.length == 6 && !auth.isBusy
-                        ? () => _unlock()
-                        : null,
-                  ),
-                ),
-                if (auth.quickUnlock?.biometricsEnabled == true) ...[
-                  const SizedBox(height: 12),
-                  VtsaButton(
-                    label: 'Use fingerprint / Face ID',
-                    variant: VtsaButtonVariant.secondary,
-                    onPressed: auth.isBusy
-                        ? null
-                        : () => _unlock(biometric: true),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: auth.isBusy ? null : _usePassword,
-                  child: const Text('Forgot PIN? Sign in with password'),
-                ),
-                const Text(
-                  'Password sign-in removes quick unlock from this phone. '
-                  'You can set it up again in Account.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
+        subtitle: 'Enter your six-digit app PIN to continue.',
+        locked: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _PinField(
+              controller: _pin,
+              label: 'App PIN',
+              enabled: !auth.isBusy,
+              onSubmitted: (_) {
+                if (_pin.text.length == 6) _unlock();
+              },
             ),
-          ),
+            const SizedBox(height: 16),
+            if (auth.failure != null) ...[
+              Text(
+                auth.failure!.message,
+                semanticsLabel: auth.failure!.message,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 16),
+            ],
+            ValueListenableBuilder(
+              valueListenable: _pin,
+              builder: (context, value, _) => VtsaButton(
+                label: 'Unlock with PIN',
+                loading: auth.isBusy,
+                onPressed: value.text.length == 6 && !auth.isBusy
+                    ? () => _unlock()
+                    : null,
+              ),
+            ),
+            if (auth.quickUnlock?.biometricsEnabled == true) ...[
+              const SizedBox(height: 12),
+              VtsaButton(
+                label: 'Use fingerprint / Face ID',
+                variant: VtsaButtonVariant.secondary,
+                onPressed: auth.isBusy ? null : () => _unlock(biometric: true),
+              ),
+            ],
+            const SizedBox(height: 24),
+            TextButton(
+              onPressed: auth.isBusy ? null : _usePassword,
+              child: const Text('Forgot PIN? Sign in with password'),
+            ),
+            const Text(
+              'Password sign-in removes quick unlock from this phone. '
+              'You can set it up again in Account.',
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     },

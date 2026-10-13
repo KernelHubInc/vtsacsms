@@ -8,6 +8,7 @@ use App\Modules\Charging\Domain\ChargerCommandState;
 use App\Modules\Charging\Domain\ChargerCommandType;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
+use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 
 final readonly class CommandOutcomeService
 {
@@ -21,6 +22,12 @@ final readonly class CommandOutcomeService
         $session = $command->session()->lockForUpdate()->firstOrFail();
         if ($command->type === ChargerCommandType::RemoteStart) {
             if ($command->state === ChargerCommandState::Acknowledged) {
+                return;
+            }
+            if (in_array($command->state, [ChargerCommandState::TimedOut, ChargerCommandState::DeliveryUnknown], true)
+                && CustomerChargingSession::query()->where('session_id', $session->getKey())->exists()) {
+                $session->forceFill(['failure_reason' => 'prepaid_start_unconfirmed'])->save();
+
                 return;
             }
             if (! $session->state->isTerminal() && ! $session->state->isPhysicallyActive()) {

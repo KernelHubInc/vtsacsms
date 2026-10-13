@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -58,16 +59,19 @@ class ConsumerShell extends StatelessWidget {
             charging.phase != ChargingFlowPhase.idle &&
             charging.phase != ChargingFlowPhase.completed &&
             charging.phase != ChargingFlowPhase.failed;
-        return VtsaBottomNavigationShell(
-          destinations: destinations,
-          selectedIndex: index,
-          onDestinationSelected: (selected) => context.go(
-            const ['/explore', '/activity', '/wallet', '/account'][selected],
+        return Theme(
+          data: DriverTheme.of(context),
+          child: VtsaBottomNavigationShell(
+            destinations: destinations,
+            selectedIndex: index,
+            onDestinationSelected: (selected) => context.go(
+              const ['/explore', '/activity', '/wallet', '/account'][selected],
+            ),
+            activeSession: showActive
+                ? _ActiveSessionBanner(dependencies: dependencies)
+                : null,
+            child: child,
           ),
-          activeSession: showActive
-              ? _ActiveSessionBanner(dependencies: dependencies)
-              : null,
-          child: child,
         );
       },
     );

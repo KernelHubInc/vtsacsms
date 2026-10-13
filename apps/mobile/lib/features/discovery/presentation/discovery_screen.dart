@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/maps/map_models.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
+import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
@@ -10,10 +11,46 @@ import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_map.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_widgets.dart';
 
+class _MapButton extends StatelessWidget {
+  const _MapButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.loading = false,
+  });
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surface,
+    elevation: 3,
+    borderRadius: BorderRadius.circular(14),
+    child: IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      icon: loading
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(icon),
+    ),
+  );
+}
+
 class DiscoveryScreen extends StatefulWidget {
-  const DiscoveryScreen({required this.dependencies, super.key});
+  const DiscoveryScreen({
+    required this.dependencies,
+    this.mapBuilder,
+    super.key,
+  });
 
   final AppDependencies dependencies;
+  final StationMapBuilder? mapBuilder;
 
   @override
   State<DiscoveryScreen> createState() => _DiscoveryScreenState();
@@ -22,6 +59,8 @@ class DiscoveryScreen extends StatefulWidget {
 class _DiscoveryScreenState extends State<DiscoveryScreen> {
   bool _showMap = true;
   bool _locating = false;
+  bool _mapExpanded = false;
+  final _mapKey = GlobalKey();
   String? _vehicleId;
   MapPosition? _userPosition;
 
@@ -56,233 +95,320 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     ]),
     builder: (context, _) {
       final discovery = widget.dependencies.discovery;
-      return Scaffold(
-        appBar: PowerSolutionsAppBar(
-          title: 'Find your next charge',
-          eyebrow: 'Explore',
-          actions: [
-            IconButton(
-              tooltip: 'Scan charger code',
-              onPressed: () => context.push('/charge'),
-              icon: const Icon(Icons.qr_code_scanner),
-            ),
-            IconButton(
-              tooltip: 'Favorites',
-              onPressed: () => context.push('/favorites'),
-              icon: const Icon(Icons.favorite_border),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            if (widget.dependencies.environment.maps.fallbackActive)
-              MaterialBanner(
-                content: const Text(
-                  'Google Maps is not configured. OpenStreetMap is active.',
-                ),
-                leading: const Icon(Icons.map_outlined),
-                actions: const [SizedBox.shrink()],
-              ),
-            if (!widget.dependencies.network.isOnline)
-              MaterialBanner(
-                content: const Text(
-                  'Offline. Showing the last loaded station data; availability may be stale.',
-                ),
-                leading: const Icon(Icons.cloud_off_outlined),
-                actions: const [SizedBox.shrink()],
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                VtsaSpacing.md,
-                VtsaSpacing.sm,
-                VtsaSpacing.md,
-                VtsaSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SearchBar(
-                      hintText: 'Search this map area',
-                      leading: const Icon(Icons.search),
-                      onChanged: discovery.search,
-                    ),
-                  ),
-                  const SizedBox(width: VtsaSpacing.xs),
-                  IconButton.filledTonal(
-                    tooltip: 'Filters',
-                    onPressed: () => _showFilters(context),
-                    icon: Badge(
-                      isLabelVisible: _filterCount(discovery.filters) > 0,
-                      label: Text('${_filterCount(discovery.filters)}'),
-                      child: const Icon(Icons.tune),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: VtsaSpacing.md),
-              child: Row(
-                children: [
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(
-                        value: true,
-                        icon: Icon(Icons.map_outlined),
-                        label: Text('Map'),
-                      ),
-                      ButtonSegment(
-                        value: false,
-                        icon: Icon(Icons.view_list_outlined),
-                        label: Text('List'),
-                      ),
-                    ],
-                    selected: {_showMap},
-                    onSelectionChanged: (selection) => setState(() {
-                      _showMap = selection.first;
-                    }),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${discovery.stations.length} stations',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: VtsaSpacing.md),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: _locating
-                        ? null
-                        : () => _locateUser(nearest: true),
-                    icon: const Icon(Icons.near_me_outlined),
-                    label: const Text('Nearest first'),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      hint: const Text('All vehicles'),
-                      value:
-                          widget.dependencies.vehicles.vehicles.any(
-                            (v) => v.id == _vehicleId,
-                          )
-                          ? _vehicleId
-                          : null,
-                      items: [
-                        const DropdownMenuItem(
-                          value: null,
-                          child: Text('All connectors'),
-                        ),
-                        ...widget.dependencies.vehicles.vehicles.map(
-                          (v) => DropdownMenuItem(
-                            value: v.id,
-                            enabled: v.connectorStandards.isNotEmpty,
-                            child: Text(
-                              v.connectorStandards.isEmpty
-                                  ? '${v.nickname} · add connectors'
-                                  : v.nickname,
-                              overflow: TextOverflow.ellipsis,
+      return Theme(
+        data: DriverTheme.of(context),
+        child: Builder(
+          builder: (context) => PopScope(
+            canPop: !_mapExpanded,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop && _mapExpanded) setState(() => _mapExpanded = false);
+            },
+            child: Scaffold(
+              body: SafeArea(
+                bottom: false,
+                child: _mapExpanded
+                    ? _map(context)
+                    : Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 600),
+                          child: RefreshIndicator(
+                            onRefresh: discovery.refresh,
+                            child: ListView(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: PowerSolutionsLogo(
+                                          height: 30,
+                                          inverse:
+                                              Theme.of(context).brightness ==
+                                              Brightness.dark,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Scan charger code',
+                                      onPressed: () => context.push('/charge'),
+                                      icon: const Icon(Icons.qr_code_scanner),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Favorites',
+                                      onPressed: () =>
+                                          context.push('/favorites'),
+                                      icon: const Icon(Icons.favorite_border),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Where would you like to charge?',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.headlineSmall,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Let’s find a spot that works for you.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                const SizedBox(height: 20),
+                                if (!widget.dependencies.network.isOnline)
+                                  const Padding(
+                                    padding: EdgeInsets.only(bottom: 12),
+                                    child: DriverNotice(
+                                      title: 'You’re offline',
+                                      message:
+                                          'Showing the last loaded stations. Refresh before relying on availability.',
+                                    ),
+                                  ),
+                                TextField(
+                                  onChanged: discovery.search,
+                                  decoration: InputDecoration(
+                                    hintText: 'Address, place or station',
+                                    helperText:
+                                        'Search within the loaded map area',
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: IconButton(
+                                      tooltip: 'Filters',
+                                      onPressed: () => _showFilters(context),
+                                      icon: Badge(
+                                        isLabelVisible:
+                                            _filterCount(discovery.filters) > 0,
+                                        label: Text(
+                                          '${_filterCount(discovery.filters)}',
+                                        ),
+                                        child: const Icon(Icons.tune),
+                                      ),
+                                    ),
+                                    filled: true,
+                                    fillColor: context.vtsaColors.surfaceSubtle,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                if (_showMap)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: SizedBox(
+                                      height:
+                                          (MediaQuery.sizeOf(context).height *
+                                                  .42)
+                                              .clamp(300.0, 440.0),
+                                      child: _map(context),
+                                    ),
+                                  ),
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    TextButton.icon(
+                                      onPressed: () =>
+                                          setState(() => _showMap = !_showMap),
+                                      icon: Icon(
+                                        _showMap
+                                            ? Icons.view_list_outlined
+                                            : Icons.map_outlined,
+                                      ),
+                                      label: Text(
+                                        _showMap ? 'Hide map' : 'Show map',
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      onPressed: _locating
+                                          ? null
+                                          : () => _locateUser(nearest: true),
+                                      icon: const Icon(Icons.near_me_outlined),
+                                      label: const Text('Nearest first'),
+                                    ),
+                                  ],
+                                ),
+                                if (widget
+                                    .dependencies
+                                    .vehicles
+                                    .vehicles
+                                    .isNotEmpty)
+                                  DropdownButton<String>(
+                                    isExpanded: true,
+                                    hint: const Text('All vehicles'),
+                                    value:
+                                        widget.dependencies.vehicles.vehicles
+                                            .any((v) => v.id == _vehicleId)
+                                        ? _vehicleId
+                                        : null,
+                                    items: [
+                                      const DropdownMenuItem(
+                                        value: null,
+                                        child: Text('All connectors'),
+                                      ),
+                                      ...widget.dependencies.vehicles.vehicles.map(
+                                        (v) => DropdownMenuItem(
+                                          value: v.id,
+                                          enabled:
+                                              v.connectorStandards.isNotEmpty,
+                                          child: Text(
+                                            v.connectorStandards.isEmpty
+                                                ? '${v.nickname} · add connectors'
+                                                : v.nickname,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (id) {
+                                      setState(() => _vehicleId = id);
+                                      final vehicle = widget
+                                          .dependencies
+                                          .vehicles
+                                          .vehicles
+                                          .where((v) => v.id == id)
+                                          .firstOrNull;
+                                      discovery.updateFilters(
+                                        discovery.filters.copyWith(
+                                          clearConnector: true,
+                                          vehicleConnectors:
+                                              vehicle?.connectorStandards
+                                                  .toList() ??
+                                              [],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                if (discovery.selectedStationId != null)
+                                  Builder(
+                                    builder: (context) {
+                                      final station = discovery.byId(
+                                        discovery.selectedStationId!,
+                                      );
+                                      return station == null
+                                          ? const SizedBox.shrink()
+                                          : Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 16,
+                                              ),
+                                              child: StationCard(
+                                                station: station,
+                                                selected: true,
+                                                favorite: widget
+                                                    .dependencies
+                                                    .favorites
+                                                    .contains(station.id),
+                                                onFavorite: () => widget
+                                                    .dependencies
+                                                    .favorites
+                                                    .toggle(station.id),
+                                                onClose: () =>
+                                                    discovery.select(null),
+                                                onTap: () => context.push(
+                                                  '/stations/${station.id}',
+                                                ),
+                                              ),
+                                            );
+                                    },
+                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Good options in this area',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleLarge,
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => _showFilters(context),
+                                      child: const Text('Filters'),
+                                    ),
+                                  ],
+                                ),
+                                if (discovery.isLoading)
+                                  const LinearProgressIndicator(),
+                                _StationList(dependencies: widget.dependencies),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                      onChanged: (id) {
-                        setState(() => _vehicleId = id);
-                        final vehicle = widget.dependencies.vehicles.vehicles
-                            .where((v) => v.id == id)
-                            .firstOrNull;
-                        discovery.updateFilters(
-                          discovery.filters.copyWith(
-                            clearConnector: true,
-                            vehicleConnectors:
-                                vehicle?.connectorStandards.toList() ?? [],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                      ),
               ),
             ),
-            const SizedBox(height: VtsaSpacing.sm),
-            Expanded(
-              child: Stack(
-                children: [
-                  if (_showMap)
-                    StationMap(
-                      discovery: discovery,
-                      configuration: widget.dependencies.environment.maps,
-                      userPosition: _userPosition,
-                      onProviderFailure: () {
-                        if (mounted) setState(() => _showMap = false);
-                      },
-                    )
-                  else
-                    _StationList(dependencies: widget.dependencies),
-                  if (_showMap)
-                    Positioned(
-                      top: 12,
-                      right: 16,
-                      child: FloatingActionButton.small(
-                        heroTag: 'discovery-current-location',
-                        tooltip: 'Show my location',
-                        onPressed: _locating ? null : _locateUser,
-                        child: _locating
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.my_location),
-                      ),
-                    ),
-                  if (discovery.isLoading)
-                    const Positioned(
-                      top: 8,
-                      left: 16,
-                      right: 16,
-                      child: LinearProgressIndicator(),
-                    ),
-                  if (_showMap && discovery.selectedStationId != null)
-                    Positioned(
-                      left: VtsaSpacing.md,
-                      right: VtsaSpacing.md,
-                      bottom: VtsaSpacing.md,
-                      child: Builder(
-                        builder: (context) {
-                          final station = discovery.byId(
-                            discovery.selectedStationId!,
-                          );
-                          return station == null
-                              ? const SizedBox.shrink()
-                              : StationCard(
-                                  station: station,
-                                  favorite: widget.dependencies.favorites
-                                      .contains(station.id),
-                                  onFavorite: () => widget
-                                      .dependencies
-                                      .favorites
-                                      .toggle(station.id),
-                                  onTap: () =>
-                                      context.push('/stations/${station.id}'),
-                                  selected: true,
-                                );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       );
     },
   );
+
+  Widget _map(BuildContext context) {
+    final discovery = widget.dependencies.discovery;
+    final station = discovery.selectedStationId == null
+        ? null
+        : discovery.byId(discovery.selectedStationId!);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        StationMap(
+          key: _mapKey,
+          discovery: discovery,
+          configuration: widget.dependencies.environment.maps,
+          userPosition: _userPosition,
+          openStreetMapBuilder: widget.mapBuilder,
+          googleMapsBuilder: widget.mapBuilder,
+          onProviderFailure: () {
+            if (mounted) {
+              setState(() {
+                _showMap = false;
+                _mapExpanded = false;
+              });
+            }
+          },
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Column(
+            children: [
+              _MapButton(
+                tooltip: _mapExpanded ? 'Close expanded map' : 'Expand map',
+                icon: _mapExpanded ? Icons.close : Icons.fullscreen,
+                onPressed: () => setState(() => _mapExpanded = !_mapExpanded),
+              ),
+              const SizedBox(height: 8),
+              _MapButton(
+                tooltip: 'Show my location',
+                icon: Icons.my_location,
+                loading: _locating,
+                onPressed: _locating ? null : _locateUser,
+              ),
+            ],
+          ),
+        ),
+        if (_mapExpanded && station != null)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 44,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * .4,
+              ),
+              child: SingleChildScrollView(
+                child: StationCard(
+                  station: station,
+                  selected: true,
+                  favorite: widget.dependencies.favorites.contains(station.id),
+                  onFavorite: () =>
+                      widget.dependencies.favorites.toggle(station.id),
+                  onClose: () => discovery.select(null),
+                  onTap: () => context.push('/stations/${station.id}'),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   Future<void> _locateUser({bool nearest = false}) async {
     setState(() => _locating = true);
@@ -300,7 +426,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         return;
       }
       setState(() {
-        _userPosition = position;
+        // A fresh value also recenters when GPS returns the same coordinates.
+        _userPosition = MapPosition(position.latitude, position.longitude);
         if (nearest) _showMap = false;
       });
       if (nearest) {
@@ -421,7 +548,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       ),
                       DropdownMenuItem(
                         value: StationAvailability.offline,
-                        child: Text('Offline'),
+                        child: Text('Offline or unavailable'),
                       ),
                     ],
                     onChanged: (value) => setSheetState(
@@ -616,16 +743,15 @@ class _StationList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: discovery.refresh,
       child: ListView.separated(
-        padding: const EdgeInsets.all(VtsaSpacing.md),
+        padding: const EdgeInsets.only(top: 8),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: discovery.stations.length,
         separatorBuilder: (_, _) => const SizedBox(height: VtsaSpacing.sm),
         itemBuilder: (context, index) {
           final station = discovery.stations[index];
-          return StationCard(
+          return DriverStationCard(
             station: station,
-            selected: discovery.selectedStationId == station.id,
-            favorite: dependencies.favorites.contains(station.id),
-            onFavorite: () => dependencies.favorites.toggle(station.id),
             onTap: () {
               discovery.select(station.id);
               context.push('/stations/${station.id}');

@@ -184,3 +184,7 @@ Payments owns `qr_topups`, provider confirmation and QR Ph protocols. Billing ow
 ### URL-only registered chargers (ADR 0024)
 
 The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).
+
+## Prepaid mobile charging (ADR 0026)
+
+Charging owns customer quotes, session ownership, idempotency guards and their payment projection. It requests wallet reservation and settlement only through Billing's `PrepaidWallet` application contract; Charging does not write wallet or ledger tables. Tariffs owns append-only version applicability endings and immutable price snapshots. Assets supplies public connector and pricing-scope queries; Locations supplies site-scope options. These contracts are tenant-scoped. Payments continues to own verified AUB credits independently of charging settlement.

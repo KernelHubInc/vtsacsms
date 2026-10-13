@@ -71,7 +71,10 @@ final readonly class MeterValueService
             if ($reset) {
                 $anomalies[] = SessionAnomaly::MeterReset->value;
             }
+            $flow = app(EnergyFlowDuration::class)->measure($locked);
             $locked->forceFill([
+                'energy_flow_seconds' => $flow['seconds'],
+                'energy_flow_evidence_complete' => $flow['complete'],
                 'energy_wh' => $energyWh,
                 'duration_seconds' => $locked->started_at === null ? 0 : max(0, $locked->started_at->diffInSeconds($receivedAt)),
                 'anomaly_flags' => array_values(array_unique($anomalies)),
@@ -84,6 +87,7 @@ final readonly class MeterValueService
                     parkingSeconds: (int) $locked->parking_seconds,
                     idleSeconds: (int) $locked->idle_seconds,
                     startedAt: $locked->started_at,
+                    energyFlowSeconds: $flow['seconds'],
                 ));
                 $locked->estimated_cost_minor = $rating->totalMinor;
             }
@@ -134,6 +138,7 @@ final readonly class MeterValueService
             ->where('session_id', $session->getKey())
             ->where('unit', 'Wh')
             ->where('measurand', 'Energy.Active.Import.Register')
+            ->whereNull('phase')
             ->orderBy('sampled_at')
             ->orderBy('id')
             ->get();

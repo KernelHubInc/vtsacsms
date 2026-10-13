@@ -121,6 +121,27 @@ final class PrepaidWalletTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_wallet_reads_remain_available_when_real_collection_is_not_configured(): void
+    {
+        config(['wallet.mode' => 'disabled', 'features.simulated_payments' => false, 'features.real_payments' => false]);
+        $tenant = $this->createTenant('wallet-disabled');
+        $user = $this->createUser();
+        $this->withinTenant($tenant, $user, fn () => $this->createMembership($tenant, $user));
+        $token = $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email, 'password' => 'password',
+            'tenant_id' => $tenant->getKey(), 'device_name' => 'Wallet test',
+        ])->assertOk()->json('data.token');
+        $this->withToken($token)->getJson('/api/v1/wallet')->assertOk()
+            ->assertJsonPath('data.mode', 'disabled')
+            ->assertJsonPath('data.book', 'live')
+            ->assertJsonPath('data.topups_enabled', false)
+            ->assertJsonPath('data.available_minor', 0)
+            ->assertJsonCount(0, 'data.history.items');
+        $this->getJson('/api/v1/wallet/topups')->assertOk()->assertJsonCount(0, 'data.items');
+        $this->assertDatabaseCount('prepaid_accounts', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_simulation_is_denied_in_production(): void
     {
         $this->app->instance('env', 'production');

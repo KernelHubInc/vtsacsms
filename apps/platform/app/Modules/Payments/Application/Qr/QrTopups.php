@@ -13,7 +13,10 @@ use App\Modules\Payments\Domain\Models\QrTopup;
 use App\Modules\Payments\Infrastructure\Aub\AubQrGateway;
 use App\Modules\Payments\Infrastructure\Aub\AubQrProtocol;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final readonly class QrTopups
@@ -58,13 +61,19 @@ final readonly class QrTopups
                 }
                 if (($result['mch_id'] ?? '') !== $row->merchant_id || ($result['status'] ?? '') !== '0' || ($result['result_code'] ?? '') !== '0') {
                     $row->forceFill(['status' => 'review_required'])->save();
+                    $this->creationFailure($row, ($result['mch_id'] ?? '') !== $row->merchant_id ? 'merchant_mismatch' : 'provider_rejected', $result);
 
                     return;
                 }
                 $qr = $result['code_url'] ?? '';
                 $invoice = $result['invoiceId'] ?? '';
-                if ($qr === '' || strlen($qr) > 512 || $invoice === '' || strlen($invoice) > 32 || ! preg_match('/^[0-9]{14}$/D', $result['expiration_date'] ?? '')) {
+                // Keep an authenticated invoice for inquiry even if another QR field is invalid.
+                if ($invoice !== '' && strlen($invoice) <= 32) {
+                    $row->forceFill(['invoice_id' => $invoice])->save();
+                }
+                if ($qr === '' || strlen($qr) > 512 || strlen($invoice) > 32 || ! preg_match('/^[0-9]{14}$/D', $result['expiration_date'] ?? '')) {
                     $row->forceFill(['status' => 'review_required'])->save();
+                    $this->creationFailure($row, 'invalid_qr_fields', $result);
 
                     return;
                 }
@@ -72,11 +81,25 @@ final readonly class QrTopups
                 if ($expiry === null || $expiry->format('YmdHis') !== $result['expiration_date']) {
                     throw new \UnexpectedValueException('Invalid expiry.');
                 }
-                $row->forceFill(['status' => 'pending', 'qr_content' => $qr, 'invoice_id' => $invoice, 'expires_at' => $expiry->utc()])->save();
+                // AUB's observed signed QR Ph response omits invoiceId. It gates inquiry, not QR display.
+                $row->forceFill(['status' => 'pending', 'qr_content' => $qr, 'invoice_id' => $invoice === '' ? null : $invoice, 'expires_at' => $expiry->utc()])->save();
+                if ($invoice === '') {
+                    Log::warning('payments.qr_topup.invoice_unavailable', [
+                        'tenant_id' => (string) $row->tenant_id, 'topup_id' => (string) $row->getKey(),
+                    ]);
+                }
             });
-        } catch (\Throwable) {
+        } catch (\Throwable $error) {
             // Preserve a callback that won the race; never expose provider payloads or credentials.
             QrTopup::query()->whereKey($topup->getKey())->where('status', 'creating')->update(['status' => 'unknown']);
+            $reason = match (true) {
+                $error instanceof ConnectionException => 'connection_failed',
+                $error instanceof RequestException => 'http_failed',
+                $error instanceof WalletException && $error->errorCode === 'INVALID_AUB_MESSAGE' => 'unverified_response',
+                $error instanceof \UnexpectedValueException => 'invalid_expiry',
+                default => 'processing_failed',
+            };
+            $this->creationFailure($topup, $reason);
         }
 
         return $topup->refresh();
@@ -126,7 +149,7 @@ final readonly class QrTopups
 
     public function reconcile(QrTopup $topup): void
     {
-        if ($topup->book !== 'live' || $topup->status === 'paid') {
+        if ($topup->book !== 'live' || $topup->status === 'paid' || ! $topup->invoice_id) {
             return;
         }
         try {
@@ -136,6 +159,25 @@ final readonly class QrTopups
         }
         // The QR Ph query success/pending schema is unresolved. Retrieval alone must never mint credit.
         QrTopup::query()->whereKey($topup->getKey())->where('status', '!=', 'paid')->update(['status' => 'review_required']);
+    }
+
+    /** @param array<string,string> $fields */
+    private function creationFailure(QrTopup $row, string $reason, array $fields = []): void
+    {
+        // Log shape and bounded codes only; provider messages can contain credentials or payment data.
+        $codes = [];
+        foreach (['status', 'result_code', 'err_code'] as $name) {
+            $value = $fields[$name] ?? '';
+            $codes[$name] = preg_match('/^[a-zA-Z0-9_-]{1,32}$/D', $value) ? $value : null;
+        }
+        $lengths = [];
+        foreach (['code_url', 'code_img_url', 'invoiceId', 'expiration_date'] as $name) {
+            $lengths[$name] = strlen($fields[$name] ?? '');
+        }
+        Log::warning('payments.qr_topup.creation_failed', [
+            'tenant_id' => (string) $row->tenant_id, 'topup_id' => (string) $row->getKey(),
+            'reason' => $reason, 'provider_codes' => $codes, 'field_lengths' => $lengths,
+        ]);
     }
 
     /** @return array<string,mixed> */

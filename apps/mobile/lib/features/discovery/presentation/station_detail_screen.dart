@@ -1,31 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_widgets.dart';
 
-class StationDetailScreen extends StatelessWidget {
+class StationDetailScreen extends StatefulWidget {
   const StationDetailScreen({
     required this.dependencies,
     required this.stationId,
     super.key,
   });
-
   final AppDependencies dependencies;
   final String stationId;
 
   @override
+  State<StationDetailScreen> createState() => _StationDetailScreenState();
+}
+
+class _StationDetailScreenState extends State<StationDetailScreen> {
+  String? _selectedId;
+
+  bool _canSelect(Station station, StationConnector connector) =>
+      !station.isStale &&
+      station.connectionStatus == 'online' &&
+      connector.id != null &&
+      (connector.availability == 'available' ||
+          (connector.availability == 'occupied' &&
+              connector.reportedStatus == 'preparing'));
+
+  @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([
-      dependencies.discovery,
-      dependencies.favorites,
-      dependencies.vehicles,
+      widget.dependencies.discovery,
+      widget.dependencies.favorites,
+      widget.dependencies.vehicles,
     ]),
     builder: (context, _) {
-      final station = dependencies.discovery.byId(stationId);
+      final dependencies = widget.dependencies;
+      final station = dependencies.discovery.byId(widget.stationId);
       if (station == null) {
-        return VtsaPageShell(
+        return DriverPage(
           title: 'Station',
           body: VtsaErrorState(
             title: 'Station is no longer in this search',
@@ -38,120 +56,194 @@ class StationDetailScreen extends StatelessWidget {
         );
       }
       final favorite = dependencies.favorites.contains(station.id);
+      final selected = station.connectors
+          .where((c) => c.id == _selectedId && _canSelect(station, c))
+          .firstOrNull;
       final vehicle = dependencies.vehicles.defaultVehicle;
-      return VtsaPageShell(
-        eyebrow: station.operatorName,
-        title: station.siteName,
-        actions: [
-          IconButton(
-            tooltip: favorite ? 'Remove from favorites' : 'Add to favorites',
-            onPressed: () => dependencies.favorites.toggle(station.id),
-            icon: Icon(favorite ? Icons.favorite : Icons.favorite_border),
-          ),
-        ],
+      return DriverPage(
+        title: 'A good place to charge',
         body: ListView(
           children: [
-            Wrap(
-              spacing: VtsaSpacing.xs,
-              runSpacing: VtsaSpacing.xs,
-              children: [
-                VtsaStatusChip(
-                  label: availabilityLabel(station),
-                  state: operationalStateFor(station),
-                ),
-                Chip(
-                  label: Text(switch (station.connectionStatus) {
-                    'online' => 'Charger online',
-                    'offline' => 'Charger offline',
-                    _ => 'Connection unconfirmed',
-                  }),
-                ),
-                Chip(
-                  label: Text(
-                    !station.hoursKnown
-                        ? 'Hours not provided'
-                        : station.openNow
-                        ? 'Open now'
-                        : 'Closed now',
+            DriverNotice(
+              title: station.name,
+              message:
+                  '${station.address ?? station.siteName}\n${!station.hoursKnown
+                      ? 'Hours not provided'
+                      : station.openNow
+                      ? 'Open now'
+                      : 'Closed now'} · ${station.connectionLabel}',
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Choose a plug',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            const Text('We’ll show you the price before you begin.'),
+            const SizedBox(height: 16),
+            for (final connector in station.connectors)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Semantics(
+                  selected: selected?.id == connector.id && selected != null,
+                  button: true,
+                  child: VtsaCard(
+                    padding: EdgeInsets.zero,
+                    selected: selected?.id == connector.id && selected != null,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _canSelect(station, connector)
+                          ? () => setState(() => _selectedId = connector.id)
+                          : null,
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  '${connector.standard} · ${connector.name}',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                VtsaStatusChip(
+                                  label: station.isStale
+                                      ? 'Status stale'
+                                      : connector.statusLabel,
+                                  state: _canSelect(station, connector)
+                                      ? VtsaOperationalState.available
+                                      : VtsaOperationalState.unavailable,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Up to ${(connector.maximumPowerW / 1000).toStringAsFixed(1)} kW',
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              vehicle == null
+                                  ? 'Price confirmed in the next step'
+                                  : vehicle.supports(connector.standard)
+                                  ? 'Compatible with ${vehicle.nickname}'
+                                  : 'Check compatibility with ${vehicle.nickname}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                Chip(label: Text('Up to ${station.maximumPowerLabel}')),
+              ),
+            if (station.connectors.isEmpty)
+              const DriverNotice(
+                title: 'Plug details pending',
+                message:
+                    'Charging availability is unconfirmed until the station publishes its connectors.',
+              ),
+            if (station.isStale)
+              const DriverNotice(
+                title: 'Availability needs a refresh',
+                message:
+                    'These are the last loaded details. Refresh before choosing a plug.',
+              ),
+            const SizedBox(height: 8),
+            const DriverNotice(
+              title: 'No surprises',
+              message:
+                  'Review the tariff and reserved wallet budget before charging.',
+              positive: true,
+            ),
+            const SizedBox(height: 16),
+            VtsaButton(
+              label: selected == null
+                  ? 'Choose a plug to continue'
+                  : 'Continue with ${selected.standard}',
+              onPressed: selected == null
+                  ? null
+                  : () => context.push(
+                      Uri(
+                        path: '/charge',
+                        queryParameters: {'code': selected.id!},
+                      ).toString(),
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Availability can change while you travel.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Station details & directions'),
+              children: [
+                Wrap(
+                  children: [
+                    TextButton.icon(
+                      onPressed: dependencies.discovery.refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh station status'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          dependencies.favorites.toggle(station.id),
+                      icon: Icon(
+                        favorite ? Icons.favorite : Icons.favorite_border,
+                      ),
+                      label: Text(
+                        favorite ? 'Remove from favorites' : 'Add to favorites',
+                      ),
+                    ),
+                  ],
+                ),
+                if (station.lastSeenAt != null)
+                  Text(
+                    'Last heard ${DateFormat('MMM d, HH:mm:ss').format(station.lastSeenAt!.toLocal())}',
+                  ),
+                VtsaButton(
+                  label: 'Directions',
+                  icon: Icons.directions_outlined,
+                  variant: VtsaButtonVariant.secondary,
+                  onPressed: () async {
+                    final opened = await dependencies.directions.open(
+                      latitude: station.latitude,
+                      longitude: station.longitude,
+                    );
+                    if (context.mounted && !opened) {
+                      showVtsaToast(
+                        context,
+                        message:
+                            'No navigation application could open directions.',
+                      );
+                    }
+                  },
+                ),
+                VtsaButton(
+                  label: 'Scan charger to start',
+                  icon: Icons.qr_code_scanner,
+                  variant: VtsaButtonVariant.quiet,
+                  onPressed: () => context.push('/charge'),
+                ),
+                _DetailSection(
+                  title: 'Operating hours',
+                  emptyText: 'Hours have not been published.',
+                  values: station.operatingHours,
+                ),
+                const SizedBox(height: 12),
+                _DetailSection(
+                  title: 'Amenities',
+                  emptyText: 'No amenities are published.',
+                  values: station.amenities,
+                ),
               ],
             ),
-            const SizedBox(height: VtsaSpacing.lg),
-            Text(
-              station.address ?? station.name,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: VtsaSpacing.lg),
-            VtsaButton(
-              label: 'Directions',
-              icon: Icons.directions_outlined,
-              onPressed: () async {
-                final opened = await dependencies.directions.open(
-                  latitude: station.latitude,
-                  longitude: station.longitude,
-                );
-                if (context.mounted && !opened) {
-                  showVtsaToast(
-                    context,
-                    message: 'No navigation application could open directions.',
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: VtsaSpacing.sm),
-            VtsaButton(
-              label: 'Scan charger to start',
-              icon: Icons.qr_code_scanner,
-              variant: VtsaButtonVariant.secondary,
-              onPressed: () => context.push('/charge'),
-            ),
-            const SizedBox(height: VtsaSpacing.xl),
-            Text(
-              'Connectors',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: VtsaSpacing.xs),
-            Text(
-              vehicle == null
-                  ? 'Add a vehicle to see compatibility.'
-                  : vehicle.connectorStandards.isEmpty
-                  ? 'Add connector standards to ${vehicle.nickname} to check compatibility.'
-                  : 'Compared with ${vehicle.nickname}. Confirm the physical connector before use.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: context.vtsaColors.textMuted,
-              ),
-            ),
-            for (final connector in station.connectors)
-              ConnectorCompatibilityTile(
-                connector: connector,
-                vehicle: vehicle,
-              ),
-            const SizedBox(height: VtsaSpacing.lg),
-            _DetailSection(
-              title: 'Operating hours',
-              emptyText:
-                  'Detailed operating hours are not published for this station.',
-              values: station.operatingHours,
-            ),
-            const SizedBox(height: VtsaSpacing.md),
-            _DetailSection(
-              title: 'Amenities',
-              emptyText: 'No amenities are published for this station.',
-              values: station.amenities,
-            ),
-            if (station.isStale) ...[
-              const SizedBox(height: VtsaSpacing.lg),
-              VtsaCard(
-                eyebrow: 'DATA FRESHNESS',
-                title: 'Treat availability as unknown',
-                child: Text(
-                  'The last status is older than the network freshness threshold. Refresh before relying on it.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ],
           ],
         ),
       );

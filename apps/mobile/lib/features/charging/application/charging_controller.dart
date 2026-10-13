@@ -79,6 +79,11 @@ final class ChargingController extends ChangeNotifier {
   List<ChargingSession> _history = const [];
   String? _historyCursor;
   bool _historyLoading = false;
+  int _generation = 0;
+  bool _disposed = false;
+
+  bool _isCurrent((int, String) request) =>
+      !_disposed && request.$1 == _generation && request.$2 == _ownerId();
 
   ChargingFlowPhase get phase => _phase;
   ChargePreparation? get preparation => _preparation;
@@ -97,40 +102,46 @@ final class ChargingController extends ChangeNotifier {
     if (!_isAuthenticated() || !_network.isOnline) {
       return;
     }
-    final reference = await _store.read(_ownerId());
+    final request = (_generation, _ownerId());
+    final reference = await _store.read(request.$2);
+    if (!_isCurrent(request)) return;
     try {
-      final recovered = reference == null
-          ? await _repository.activeSession()
-          : await _repository.getSession(reference.sessionId);
-      if (recovered == null && reference != null) {
-        await _store.clear(_ownerId());
-        return;
+      ChargingSession? recovered;
+      if (reference != null) {
+        try {
+          recovered = await _repository.getSession(reference.sessionId);
+        } on AppFailure catch (failure) {
+          if (failure.kind != FailureKind.notFound) rethrow;
+          if (!_isCurrent(request)) return;
+          await _store.clear(request.$2);
+        }
       }
+      if (!_isCurrent(request)) return;
+      recovered ??= await _repository.activeSession();
+      if (!_isCurrent(request)) return;
       if (recovered != null) {
-        await _applySession(recovered);
+        await _applySession(recovered, request);
         if (reference != null &&
             recovered.isTerminal &&
             _phase != ChargingFlowPhase.paymentProcessing) {
           final active = await _repository.activeSession();
           if (active != null && active.id != recovered.id) {
-            await _applySession(active);
+            await _applySession(active, request);
           }
         }
       }
     } on AppFailure catch (failure) {
-      if (failure.kind == FailureKind.notFound && reference != null) {
-        await _store.clear(_ownerId());
-      } else {
-        _failure = failure;
-        notifyListeners();
-      }
+      if (!_isCurrent(request)) return;
+      _failure = failure;
+      notifyListeners();
     }
   }
 
   Future<bool> prepare({required String rawCode, String? vehicleId}) async {
-    if (!_network.isOnline || _mutationInFlight) {
+    if (!_isAuthenticated() || !_network.isOnline || _mutationInFlight) {
       return false;
     }
+    final request = (_generation, _ownerId());
     ChargerCode code;
     try {
       code = ChargerCode.parse(rawCode);
@@ -152,6 +163,7 @@ final class ChargingController extends ChangeNotifier {
         code: code,
         vehicleId: vehicleId,
       );
+      if (!_isCurrent(request) || !_isAuthenticated()) return false;
       _preparation = result;
       _selectedPaymentMethod = result.paymentMethods
           .where((method) => method.isDefault)
@@ -160,12 +172,15 @@ final class ChargingController extends ChangeNotifier {
       _phase = ChargingFlowPhase.reviewing;
       return true;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return false;
       _failure = failure;
       _phase = ChargingFlowPhase.failed;
       return false;
     } finally {
-      _mutationInFlight = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _mutationInFlight = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -179,9 +194,11 @@ final class ChargingController extends ChangeNotifier {
   }
 
   Future<bool> start() async {
+    final request = (_generation, _ownerId());
     final preparation = _preparation;
     final method = _selectedPaymentMethod;
-    if (!_network.isOnline ||
+    if (!_isAuthenticated() ||
+        !_network.isOnline ||
         _mutationInFlight ||
         preparation == null ||
         method == null) {
@@ -219,25 +236,43 @@ final class ChargingController extends ChangeNotifier {
           idempotencyKey: _startIdempotencyKey!,
         ),
       );
-      await _applySession(authoritative);
+      if (!_isCurrent(request) || !_isAuthenticated()) return false;
+      await _applySession(authoritative, request);
       return true;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return false;
       _failure = failure;
-      if (failure.code == 'session_already_active') {
+      // A lost response does not prove that the server rejected Start.
+      if (failure.code == 'session_already_active' ||
+          failure.code == 'charging_request_rejected' ||
+          const {
+            FailureKind.timeout,
+            FailureKind.offline,
+            FailureKind.server,
+          }.contains(failure.kind)) {
         await restoreAuthoritativeSession();
-      } else {
-        _phase = ChargingFlowPhase.failed;
+        if (!_isCurrent(request)) return false;
+        if (_session != null &&
+            (!_session!.isTerminal ||
+                _phase == ChargingFlowPhase.paymentProcessing)) {
+          return true;
+        }
       }
+      _phase = ChargingFlowPhase.failed;
       return false;
     } finally {
-      _mutationInFlight = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _mutationInFlight = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<bool> stop() async {
+    final request = (_generation, _ownerId());
     final current = _session;
-    if (!_network.isOnline ||
+    if (!_isAuthenticated() ||
+        !_network.isOnline ||
         _mutationInFlight ||
         current == null ||
         !current.canRequestRemoteStop) {
@@ -253,23 +288,29 @@ final class ChargingController extends ChangeNotifier {
         sessionId: current.id,
         idempotencyKey: _stopIdempotencyKey!,
       );
-      await _applySession(authoritative);
+      if (!_isCurrent(request) || !_isAuthenticated()) return false;
+      await _applySession(authoritative, request);
       return true;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return false;
       _failure = failure;
       _phase = current.isPhysicalActive
           ? ChargingFlowPhase.live
           : _phaseFor(current);
       return false;
     } finally {
-      _mutationInFlight = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _mutationInFlight = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<bool> cancelPendingStart() async {
+    final request = (_generation, _ownerId());
     final current = _session;
-    if (!_network.isOnline ||
+    if (!_isAuthenticated() ||
+        !_network.isOnline ||
         _mutationInFlight ||
         current == null ||
         current.isPhysicalActive) {
@@ -282,18 +323,23 @@ final class ChargingController extends ChangeNotifier {
         sessionId: current.id,
         reason: 'customer_cancelled_before_start',
       );
-      await _applySession(authoritative);
+      if (!_isCurrent(request) || !_isAuthenticated()) return false;
+      await _applySession(authoritative, request);
       return true;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return false;
       _failure = failure;
       return false;
     } finally {
-      _mutationInFlight = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _mutationInFlight = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> refresh() async {
+    final request = (_generation, _ownerId());
     final current = _session;
     if (!_isAuthenticated() ||
         current == null ||
@@ -304,43 +350,53 @@ final class ChargingController extends ChangeNotifier {
     _syncing = true;
     notifyListeners();
     try {
-      await _applySession(await _repository.getSession(current.id));
+      await _applySession(await _repository.getSession(current.id), request);
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return;
       _failure = failure;
     } finally {
-      _syncing = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _syncing = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> recoverSession(String sessionId) async {
+    final request = (_generation, _ownerId());
     if (!_isAuthenticated() || !_network.isOnline || _syncing) {
       return;
     }
     _syncing = true;
     notifyListeners();
     try {
-      await _applySession(await _repository.getSession(sessionId));
+      await _applySession(await _repository.getSession(sessionId), request);
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return;
       _failure = failure;
     } finally {
-      _syncing = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _syncing = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<ChargingSession?> fetchSessionDetail(String sessionId) async {
+    final request = (_generation, _ownerId());
     final current = _session;
     if (current?.id == sessionId) {
       await refresh();
-      return _session;
+      return _isCurrent(request) ? _session : null;
     }
     if (!_isAuthenticated() || !_network.isOnline) {
       return null;
     }
     try {
-      return await _repository.getSession(sessionId);
+      final result = await _repository.getSession(sessionId);
+      return _isCurrent(request) && _isAuthenticated() ? result : null;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return null;
       _failure = failure;
       notifyListeners();
       return null;
@@ -348,6 +404,7 @@ final class ChargingController extends ChangeNotifier {
   }
 
   Future<void> loadHistory({bool nextPage = false}) async {
+    final request = (_generation, _ownerId());
     if (!_isAuthenticated() || _historyLoading || !_network.isOnline) {
       return;
     }
@@ -357,13 +414,18 @@ final class ChargingController extends ChangeNotifier {
       final page = await _repository.history(
         cursor: nextPage ? _historyCursor : null,
       );
+      if (!_isCurrent(request) || !_isAuthenticated()) return;
+      _failure = null;
       _history = nextPage ? [..._history, ...page.sessions] : page.sessions;
       _historyCursor = page.nextCursor;
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return;
       _failure = failure;
     } finally {
-      _historyLoading = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _historyLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -399,7 +461,11 @@ final class ChargingController extends ChangeNotifier {
     String? sessionId,
   }) async {
     final targetSessionId = sessionId ?? _session?.id;
-    if (targetSessionId == null || !_network.isOnline || _mutationInFlight) {
+    final request = (_generation, _ownerId());
+    if (!_isAuthenticated() ||
+        targetSessionId == null ||
+        !_network.isOnline ||
+        _mutationInFlight) {
       return false;
     }
     _mutationInFlight = true;
@@ -407,13 +473,16 @@ final class ChargingController extends ChangeNotifier {
     notifyListeners();
     try {
       await operation(targetSessionId, '$prefix-${_ids.next()}');
-      return true;
+      return _isCurrent(request) && _isAuthenticated();
     } on AppFailure catch (failure) {
+      if (!_isCurrent(request)) return false;
       _failure = failure;
       return false;
     } finally {
-      _mutationInFlight = false;
-      notifyListeners();
+      if (_isCurrent(request)) {
+        _mutationInFlight = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -433,27 +502,39 @@ final class ChargingController extends ChangeNotifier {
 
   Future<void> onResumed() => restoreAuthoritativeSession();
 
-  Future<void> onSignedOut() async {
-    await _store.clear(_ownerId());
+  Future<void> onSignedOut({String? ownerId}) async {
+    final previousOwner = ownerId ?? _ownerId();
+    _generation++;
     _stopSync();
     _session = null;
     _preparation = null;
     _selectedPaymentMethod = null;
     _history = const [];
     _historyCursor = null;
+    _mutationInFlight = false;
+    _historyLoading = false;
+    _syncing = false;
+    _startIdempotencyKey = null;
+    _stopIdempotencyKey = null;
     _phase = ChargingFlowPhase.idle;
     _failure = null;
     notifyListeners();
+    await _store.clear(previousOwner);
   }
 
-  Future<void> _applySession(ChargingSession authoritative) async {
-    if (!_isAuthenticated()) return;
+  Future<void> _applySession(
+    ChargingSession authoritative,
+    (int, String) request,
+  ) async {
+    if (!_isCurrent(request) || !_isAuthenticated()) return;
     final current = _session;
     if (current != null &&
         current.id == authoritative.id &&
         authoritative.aggregateVersion < current.aggregateVersion) {
       return;
     }
+    if (current?.id != authoritative.id) _stopIdempotencyKey = null;
+    _failure = null;
     _session = authoritative;
     _phase = _phaseFor(authoritative);
     final keepForRecovery =
@@ -462,14 +543,16 @@ final class ChargingController extends ChangeNotifier {
     if (keepForRecovery) {
       await _store.write(
         ActiveSessionReference(
-          ownerId: _ownerId(),
+          ownerId: request.$2,
           sessionId: authoritative.id,
           savedAt: _now().toUtc(),
         ),
       );
+      if (!_isCurrent(request)) return;
       _startSync(authoritative.id);
     } else {
-      await _store.clear(_ownerId());
+      await _store.clear(request.$2);
+      if (!_isCurrent(request)) return;
       _stopSync();
     }
     _scheduleDeadline(authoritative);
@@ -533,6 +616,7 @@ final class ChargingController extends ChangeNotifier {
   }
 
   void _startSync(String sessionId) {
+    final request = (_generation, _ownerId());
     if (_syncedSessionId != null && _syncedSessionId != sessionId) {
       unawaited(_realtimeSubscription?.cancel());
       _realtimeSubscription = null;
@@ -544,14 +628,17 @@ final class ChargingController extends ChangeNotifier {
           .watch(sessionId)
           .listen(
             (update) {
+              if (!_isCurrent(request) || _session?.id != sessionId) return;
               _realtimeConnected = true;
-              unawaited(_applySession(update));
+              unawaited(_applySession(update, request));
             },
             onError: (Object _) {
+              if (!_isCurrent(request)) return;
               _realtimeConnected = false;
               notifyListeners();
             },
             onDone: () {
+              if (!_isCurrent(request)) return;
               _realtimeConnected = false;
               notifyListeners();
             },
@@ -591,6 +678,8 @@ final class ChargingController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _generation++;
     _network.removeListener(_onNetworkChanged);
     _stopSync();
     unawaited(_pushSubscription?.cancel());

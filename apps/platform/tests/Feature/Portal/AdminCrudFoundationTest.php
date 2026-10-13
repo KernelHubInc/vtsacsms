@@ -11,7 +11,12 @@ use App\Filament\Platform\Pages\KycSettings;
 use App\Filament\Platform\Pages\KycVerifications;
 use App\Filament\Platform\Pages\MasterData;
 use App\Foundation\Audit\Models\AuditEvent;
+use App\Modules\Assets\Domain\Models\ChargingCurrentType;
 use App\Modules\Assets\Domain\Models\ChargingStation;
+use App\Modules\Assets\Domain\Models\Connector;
+use App\Modules\Assets\Domain\Models\ConnectorStandard;
+use App\Modules\Assets\Domain\Models\Evse;
+use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Identity\Application\AccountLifecycleService;
 use App\Modules\Inventory\Application\InventoryCatalogService;
@@ -53,7 +58,7 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
             ]);
             $this->assignDirectly($tenant, $membership, $role);
             $station = ChargingStation::factory()->create();
-            StationConnection::query()->create([
+            $connection = StationConnection::query()->create([
                 'charging_station_id' => $station->getKey(),
                 'connection_id' => (string) Str::ulid(),
                 'connected' => true,
@@ -61,13 +66,25 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
                 'last_event_at' => now(),
                 'last_seen_at' => now(),
             ]);
+            $evse = Evse::factory()->create(['charging_station_id' => $station->getKey()]);
+            ConnectorStandard::query()->create(['code' => 'type2', 'name' => 'Type 2']);
+            ChargingCurrentType::query()->create(['code' => 'ac', 'name' => 'AC']);
+            $connector = Connector::factory()->create(['evse_id' => $evse->getKey()]);
+            ConnectorStatus::query()->create([
+                'connector_id' => $connector->getKey(), 'status' => 'occupied',
+                'reported_status' => 'charging', 'observed_at' => now(),
+                'ocpp_connection_id' => $connection->connection_id, 'stale_after_seconds' => 300,
+            ]);
 
             return [$station, ChargingStation::factory()->create()];
         });
         $other = $this->withinTenant($otherTenant, $user, fn () => ChargingStation::factory()->create());
 
         $this->actingAs($user)->get('/admin/charging-stations')
-            ->assertOk()->assertSee($station->name)->assertSee($unseen->name)->assertDontSee($other->name);
+            ->assertOk()->assertSee($station->name)->assertSee($unseen->name)->assertDontSee($other->name)->assertSee('Charging');
+        $this->get('/admin/connector-statuses')->assertOk()->assertSee('Charging');
+        $this->travel(181)->seconds();
+        $this->get('/admin/connector-statuses')->assertOk()->assertSee('Offline')->assertDontSee('>Charging<', false);
         foreach ([$station, $unseen] as $record) {
             $this->get('/admin/charging-stations/'.$record->getKey().'/edit')->assertOk();
         }

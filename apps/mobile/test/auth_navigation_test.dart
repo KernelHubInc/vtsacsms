@@ -50,7 +50,7 @@ void main() {
     expect(fixture.stations.lastBounds, isNull);
     await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
-    expect(find.text('Find your next charge'), findsOneWidget);
+    expect(find.text('Where would you like to charge?'), findsOneWidget);
   });
 
   for (final onboardingComplete in [false, true]) {

@@ -13,6 +13,42 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class ConnectorSnapshotQuery
 {
+    /** @return array<string, mixed>|null */
+    public function publicChargeTarget(string $code): ?array
+    {
+        $connectors = $this->baseQuery()->with('standard')
+            ->whereHas('evse.station', fn (Builder $query): Builder => $query->where('is_public', true))
+            ->whereHas('evse.station.site', fn (Builder $query): Builder => $query->where('is_public', true)->where('is_active', true)->where('lifecycle_status', 'active'))
+            ->where(fn (Builder $query): Builder => $query->where('qr_identifier', $code)->orWhere('id', $code)
+                ->orWhereHas('evse.station', fn (Builder $query): Builder => $query->where('charge_point_identity', $code)->orWhere('qr_identifier', $code)))
+            ->limit(2)->get();
+        if ($connectors->count() !== 1) {
+            return null;
+        }
+        $connector = $connectors->first();
+        $snapshot = $this->snapshot($connector);
+        $status = ConnectorStatus::query()->where('connector_id', $connector->getKey())->first();
+        $ready = $snapshot->availability === ConnectorAvailability::Available
+            || ($snapshot->availability === ConnectorAvailability::Occupied && $status?->reported_status === 'preparing');
+
+        return [
+            'connector_id' => (string) $connector->getKey(), 'connector_name' => 'Connector '.$connector->connector_number,
+            'connector_standard' => (string) $connector->standard->getAttribute('code'), 'maximum_power_w' => (int) $connector->maximum_power_w,
+            'station_id' => (string) $connector->evse->station->getKey(), 'station_name' => $connector->evse->station->name,
+            'station_address' => $connector->evse->station->site->name,
+            'readiness' => $ready ? 'available' : 'unavailable',
+            'status_observed_at' => $status?->observed_at->toISOString() ?? now('UTC')->toISOString(),
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function pricingOptions(): array
+    {
+        return $this->baseQuery()->get()->mapWithKeys(fn (Connector $connector): array => [
+            (string) $connector->getKey() => $connector->evse->station->name.' / '.$connector->evse->station->charge_point_identity.' / Connector '.$connector->connector_number,
+        ])->all();
+    }
+
     public function byId(string $connectorId): ?ConnectorSnapshot
     {
         return $this->snapshot($this->baseQuery()->whereKey($connectorId)->first());

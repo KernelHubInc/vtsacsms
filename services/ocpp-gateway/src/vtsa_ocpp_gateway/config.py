@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -58,6 +59,8 @@ class Settings:
     command_timeout_seconds: float = 30.0
     authorization_timeout_seconds: float = 5.0
     heartbeat_interval_seconds: int = 30
+    websocket_ping_timeout_seconds: float = 30.0
+    message_idle_timeout_seconds: float = 180.0
     maximum_clock_skew_seconds: int = 300
     maximum_message_bytes: int = 262_144
     charger_registry_json: str = "{}"
@@ -91,6 +94,17 @@ class Settings:
             raise ValueError("Only OCPP 1.6J and OCPP 2.0.1 subprotocols are supported")
         if self.connection_lease_seconds < 9:
             raise ValueError("Connection lease must be at least 9 seconds")
+        if (
+            self.heartbeat_interval_seconds < 1
+            or not math.isfinite(self.websocket_ping_timeout_seconds)
+            or self.websocket_ping_timeout_seconds < 0
+        ):
+            raise ValueError("Heartbeat must be positive and WebSocket ping timeout nonnegative")
+        if (
+            not math.isfinite(self.message_idle_timeout_seconds)
+            or self.message_idle_timeout_seconds < 3 * self.heartbeat_interval_seconds
+        ):
+            raise ValueError("Message idle timeout must allow at least three heartbeat intervals")
         if self.maximum_message_bytes < 1024:
             raise ValueError("Maximum OCPP message size must be at least 1024 bytes")
         if bool(self.tls_certificate_file) != bool(self.tls_private_key_file):
@@ -156,6 +170,12 @@ class Settings:
                 os.getenv("GATEWAY_AUTHORIZATION_TIMEOUT_SECONDS", "5")
             ),
             heartbeat_interval_seconds=int(os.getenv("GATEWAY_HEARTBEAT_INTERVAL_SECONDS", "30")),
+            websocket_ping_timeout_seconds=float(
+                os.getenv("GATEWAY_WS_PING_TIMEOUT_SECONDS", "30")
+            ),
+            message_idle_timeout_seconds=float(
+                os.getenv("GATEWAY_MESSAGE_IDLE_TIMEOUT_SECONDS", "180")
+            ),
             maximum_clock_skew_seconds=int(os.getenv("GATEWAY_MAXIMUM_CLOCK_SKEW_SECONDS", "300")),
             maximum_message_bytes=int(os.getenv("GATEWAY_MAXIMUM_MESSAGE_BYTES", "262144")),
             charger_registry_json=os.getenv("OCPP_CHARGER_REGISTRY_JSON", "{}"),

@@ -77,6 +77,8 @@ Authorization requests contain the authenticated tenant/charger binding, protoco
 | `GATEWAY_COMMAND_TIMEOUT_SECONDS` | `30` | Hard upper bound for command correlation |
 | `GATEWAY_AUTHORIZATION_TIMEOUT_SECONDS` | `5` | Fail-closed core authorization timeout |
 | `GATEWAY_HEARTBEAT_INTERVAL_SECONDS` | `30` | Boot response and WebSocket ping interval |
+| `GATEWAY_WS_PING_TIMEOUT_SECONDS` | `30` | Pong deadline; `0` disables only this deadline for tested firmware compatibility |
+| `GATEWAY_MESSAGE_IDLE_TIMEOUT_SECONDS` | `180` | Close a socket with no OCPP messages; at least three heartbeat intervals, finite and positive |
 | `GATEWAY_MAXIMUM_CLOCK_SKEW_SECONDS` | `300` | Adds anomaly evidence; does not rewrite charger time |
 | `GATEWAY_MAXIMUM_MESSAGE_BYTES` | `262144` | Applied before protocol routing |
 | `GATEWAY_RAW_MESSAGE_LOGGING` | `true` | Structured frames; disable when evidence is unnecessary |

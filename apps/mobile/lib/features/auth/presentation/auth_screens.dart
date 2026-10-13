@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart'
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
+import 'package:vtsa_mobile/features/auth/presentation/auth_entry_scaffold.dart';
 import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -28,11 +29,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => _AuthShell(
-    eyebrow: 'WELCOME BACK',
+  Widget build(BuildContext context) => AuthEntryScaffold(
     title: 'Sign in to your drive.',
-    intro:
-        'Sign in to find charging stations, manage your vehicles, and verify your identity. New here? Create an account to get started.',
+    subtitle: 'Welcome back to Power Solutions.',
     child: AnimatedBuilder(
       animation: widget.dependencies.auth,
       builder: (context, _) {
@@ -85,6 +84,8 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _submit,
             ),
             const SizedBox(height: VtsaSpacing.md),
+            const Center(child: Text('New to Power Solutions?')),
+            const SizedBox(height: 8),
             VtsaButton(
               label: 'Create an account',
               variant: VtsaButtonVariant.secondary,
@@ -323,34 +324,41 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => _AuthShell(
-    eyebrow: 'ACCOUNT RECOVERY',
-    title: _sent ? 'Check your inbox.' : 'Reset your password.',
-    intro: _sent
-        ? 'If an account matches that address, reset instructions are on their way.'
-        : 'We will send a time-limited reset link without revealing whether an account exists.',
-    child: _sent
-        ? VtsaButton(
-            label: 'Back to sign in',
-            onPressed: () => context.go('/login'),
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              VtsaTextField(
-                label: 'Email address',
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                required: true,
-              ),
-              const SizedBox(height: VtsaSpacing.lg),
-              VtsaButton(
-                label: 'Send reset link',
-                loading: widget.dependencies.auth.isBusy,
-                onPressed: _submit,
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.dependencies.auth,
+    builder: (context, _) => AuthEntryScaffold(
+      title: _sent ? 'Check your inbox.' : 'Reset your password.',
+      subtitle: _sent
+          ? 'If an account matches that address, reset instructions are on their way.'
+          : 'We will send a time-limited reset link without revealing whether an account exists.',
+      child: _sent
+          ? VtsaButton(
+              label: 'Back to sign in',
+              onPressed: () => context.go('/login'),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                VtsaTextField(
+                  label: 'Email address',
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  required: true,
+                ),
+                const SizedBox(height: VtsaSpacing.lg),
+                if (widget.dependencies.auth.failure != null)
+                  VtsaErrorState(
+                    title: 'Could not send reset link',
+                    description: widget.dependencies.auth.failure!.message,
+                  ),
+                VtsaButton(
+                  label: 'Send reset link',
+                  loading: widget.dependencies.auth.isBusy,
+                  onPressed: widget.dependencies.auth.isBusy ? null : _submit,
+                ),
+              ],
+            ),
+    ),
   );
 
   Future<void> _submit() async {

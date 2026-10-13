@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\AubQrWebhookController;
 use App\Http\Controllers\Api\V1\ChargerAuthenticationController;
 use App\Http\Controllers\Api\V1\ChargingSessionController;
 use App\Http\Controllers\Api\V1\ChargingStationController;
+use App\Http\Controllers\Api\V1\CustomerChargingController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\DriverVehicleController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
@@ -119,6 +120,17 @@ Route::prefix('v1')->middleware([
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
 
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
+        Route::prefix('mobile')->middleware('throttle:60,1')->group(function (): void {
+            $charging = CustomerChargingController::class;
+            Route::post('/charging/prepare', [$charging, 'prepare']);
+            Route::post('/charging-sessions/remote-start', [$charging, 'start'])
+                ->middleware(RequireEnabledFeature::class.':'.Feature::RemoteCharging->value);
+            Route::get('/charging-sessions/active', [$charging, 'active']);
+            Route::get('/charging-sessions', [$charging, 'index']);
+            Route::get('/charging-sessions/{session}', [$charging, 'show'])->whereUlid('session');
+            Route::post('/charging-sessions/{session}/remote-stop', [$charging, 'stop'])->whereUlid('session');
+            Route::post('/charging-sessions/{session}/cancel', [$charging, 'cancel'])->whereUlid('session');
+        });
         Route::get('/vehicles', [DriverVehicleController::class, 'index'])->name('api.v1.vehicles.index');
         Route::put('/vehicles/{vehicle}', [DriverVehicleController::class, 'store'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.store');
         Route::delete('/vehicles/{vehicle}', [DriverVehicleController::class, 'destroy'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.destroy');

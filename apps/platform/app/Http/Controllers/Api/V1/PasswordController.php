@@ -16,6 +16,8 @@ use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Application\TenantContext;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
@@ -23,6 +25,21 @@ use Illuminate\Support\Str;
 
 final class PasswordController extends Controller
 {
+    public function show(Request $request, string $token): Response
+    {
+        $email = $request->query('email', '');
+
+        return $this->form($token, is_string($email) && strlen($email) <= 254 ? $email : '');
+    }
+
+    private function form(string $token = '', string $email = '', ?string $error = null, bool $completed = false): Response
+    {
+        return response()->view('auth.reset-password', compact('token', 'email', 'error', 'completed'), $error === null ? 200 : 422)
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    }
+
     public function forgot(ForgotPasswordRequest $request): JsonResponse
     {
         Password::sendResetLink(['email' => $request->validated('email')]);
@@ -36,7 +53,7 @@ final class PasswordController extends Controller
         ResetPasswordRequest $request,
         CurrentTenant $currentTenant,
         AuditRecorder $audit,
-    ): JsonResponse {
+    ): JsonResponse|Response {
         $correlationId = (string) $request->attributes->get('correlation_id');
         $status = Password::reset(
             $request->safe()->only(['email', 'password', 'password_confirmation', 'token']),
@@ -78,6 +95,10 @@ final class PasswordController extends Controller
         );
 
         if ($status !== Password::PasswordReset) {
+            if ($request->routeIs('password.update')) {
+                return $this->form((string) $request->validated('token'), (string) $request->validated('email'), 'This reset link is invalid or expired. Request a new link from the app.');
+            }
+
             return response()->json(['error' => [
                 'code' => 'invalid_reset_token',
                 'message' => 'The password reset token is invalid or expired.',
@@ -85,6 +106,8 @@ final class PasswordController extends Controller
             ]], 422);
         }
 
-        return response()->json(['data' => ['message' => 'Password reset completed.']]);
+        return $request->routeIs('password.update')
+            ? $this->form(completed: true)
+            : response()->json(['data' => ['message' => 'Password reset completed.']]);
     }
 }

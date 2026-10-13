@@ -478,9 +478,66 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
         $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:02Z', [...$data, 'connector_id' => 1, 'status' => 'Available']));
         $this->travel(6)->seconds();
         $this->getJson($url)->assertOk()->assertJsonPath('data.0.availability', 'available');
-        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_disconnected', '2026-07-22T10:00:07Z', $data));
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', '2026-07-22T10:00:07Z', [...$data, 'connector_id' => 1, 'status' => 'Unavailable']));
         $this->travel(6)->seconds();
-        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'offline')->assertJsonPath('data.0.availability', 'offline');
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('data.0.connection_status', 'online')
+            ->assertJsonPath('data.0.operational_status', 'unavailable')
+            ->assertJsonPath('data.0.connectors.0.availability', 'unavailable')
+            ->assertJsonPath('data.0.available_connector_count', 0);
+        foreach (['Available' => 'available', 'Preparing' => 'busy', 'Charging' => 'busy', 'SuspendedEV' => 'busy', 'SuspendedEVSE' => 'busy', 'Finishing' => 'busy', 'Reserved' => 'busy', 'Faulted' => 'faulted'] as $reported => $expected) {
+            $this->consume($tenant, $actor, $this->event($tenant, $connector, 'status_notification', now()->toIso8601String(), [...$data, 'connector_id' => 1, 'status' => $reported]));
+            $this->travel(6)->seconds();
+            $this->getJson($url)->assertOk()->assertJsonPath('data.0.operational_status', $expected)
+                ->assertJsonPath('data.0.connection_status', 'online')
+                ->assertJsonPath('data.0.connectors.0.reported_status', mb_strtolower($reported));
+            $label = match ($reported) {
+                'SuspendedEV' => 'Paused by vehicle',
+                'SuspendedEVSE' => 'Paused by charger',
+                default => $reported,
+            };
+            self::assertSame($label, app(StationConnectionQuery::class)->connectorStates(connectorIds: [(string) $connector->getKey()])[$connector->getKey()]['label']);
+        }
+        $this->travel(301)->seconds();
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'heartbeat', now()->toIso8601String(), $data));
+        $this->travel(6)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'online')
+            ->assertJsonPath('data.0.connectors.0.reported_status', 'faulted');
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_disconnected', now()->toIso8601String(), $data));
+        $this->travel(6)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'offline')->assertJsonPath('data.0.availability', 'offline')
+            ->assertJsonPath('data.0.operational_status', 'offline')
+            ->assertJsonPath('data.0.connectors.0.reported_status', null);
+        self::assertSame('Offline', app(StationConnectionQuery::class)->connectorStates(stationIds: [(string) $connector->evse->charging_station_id])[$connector->getKey()]['label']);
+        self::assertSame([], app(StationConnectionQuery::class)->connectorStates());
+    }
+
+    public function test_public_station_without_active_connectors_stays_visible_without_claiming_readiness(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T10:00:00Z'));
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('pending-connectors');
+        [$connector] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'PENDING', '1.6J'));
+        $this->withinTenant($tenant, $actor, function () use ($connector): void {
+            $connector->update(['lifecycle_status' => 'draft']);
+            $station = $connector->evse->station;
+            $station->update(['is_public' => true]);
+            $station->site->update(['latitude' => 14.6, 'longitude' => 121, 'is_public' => true, 'published_at' => now()->subDay()]);
+        });
+        $this->consume($tenant, $actor, $this->event($tenant, $connector, 'charger_connected', now()->toIso8601String(), ['connection_id' => '01J00000000000000000000001']));
+        $url = '/api/v1/public/stations?west=120&south=14&east=122&north=15';
+        $this->getJson($url)->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.connection_status', 'online')
+            ->assertJsonPath('data.0.operational_status', 'unknown')
+            ->assertJsonPath('data.0.connector_count', 0)
+            ->assertJsonPath('data.0.available_connector_count', 0);
+
+        $this->travel(181)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.connection_status', 'offline')
+            ->assertJsonPath('data.0.operational_status', 'offline');
+        $this->withinTenant($tenant, $actor, fn () => $connector->evse->station->update(['is_public' => false]));
+        $this->travel(6)->seconds();
+        $this->getJson($url)->assertOk()->assertJsonCount(0, 'data');
     }
 
     /** @return array{Connector, TariffVersion} */

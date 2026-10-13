@@ -28,6 +28,9 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0022](0022-prepaid-balances-and-aub-qrph.md) | Prepaid balances and AUB QR Ph collections | Accepted for simulation; live acceptance gated |
 | [0023](0023-authenticate-ocpp-against-platform-stations.md) | Authenticate OCPP against current platform stations and Identity credentials | Superseded for URL-only deployments by 0024 |
 | [0024](0024-url-only-registered-chargers.md) | URL-only connections for registered chargers | Accepted by explicit operator request |
+| [0025](0025-native-staging-ocpp-runtime.md) | Native systemd gateway with Docker rollback on staging | Accepted by explicit operator request |
+
+| [0026](0026-prepaid-mobile-charging-and-metered-time.md) | Prepaid mobile charging and metered energy-flow time | Staging; physical EV acceptance pending |
 
 ## ADR Template
 

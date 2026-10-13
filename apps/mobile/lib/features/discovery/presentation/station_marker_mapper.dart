@@ -5,7 +5,7 @@ StationMapMarker stationMapMarker(Station station, {required bool selected}) =>
     StationMapMarker(
       id: station.id,
       position: MapPosition(station.latitude, station.longitude),
-      title: station.siteName,
+      title: station.name,
       status: station.isStale
           ? StationMarkerStatus.stale
           : switch (station.availability) {
@@ -13,6 +13,7 @@ StationMapMarker stationMapMarker(Station station, {required bool selected}) =>
               StationAvailability.busy => StationMarkerStatus.busy,
               StationAvailability.faulted => StationMarkerStatus.faulted,
               StationAvailability.offline => StationMarkerStatus.offline,
+              StationAvailability.unavailable => StationMarkerStatus.unknown,
               StationAvailability.stale => StationMarkerStatus.stale,
               StationAvailability.unknown => StationMarkerStatus.unknown,
             },

@@ -74,16 +74,22 @@ class _GoogleStationMapState extends State<GoogleStationMap>
     child: GoogleMap(
       initialCameraPosition: CameraPosition(
         target: LatLng(
-          widget.configuration.defaultLatitude,
-          widget.configuration.defaultLongitude,
+          widget.userPosition?.latitude ?? widget.configuration.defaultLatitude,
+          widget.userPosition?.longitude ??
+              widget.configuration.defaultLongitude,
         ),
-        zoom: widget.configuration.defaultZoom,
+        zoom: widget.userPosition == null
+            ? widget.configuration.defaultZoom
+            : 13,
       ),
       minMaxZoomPreference: MinMaxZoomPreference(
         widget.configuration.minimumZoom,
         widget.configuration.maximumZoom,
       ),
-      compassEnabled: true,
+      compassEnabled: false,
+      rotateGesturesEnabled: false,
+      tiltGesturesEnabled: false,
+      onTap: (_) => widget.discovery.select(null),
       mapToolbarEnabled: false,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
@@ -110,12 +116,7 @@ class _GoogleStationMapState extends State<GoogleStationMap>
             clusterManagerId: widget.configuration.clusteringEnabled
                 ? _clusterId
                 : null,
-            infoWindow: InfoWindow(
-              title: station.siteName,
-              snippet: station.isStale
-                  ? 'Status stale'
-                  : station.availability.name,
-            ),
+            consumeTapEvents: true,
             icon: BitmapDescriptor.defaultMarkerWithHue(
               _markerHue(
                 stationMapMarker(
@@ -156,6 +157,7 @@ class _GoogleStationMapState extends State<GoogleStationMap>
 
   void _synchronizeSelection() {
     final id = widget.discovery.selectedStationId;
+    if (id == null) _lastFocusedId = null;
     if (id == null || id == _lastFocusedId) {
       return;
     }

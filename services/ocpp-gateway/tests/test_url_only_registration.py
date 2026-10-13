@@ -12,8 +12,9 @@ from vtsa_ocpp_gateway.security import ChargerIdentityError, ChargerIdentityVali
 
 
 @pytest.mark.parametrize("header", [None, "Basic obsolete-device-credentials"])
+@pytest.mark.parametrize("binding_id", ["01J00000000000000000000002", "01j00000000000000000000002"])
 async def test_registered_chargers_need_no_device_credentials(
-    monkeypatch: pytest.MonkeyPatch, header: str | None
+    monkeypatch: pytest.MonkeyPatch, header: str | None, binding_id: str
 ) -> None:
     client = MagicMock()
     response = client.open.return_value.__enter__.return_value
@@ -21,8 +22,8 @@ async def test_registered_chargers_need_no_device_credentials(
     response.read.return_value = json.dumps(
         {
             "data": {
-                "tenant_id": "01J00000000000000000000001",
-                "charger_id": "01J00000000000000000000002",
+                "tenant_id": binding_id,
+                "charger_id": binding_id,
                 "charge_point_identity": "DEMO-CP-022",
                 "authentication": "registered",
             }
@@ -42,6 +43,8 @@ async def test_registered_chargers_need_no_device_credentials(
     result = await validator.validate(socket, "DEMO-CP-022")
     assert result.authentication == "registered"
     assert result.is_bound
+    assert result.tenant_id == binding_id
+    assert result.charger_id == binding_id
     request = client.open.call_args.args[0]
     assert json.loads(request.data) == {"identity": "DEMO-CP-022", "protocol": "ocpp1.6"}
     assert request.get_header("Authorization") == "Bearer synthetic-service"

@@ -15,6 +15,7 @@ use App\Modules\Charging\Domain\ChargingSessionOrigin;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\ConnectorAvailability;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
+use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\ConnectorReservation;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Jobs\DispatchChargerCommand;
@@ -82,7 +83,12 @@ final readonly class RemoteStartService
 
                 return new RemoteCommandResult($existing->session, $existing);
             }
-            if ($status === null || $status->status !== ConnectorAvailability::Available || $status->observed_at->addSeconds($status->stale_after_seconds)->isPast()) {
+            $live = $this->connectors->byId($connector->connectorId);
+            $ready = $live?->availability === ConnectorAvailability::Available
+                || ($live?->availability === ConnectorAvailability::Occupied && $status?->reported_status === 'preparing');
+            $occupied = ChargingSession::query()->where('connector_id', $connector->connectorId)
+                ->whereNotIn('state', ['completed', 'failed', 'cancelled', 'expired'])->exists();
+            if ($status === null || ! $ready || $occupied) {
                 throw new DomainException('Connector is not currently available for remote start.');
             }
 
@@ -186,7 +192,7 @@ final readonly class RemoteStartService
             correlationId: $context->correlationId,
             causationId: (string) $command->getKey(),
         );
-        DispatchChargerCommand::dispatch((string) $command->getKey(), $envelope)->afterCommit();
+        DispatchChargerCommand::dispatch((string) $command->getKey(), $envelope)->onQueue('charging')->afterCommit();
     }
 
     private function assertSameIntent(

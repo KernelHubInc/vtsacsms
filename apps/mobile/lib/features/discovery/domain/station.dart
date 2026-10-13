@@ -1,6 +1,14 @@
 import 'package:flutter/foundation.dart';
 
-enum StationAvailability { available, busy, faulted, offline, stale, unknown }
+enum StationAvailability {
+  available,
+  busy,
+  faulted,
+  unavailable,
+  offline,
+  stale,
+  unknown,
+}
 
 @immutable
 final class GeoBounds {
@@ -36,6 +44,7 @@ final class StationConnector {
     required this.maximumPowerW,
     this.id,
     this.availability = "unknown",
+    this.reportedStatus,
     this.observedAt,
   });
 
@@ -43,6 +52,7 @@ final class StationConnector {
       StationConnector(
         id: json['id'] as String?,
         availability: json['availability'] as String? ?? 'unknown',
+        reportedStatus: json['reported_status'] as String?,
         observedAt: DateTime.tryParse(
           json['status_observed_at'] as String? ?? '',
         ),
@@ -53,19 +63,37 @@ final class StationConnector {
 
   final String? id;
   final String availability;
+  final String? reportedStatus;
   final DateTime? observedAt;
   String get statusLabel => switch (availability) {
     "available" => "Available",
-    "occupied" => "In use",
+    "occupied" => switch (reportedStatus) {
+      'preparing' => 'Preparing',
+      'charging' => 'Charging',
+      'suspendedev' => 'Paused by vehicle',
+      'suspendedevse' => 'Paused by charger',
+      'finishing' => 'Finishing',
+      _ => 'In use',
+    },
     "reserved" => "Reserved",
     "faulted" => "Fault reported",
-    "offline" || "unavailable" => "Offline",
+    "offline" => "Offline",
+    "unavailable" => "Unavailable",
     "stale" => "Status stale",
     _ => "Status unknown",
   };
   final String standard;
   final String name;
   final int maximumPowerW;
+
+  StationConnector asStale() => StationConnector(
+    id: id,
+    standard: standard,
+    name: name,
+    maximumPowerW: maximumPowerW,
+    availability: 'stale',
+    observedAt: observedAt,
+  );
 
   String get powerLabel => maximumPowerW >= 1000
       ? '${(maximumPowerW / 1000).toStringAsFixed(maximumPowerW % 1000 == 0 ? 0 : 1)} kW'
@@ -117,8 +145,11 @@ final class Station {
     operatorId: json['operator_id']! as String,
     operatorName: json['operator_name']! as String,
     availability: StationAvailability.values.firstWhere(
-      (value) => value.name == json['availability'],
-      orElse: () => StationAvailability.unknown,
+      (value) => value.name == json['operational_status'],
+      orElse: () => StationAvailability.values.firstWhere(
+        (value) => value.name == json['availability'],
+        orElse: () => StationAvailability.unknown,
+      ),
     ),
     isStale: json['is_stale']! as bool,
     statusObservedAt: json['status_observed_at'] == null
@@ -170,6 +201,39 @@ final class Station {
   final double? distanceM;
   final List<String> operatingHours;
   final List<String> amenities;
+
+  String get connectionLabel => switch (connectionStatus) {
+    'online' => 'Charger online',
+    'offline' => 'Charger offline',
+    _ => 'Connection unconfirmed',
+  };
+
+  Station asStale() => Station(
+    id: id,
+    siteId: siteId,
+    name: name,
+    siteName: siteName,
+    latitude: latitude,
+    longitude: longitude,
+    timezone: timezone,
+    siteType: siteType,
+    operatorId: operatorId,
+    operatorName: operatorName,
+    availability: StationAvailability.stale,
+    isStale: true,
+    maximumPowerW: maximumPowerW,
+    openNow: openNow,
+    hoursKnown: hoursKnown,
+    lastSeenAt: lastSeenAt,
+    address: address,
+    statusObservedAt: statusObservedAt,
+    distanceM: distanceM,
+    operatingHours: operatingHours,
+    amenities: amenities,
+    connectors: connectors
+        .map((connector) => connector.asStale())
+        .toList(growable: false),
+  );
 
   String get maximumPowerLabel => maximumPowerW >= 1000
       ? '${(maximumPowerW / 1000).toStringAsFixed(maximumPowerW % 1000 == 0 ? 0 : 1)} kW'

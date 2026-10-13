@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/activity_screens.dart';
@@ -8,6 +9,74 @@ import 'package:vtsa_mobile/features/charging/presentation/activity_screens.dart
 import 'support/fakes.dart';
 
 void main() {
+  testWidgets('history failure is shown instead of claiming no sessions', (
+    tester,
+  ) async {
+    final repository = FakeChargingRepository()
+      ..historyFailure = const AppFailure(
+        kind: FailureKind.server,
+        message: 'History service unavailable.',
+      );
+    final fixture = await buildTestDependencies(
+      signedIn: true,
+      chargingRepository: repository,
+    );
+    await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('History service unavailable.'), findsOneWidget);
+    expect(find.text('No sessions in this view'), findsNothing);
+    repository.historyFailure = null;
+    await fixture.dependencies.charging.loadHistory();
+    await tester.pumpAndSettle();
+    expect(find.text('History service unavailable.'), findsNothing);
+    expect(find.text('No sessions in this view'), findsOneWidget);
+  });
+
+  testWidgets(
+    'unavailable issue submission shows recovery and preserves the reference',
+    (tester) async {
+      final repository = FakeChargingRepository()
+        ..issueFailure = const AppFailure(
+          kind: FailureKind.notFound,
+          message: 'Not found',
+        );
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: IssueReportScreen(
+            dependencies: fixture.dependencies,
+            sessionId: 'session-for-support',
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byType(TextField),
+        'The charger needs operator assistance.',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Submit issue'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Submit issue'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Your issue has not been submitted.'),
+        findsOneWidget,
+      );
+      expect(find.text('Copy session reference'), findsOneWidget);
+      expect(find.text('Issue submitted'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dependencies.dispose();
+    },
+  );
+
   testWidgets('driver sees camera rationale and can use manual entry', (
     tester,
   ) async {
@@ -28,7 +97,7 @@ void main() {
 
     expect(find.text('REVIEW BEFORE START'), findsOneWidget);
     expect(find.text('Standard charging'), findsOneWidget);
-    expect(find.text('Estimated preauthorization'), findsOneWidget);
+    expect(find.text('Reserved charging budget'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Visa ending 4242'), 240);
     expect(find.text('Visa ending 4242'), findsOneWidget);
   });
@@ -57,6 +126,8 @@ void main() {
     expect(find.textContaining('does not list CCS2'), findsOneWidget);
 
     await tester.scrollUntilVisible(find.text('Review and request start'), 300);
+    await tester.ensureVisible(find.text('Review and request start'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Review and request start'));
     await tester.pumpAndSettle();
     expect(find.text('Start despite compatibility warning?'), findsOneWidget);
@@ -93,9 +164,20 @@ void main() {
     expect(find.text('Charging in progress'), findsOneWidget);
     expect(find.text('6.42 kWh'), findsOneWidget);
     expect(find.text('00:12:34'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Power & session details'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Power & session details'));
+    await tester.pumpAndSettle();
     expect(find.text('48.8 kW'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Stop charging'), 300);
-    expect(find.text('Stop charging'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('End charging'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('End charging'), findsOneWidget);
   });
 
   testWidgets(
@@ -121,11 +203,8 @@ void main() {
       await tester.tap(find.text('Payment processing'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Payment confirmation pending'), findsOneWidget);
-      expect(
-        find.textContaining('will not create a duplicate charge'),
-        findsOneWidget,
-      );
+      expect(find.text('Finalizing wallet payment'), findsOneWidget);
+      expect(find.textContaining('deducting the charge once'), findsOneWidget);
       expect(find.text('Pay again'), findsNothing);
     },
   );

@@ -12,6 +12,7 @@ use App\Modules\Charging\Domain\ChargerCommandType;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingSession;
+use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Jobs\DispatchChargerCommand;
 use App\Modules\Integrations\Application\OutboxRecorder;
 use App\Modules\Tenancy\Application\CurrentTenant;
@@ -31,7 +32,7 @@ final readonly class RemoteStopService
         private AuditRecorder $audit,
     ) {}
 
-    public function request(ChargingSession $session, string $idempotencyKey): RemoteCommandResult
+    public function request(ChargingSession $session, string $idempotencyKey, bool $spendingLimit = false): RemoteCommandResult
     {
         $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existing !== null) {
@@ -43,11 +44,11 @@ final readonly class RemoteStopService
         }
 
         $context = $this->tenant->get();
-        if ($context->actorId === null) {
+        if ($context->actorId === null && ! $spendingLimit) {
             throw new DomainException('Remote stop requires an authenticated human actor.');
         }
         $expiresAt = CarbonImmutable::now('UTC')->addSeconds(max(10, (int) config('services.ocpp_gateway.timeout_seconds', 20) + 5));
-        $result = DB::transaction(function () use ($session, $idempotencyKey, $context, $expiresAt): RemoteCommandResult {
+        $result = DB::transaction(function () use ($session, $idempotencyKey, $context, $expiresAt, $spendingLimit): RemoteCommandResult {
             $locked = ChargingSession::query()->whereKey($session->getKey())->lockForUpdate()->firstOrFail();
             // Re-check after acquiring the aggregate lock so concurrent retries return the committed intent.
             $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
@@ -83,8 +84,10 @@ final readonly class RemoteStopService
                 'state' => ChargerCommandState::Requested,
                 'idempotency_key' => $idempotencyKey,
                 'correlation_id' => $context->correlationId,
-                'actor_id' => $context->actorId,
-                'reason_code' => 'driver.remote_stop',
+                'actor_id' => $spendingLimit
+                    ? CustomerChargingSession::query()->where('session_id', $locked->getKey())->firstOrFail()->subject_id
+                    : $context->actorId,
+                'reason_code' => $spendingLimit ? 'prepaid.spending_limit_or_stale_meter' : 'driver.remote_stop',
                 'payload' => $payload,
                 'secret_payload' => null,
                 'expected_state' => ['session_state' => $previousState->value],
@@ -140,6 +143,6 @@ final readonly class RemoteStopService
                 correlationId: $context->correlationId,
                 causationId: (string) $command->getKey(),
             ),
-        )->afterCommit();
+        )->onQueue('charging')->afterCommit();
     }
 }

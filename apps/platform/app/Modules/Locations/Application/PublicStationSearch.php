@@ -131,7 +131,7 @@ final class PublicStationSearch
             })
             ->whereIn('evse.charging_station_id', $stationCollection->pluck('id'))
             ->where('connector.lifecycle_status', 'active')
-            ->select(['connector.id', 'evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.ocpp_connection_id', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
+            ->select(['connector.id', 'evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.ocpp_connection_id', 'signal.status', 'signal.reported_status', 'signal.observed_at', 'signal.stale_after_seconds'])
             ->get()->groupBy('charging_station_id');
 
         return array_values($stationCollection->map(function (array $station) use ($connectors, $connections, $connectionQuery): array {
@@ -171,8 +171,13 @@ final class PublicStationSearch
                     'id' => $item->id, 'standard' => $item->code, 'name' => $item->name,
                     'current_type' => $item->current_type, 'maximum_power_w' => (int) $item->maximum_power_w,
                     'availability' => $availability, 'status_observed_at' => $item->observed_at,
+                    'reported_status' => $connectionQuery->reportedStatus($availability, $item->reported_status),
                 ];
             })->values()->all();
+            // Keep the original v1 availability enum for older clients.
+            $station['operational_status'] = $connection !== null && $connection['status'] === 'offline'
+                ? 'offline'
+                : $this->summarizeAvailability(array_column($station['connectors'], 'availability'), $station['is_stale'], true);
             $station['available_connector_count'] = count(array_filter($station['connectors'], fn (array $item): bool => $item['availability'] === 'available'));
             $station['connector_count'] = count($station['connectors']);
 
@@ -215,7 +220,7 @@ final class PublicStationSearch
     }
 
     /** @param list<mixed> $statuses */
-    private function summarizeAvailability(array $statuses, bool $stale): string
+    private function summarizeAvailability(array $statuses, bool $stale, bool $distinguishUnavailable = false): string
     {
         if (in_array('available', $statuses, true)) {
             return 'available';
@@ -225,6 +230,9 @@ final class PublicStationSearch
         }
         if (in_array('faulted', $statuses, true)) {
             return 'faulted';
+        }
+        if ($distinguishUnavailable && in_array('unavailable', $statuses, true)) {
+            return 'unavailable';
         }
         if (array_intersect(['offline', 'unavailable'], $statuses) !== []) {
             return 'offline';

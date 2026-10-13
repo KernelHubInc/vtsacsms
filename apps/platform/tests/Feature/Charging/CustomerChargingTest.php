@@ -1,0 +1,228 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Charging;
+
+use App\Models\User;
+use App\Modules\Assets\Domain\Models\ChargingCurrentType;
+use App\Modules\Assets\Domain\Models\ChargingStation;
+use App\Modules\Assets\Domain\Models\Connector;
+use App\Modules\Assets\Domain\Models\ConnectorStandard;
+use App\Modules\Assets\Domain\Models\Evse;
+use App\Modules\Assets\Domain\Models\OcppVersion;
+use App\Modules\Billing\Application\PrepaidWallet;
+use App\Modules\Charging\Application\CommandOutcomeService;
+use App\Modules\Charging\Application\CustomerCharging;
+use App\Modules\Charging\Application\MeterValueService;
+use App\Modules\Charging\Application\OcppEventConsumer;
+use App\Modules\Charging\Application\PrepaidChargingMonitor;
+use App\Modules\Charging\Domain\Models\ChargerCommand;
+use App\Modules\Charging\Domain\Models\ConnectorStatus;
+use App\Modules\Charging\Domain\Models\CustomerChargingSession;
+use App\Modules\Locations\Domain\Models\Site;
+use App\Modules\Tariffs\Application\PortalPricing;
+use App\Modules\Tariffs\Application\TariffManagementService;
+use App\Modules\Tenancy\Application\CurrentTenant;
+use Carbon\CarbonImmutable;
+use DomainException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
+use Tests\Support\TenantSecurityTestCase;
+
+final class CustomerChargingTest extends TenantSecurityTestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->freezeTime();
+        Queue::fake();
+        ConnectorStandard::query()->create(['code' => 'type2', 'name' => 'Type 2']);
+        ChargingCurrentType::query()->create(['code' => 'ac', 'name' => 'AC']);
+        config(['kyc.required_for_charging' => false]);
+    }
+
+    public function test_customer_start_reserves_once_and_final_energy_settles_once(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('mobile-charging');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            self::assertSame(100, $quote['quote']['lines'][0]['price_minor']);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'customer-start-01');
+            self::assertSame((string) $session->getKey(), $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'customer-start-01')->id);
+            self::assertSame('starting', $session->state->value);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            $start = now('UTC');
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 91, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $this->travel(150)->seconds();
+            app(MeterValueService::class)->record($session->refresh(), (string) Str::ulid(), [
+                ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 1500],
+                ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 500, 'phase' => 'L1'],
+            ], CarbonImmutable::now('UTC'));
+            self::assertSame(500, $session->refresh()->energy_wh);
+            $this->travel(150)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'stop_transaction', ['protocol_transaction_id' => 91, 'meter_stop_wh' => 1750, 'reason' => 'Remote', 'samples' => []]);
+            $session->refresh();
+            self::assertSame('completed', $session->state->value);
+            self::assertSame(75, $session->final_cost_minor);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            $balance = app(PrepaidWallet::class)->summary($actor->public_id, 'live');
+            self::assertSame(25, $balance['available_minor']);
+            self::assertSame(0, $balance['reserved_minor']);
+            self::assertSame('captured', $service->present($session)['payment_state']);
+            $this->assertDatabaseCount('charging_customer_sessions', 1);
+        });
+    }
+
+    public function test_stale_quote_and_different_owner_are_rejected_without_reserving_funds(): void
+    {
+        $actor = $this->createUser();
+        $other = $this->createUser();
+        $tenant = $this->createTenant('quote-ownership');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $other): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            try {
+                $service->start($other->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'other-owner-01');
+                self::fail('Another customer must not consume this quote.');
+            } catch (ModelNotFoundException) {
+                self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
+            }
+            $this->travel(121)->seconds();
+            $this->expectException(DomainException::class);
+            $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'expired-start-01');
+        });
+    }
+
+    public function test_budget_monitor_requests_stop_but_does_not_settle_before_final_evidence(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('budget-stop');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'budget-start-01');
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 92, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $session->refresh()->forceFill(['energy_wh' => 900, 'estimated_cost_minor' => 90])->save();
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            self::assertSame('stopping', $session->refresh()->state->value);
+            self::assertSame(1, ChargerCommand::query()->where('type', 'remote_stop')->count());
+            self::assertNull(CustomerChargingSession::query()->firstOrFail()->settled_at);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
+    public function test_mobile_http_routes_scope_sessions_to_token_owner_and_validate_start(): void
+    {
+        config(['features.remote_charging' => true]);
+        $actor = $this->createUser();
+        $other = $this->createUser();
+        $tenant = $this->createTenant('mobile-http');
+        $otherTenant = $this->createTenant('mobile-http-other');
+        $this->withinTenant($tenant, $actor, fn () => $this->createMembership($tenant, $actor));
+        $this->withinTenant($tenant, $other, fn () => $this->createMembership($tenant, $other));
+        $this->withinTenant($otherTenant, $actor, fn () => $this->createMembership($otherTenant, $actor));
+        $connector = $this->withinTenant($tenant, $actor, fn () => $this->fixture($actor));
+        $login = fn (User $user, string $tenantId): string => (string) $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email, 'password' => 'password', 'tenant_id' => $tenantId, 'device_name' => 'Charging acceptance',
+        ])->assertOk()->json('data.token');
+        $token = $login($actor, (string) $tenant->getKey());
+        $headers = ['Authorization' => 'Bearer '.$token];
+        $quote = $this->postJson('/api/v1/mobile/charging/prepare', ['charger_code' => (string) $connector->getKey()], $headers)->assertOk()->json('data.quote.id');
+        $data = ['quote_id' => $quote, 'connector_id' => (string) $connector->getKey(), 'payment_method_id' => 'prepaid_wallet'];
+        $this->postJson('/api/v1/mobile/charging-sessions/remote-start', $data, $headers)->assertUnprocessable();
+        $started = $this->postJson('/api/v1/mobile/charging-sessions/remote-start', $data, $headers + ['Idempotency-Key' => 'http-start-001'])->assertStatus(202);
+        $id = $started->json('data.id');
+        $this->getJson('/api/v1/mobile/charging-sessions/'.$id, $headers)->assertOk();
+        $this->getJson('/api/v1/mobile/charging-sessions/active', $headers)->assertOk()->assertJsonPath('data.id', $id);
+        $otherHeaders = ['Authorization' => 'Bearer '.$login($other, (string) $tenant->getKey())];
+        $this->getJson('/api/v1/mobile/charging-sessions/'.$id, $otherHeaders)->assertNotFound();
+        $this->postJson('/api/v1/mobile/charging-sessions/'.$id.'/remote-stop', [], $otherHeaders + ['Idempotency-Key' => 'other-stop-001'])->assertNotFound();
+        $this->getJson('/api/v1/mobile/charging-sessions', $otherHeaders)->assertOk()->assertJsonCount(0, 'data');
+        $crossHeaders = ['Authorization' => 'Bearer '.$login($actor, (string) $otherTenant->getKey())];
+        $this->getJson('/api/v1/mobile/charging-sessions/'.$id, $crossHeaders)->assertNotFound();
+    }
+
+    public function test_unknown_start_retains_hold_and_connector_reservation(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('unknown-start');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'unknown-start-01');
+            $command = ChargerCommand::query()->where('session_id', $session->getKey())->firstOrFail();
+            $command->forceFill(['state' => 'delivery_unknown', 'dispatched_at' => now()])->save();
+            app(CommandOutcomeService::class)->apply($command);
+            self::assertSame('starting', $session->refresh()->state->value);
+            self::assertSame('prepaid_start_unconfirmed', $session->failure_reason);
+            $this->travel(600)->seconds();
+            $currentTenant = app(CurrentTenant::class);
+            $context = $currentTenant->get();
+            $currentTenant->clear();
+            self::assertSame(0, Artisan::call('charging:expire-operations'));
+            $currentTenant->establish($context);
+            self::assertSame('starting', $session->refresh()->state->value);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame('requires_action', $service->present($session)['payment_state']);
+            self::assertNotNull($service->active($actor->public_id));
+        });
+    }
+
+    public function test_cancel_before_dispatch_releases_wallet_once(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('unsent-cancel');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'cancel-start-01');
+            $service->cancel($actor->public_id, (string) $session->getKey(), null);
+            $service->cancel($actor->public_id, (string) $session->getKey(), null);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
+    private function fixture(User $actor): Connector
+    {
+        $site = Site::factory()->activePublic()->create();
+        $ocpp = OcppVersion::query()->firstOrCreate(['code' => '1.6J'], ['name' => 'OCPP 1.6J']);
+        $station = ChargingStation::factory()->activePublic()->create(['site_id' => $site->id, 'ocpp_version_id' => $ocpp->id]);
+        $evse = Evse::factory()->create(['charging_station_id' => $station->id, 'lifecycle_status' => 'active', 'evse_number' => 1]);
+        $connector = Connector::factory()->create(['evse_id' => $evse->id, 'lifecycle_status' => 'active', 'connector_number' => 1, 'maximum_power_w' => 7000]);
+        ConnectorStatus::query()->create(['connector_id' => (string) $connector->getKey(), 'status' => 'occupied', 'reported_status' => 'preparing', 'observed_at' => now(), 'stale_after_seconds' => 300]);
+        $tariff = app(TariffManagementService::class)->create(['name' => 'PHP 1/kWh', 'currency' => 'PHP']);
+        app(PortalPricing::class)->publish($tariff, ['mode' => 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => (string) $connector->getKey()]);
+        app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 100);
+
+        return $connector;
+    }
+
+    /** @param array<string, mixed> $data */
+    private function event(string $tenant, Connector $connector, string $action, array $data): void
+    {
+        $result = app(OcppEventConsumer::class)->consume([
+            'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.'.$action.'.received.v1',
+            'schema_version' => 1, 'tenant_id' => $tenant, 'occurred_at' => now('UTC')->toISOString(),
+            'aggregate_type' => 'charging_station', 'aggregate_id' => (string) $connector->evse->station->id,
+            'correlation_id' => (string) Str::ulid(), 'causation_id' => (string) Str::ulid(),
+            'data' => ['charge_point_identity' => $connector->evse->station->charge_point_identity, 'protocol' => 'ocpp1.6', 'protocol_timestamp' => now('UTC')->toISOString(), 'clock_skew_detected' => false, ...$data],
+        ]);
+        self::assertSame('processed', $result->outcome, (string) $result->errorCode);
+    }
+}

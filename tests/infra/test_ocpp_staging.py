@@ -213,6 +213,15 @@ class OcppStagingTest(unittest.TestCase):
             self.values["REDIS_PASSWORD"],
         )
 
+    def test_private_runtime_proxy_is_preserved_for_every_core_service(self):
+        self.values["OCPP_GATEWAY_INTERNAL_URL"] = "http://172.16.2.1:9004"
+        config = self.render()
+        for name in setup.CORE + setup.SERVICES[1:]:
+            self.assertEqual(
+                config["services"][name]["environment"]["OCPP_GATEWAY_INTERNAL_URL"],
+                "http://172.16.2.1:9004",
+            )
+
     def test_base_configuration_reproduces_the_deployment_blocker(self):
         config = self.render(False)
         with self.assertRaises(ValueError):

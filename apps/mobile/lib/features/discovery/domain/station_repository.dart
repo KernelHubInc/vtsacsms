@@ -28,7 +28,9 @@ final class StationFilters {
     if (vehicleConnectors.isNotEmpty) 'connectors[]': vehicleConnectors,
     if (connector != null && connector!.isNotEmpty) 'connector': connector!,
     'min_power_w': ?minimumPowerW,
-    'availability': ?availability?.name,
+    'availability': ?(availability == StationAvailability.unavailable
+        ? 'offline'
+        : availability?.name),
     if (operatorId != null && operatorId!.isNotEmpty)
       'operator_id': operatorId!,
     if (siteType != null && siteType!.isNotEmpty) 'site_type': siteType!,

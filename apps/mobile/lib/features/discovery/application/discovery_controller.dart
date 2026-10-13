@@ -6,9 +6,13 @@ import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 
 final class DiscoveryController extends ChangeNotifier {
-  DiscoveryController(this._repository);
+  DiscoveryController(this._repository, {DateTime Function()? now})
+    : _now = now ?? DateTime.now;
 
   final StationRepository _repository;
+  final DateTime Function() _now;
+  DateTime? _loadedAt;
+  bool _signalsStale = false;
   List<Station> _stations = const [];
   StationFilters _filters = const StationFilters();
   GeoBounds? _lastBounds;
@@ -26,9 +30,13 @@ final class DiscoveryController extends ChangeNotifier {
 
   void startAutoRefresh({bool Function()? canRefresh}) {
     _refreshTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_requestsInFlight == 0 &&
-          !_refreshing &&
-          (canRefresh?.call() ?? true)) {
+      final canLoad = canRefresh?.call() ?? true;
+      if (!canLoad ||
+          (_loadedAt != null &&
+              _now().difference(_loadedAt!) >= const Duration(seconds: 15))) {
+        markSignalsStale();
+      }
+      if (_requestsInFlight == 0 && !_refreshing && canLoad) {
         unawaited(refresh());
       }
     });
@@ -37,6 +45,13 @@ final class DiscoveryController extends ChangeNotifier {
   void stopAutoRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+    markSignalsStale();
+  }
+
+  void markSignalsStale() {
+    if (_disposed || _signalsStale) return;
+    _signalsStale = true;
+    notifyListeners();
   }
 
   @override
@@ -48,11 +63,14 @@ final class DiscoveryController extends ChangeNotifier {
   }
 
   List<Station> get stations {
+    final visible = _signalsStale
+        ? _stations.map((station) => station.asStale()).toList(growable: false)
+        : _stations;
     if (_query.isEmpty) {
-      return _stations;
+      return visible;
     }
     final needle = _query.toLowerCase();
-    return _stations
+    return visible
         .where(
           (station) =>
               station.name.toLowerCase().contains(needle) ||
@@ -69,8 +87,10 @@ final class DiscoveryController extends ChangeNotifier {
   AppFailure? get failure => _failure;
   bool get isLoading => _loading;
 
-  Station? byId(String id) =>
-      _stations.where((item) => item.id == id).firstOrNull;
+  Station? byId(String id) => _stations
+      .where((item) => item.id == id)
+      .map((station) => _signalsStale ? station.asStale() : station)
+      .firstOrNull;
 
   Future<void> loadBounds(GeoBounds bounds) async {
     _lastBounds = bounds;
@@ -91,9 +111,12 @@ final class DiscoveryController extends ChangeNotifier {
       }
       _stations = result.stations;
       _generatedAt = result.generatedAt;
+      _loadedAt = _now();
+      _signalsStale = false;
     } on AppFailure catch (failure) {
       if (generation == _requestGeneration) {
         _failure = failure;
+        _signalsStale = true;
       }
     } finally {
       _requestsInFlight--;
@@ -127,10 +150,13 @@ final class DiscoveryController extends ChangeNotifier {
       if (generation == _requestGeneration) {
         _stations = result.stations;
         _generatedAt = result.generatedAt;
+        _loadedAt = _now();
+        _signalsStale = false;
       }
     } on AppFailure catch (failure) {
       if (generation == _requestGeneration) {
         _failure = failure;
+        _signalsStale = true;
       }
     } finally {
       _requestsInFlight--;

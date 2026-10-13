@@ -38,6 +38,8 @@ For iOS, define the user build setting `GOOGLE_MAPS_API_KEY` in the local Xcode 
 
 ## Commands
 
+For iOS prerequisites, the manual macOS simulator workflow, and signed IPA export, see [iOS builds](../../docs/runbooks/mobile-ios.md). Windows and the Linux staging VPS cannot compile the iOS app.
+
 ```powershell
 flutter.bat pub get
 flutter.bat run -d chrome --web-port=7357 --dart-define-from-file=dart_defines.web.example.json

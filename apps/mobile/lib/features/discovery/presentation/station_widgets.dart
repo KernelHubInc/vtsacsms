@@ -13,6 +13,7 @@ VtsaOperationalState operationalStateFor(Station station) {
     StationAvailability.available => VtsaOperationalState.available,
     StationAvailability.busy => VtsaOperationalState.charging,
     StationAvailability.faulted => VtsaOperationalState.faulted,
+    StationAvailability.unavailable => VtsaOperationalState.unavailable,
     StationAvailability.offline => VtsaOperationalState.offline,
     StationAvailability.stale => VtsaOperationalState.unknown,
     StationAvailability.unknown => VtsaOperationalState.unknown,
@@ -23,14 +24,103 @@ String availabilityLabel(Station station) {
   if (station.isStale || station.availability == StationAvailability.stale) {
     return 'Status stale';
   }
+  if (station.availability == StationAvailability.busy) {
+    final occupied = station.connectors
+        .where((connector) => connector.availability == 'occupied')
+        .toList();
+    if (occupied.any((connector) => connector.reportedStatus == 'charging')) {
+      return 'Charging';
+    }
+    if (occupied.length == 1) return occupied.single.statusLabel;
+    if (station.connectors.isNotEmpty &&
+        station.connectors.every(
+          (connector) => connector.availability == 'reserved',
+        )) {
+      return 'Reserved';
+    }
+  }
   return switch (station.availability) {
     StationAvailability.available => 'Available',
     StationAvailability.busy => 'In use',
     StationAvailability.faulted => 'Fault reported',
+    StationAvailability.unavailable => 'Unavailable',
     StationAvailability.offline => 'Offline',
     StationAvailability.stale => 'Status stale',
     StationAvailability.unknown => 'Status unknown',
   };
+}
+
+class DriverStationCard extends StatelessWidget {
+  const DriverStationCard({
+    required this.station,
+    required this.onTap,
+    super.key,
+  });
+  final Station station;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => VtsaCard(
+    padding: EdgeInsets.zero,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: context.vtsaColors.brandSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'EV',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    station.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    station.distanceM == null
+                        ? station.siteName
+                        : '${(station.distanceM! / 1000).toStringAsFixed(1)} km · straight-line distance',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    station.maximumPowerW > 0
+                        ? 'Up to ${station.maximumPowerLabel}'
+                        : 'Power not provided',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  VtsaStatusChip(
+                    label: availabilityLabel(station),
+                    state: operationalStateFor(station),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class StationCard extends StatelessWidget {
@@ -39,6 +129,7 @@ class StationCard extends StatelessWidget {
     required this.onTap,
     required this.favorite,
     required this.onFavorite,
+    this.onClose,
     this.selected = false,
     super.key,
   });
@@ -47,6 +138,7 @@ class StationCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool favorite;
   final VoidCallback onFavorite;
+  final VoidCallback? onClose;
   final bool selected;
 
   @override
@@ -54,7 +146,7 @@ class StationCard extends StatelessWidget {
     button: true,
     selected: selected,
     label:
-        '${station.siteName}. ${availabilityLabel(station)}. ${station.maximumPowerLabel}.',
+        '${station.name}. ${station.siteName}. ${station.connectionLabel}. ${availabilityLabel(station)}.',
     child: VtsaCard(
       selected: selected,
       padding: EdgeInsets.zero,
@@ -74,15 +166,20 @@ class StationCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          station.siteName,
+                          station.name,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: VtsaSpacing.xxs),
                         Text(
-                          station.address ?? station.name,
+                          station.siteName,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: context.vtsaColors.textMuted),
                         ),
+                        if (station.address != null)
+                          Text(
+                            station.address!,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                       ],
                     ),
                   ),
@@ -98,6 +195,12 @@ class StationCard extends StatelessWidget {
                           : context.vtsaColors.textMuted,
                     ),
                   ),
+                  if (onClose != null)
+                    IconButton(
+                      tooltip: 'Close station preview',
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close),
+                    ),
                 ],
               ),
               const SizedBox(height: VtsaSpacing.sm),
@@ -110,8 +213,16 @@ class StationCard extends StatelessWidget {
                     state: operationalStateFor(station),
                   ),
                   _FactChip(
+                    icon: station.connectionStatus == 'online'
+                        ? Icons.cloud_done_outlined
+                        : Icons.cloud_off_outlined,
+                    label: station.connectionLabel,
+                  ),
+                  _FactChip(
                     icon: Icons.bolt_outlined,
-                    label: 'Up to ${station.maximumPowerLabel}',
+                    label: station.maximumPowerW > 0
+                        ? 'Up to ${station.maximumPowerLabel}'
+                        : 'Power not provided',
                   ),
                   _FactChip(
                     icon: station.openNow
@@ -127,12 +238,21 @@ class StationCard extends StatelessWidget {
               ),
               const SizedBox(height: VtsaSpacing.xs),
               Text(
-                '${station.connectors.where((item) => item.availability == "available").length} of ${station.connectors.length} connectors reported available',
+                station.connectors.isEmpty
+                    ? 'Connector details pending'
+                    : '${station.connectors.where((item) => item.availability == "available").length} of ${station.connectors.length} connectors reported available',
               ),
               if (station.distanceM != null)
                 Text(
                   '${(station.distanceM! / 1000).toStringAsFixed(1)} km away · straight-line distance',
                 ),
+              if (station.lastSeenAt != null) ...[
+                const SizedBox(height: VtsaSpacing.xs),
+                Text(
+                  'Last heard ${DateFormat('MMM d, HH:mm:ss').format(station.lastSeenAt!.toLocal())}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ],
               if (station.statusObservedAt != null) ...[
                 const SizedBox(height: VtsaSpacing.sm),
                 Text(
@@ -172,7 +292,9 @@ class ConnectorCompatibilityTile extends StatelessWidget {
         child: const Icon(Icons.ev_station_outlined),
       ),
       title: Text(connector.name),
-      subtitle: Text('${connector.standard} · ${connector.powerLabel}'),
+      subtitle: Text(
+        '${connector.standard} · ${connector.powerLabel}\n${connector.statusLabel}',
+      ),
       trailing: compatible == null
           ? null
           : Tooltip(

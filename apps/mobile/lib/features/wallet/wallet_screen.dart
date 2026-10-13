@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/ids/ulid_generator.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
@@ -27,6 +28,7 @@ class _WalletScreenState extends State<WalletScreen> {
   String? _topupCursor;
   String? _error;
   bool _loading = false;
+  bool _showTransactions = false;
   @override
   void initState() {
     super.initState();
@@ -118,8 +120,8 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     final wallet = _wallet;
-    return VtsaPageShell(
-      eyebrow: 'YOUR CHARGING BALANCE',
+    return DriverTabPage(
+      subtitle: 'Balance, payments and activity',
       title: 'Wallet',
       actions: [
         IconButton(
@@ -131,6 +133,7 @@ class _WalletScreenState extends State<WalletScreen> {
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             if (_loading) const LinearProgressIndicator(),
             if (_error != null)
@@ -140,10 +143,10 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
             if (wallet != null) ...[
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF15386A),
-                  borderRadius: BorderRadius.circular(24),
+                  color: DriverTheme.navy,
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,7 +154,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     Text(
                       wallet['book'] == 'simulated'
                           ? 'TEST BALANCE · NO REAL MONEY'
-                          : 'AVAILABLE TO CHARGE',
+                          : 'AVAILABLE BALANCE',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontWeight: FontWeight.w600,
@@ -162,7 +165,7 @@ class _WalletScreenState extends State<WalletScreen> {
                       walletMoney(wallet['available_minor'] as int),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 34,
+                        fontSize: 30,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -193,62 +196,82 @@ class _WalletScreenState extends State<WalletScreen> {
                 icon: Icons.add,
               ),
               const SizedBox(height: 28),
-              Text('Top-ups', style: Theme.of(context).textTheme.titleLarge),
-              if (_orders.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'No top-ups yet. Your pending and completed requests will appear here.',
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  DriverFilterChip(
+                    label: 'Top-ups',
+                    selected: !_showTransactions,
+                    onSelected: (_) =>
+                        setState(() => _showTransactions = false),
                   ),
-                ),
-              for (final row in _orders)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    row['status'] == 'paid'
-                        ? Icons.check_circle_outline
-                        : Icons.schedule,
+                  DriverFilterChip(
+                    label: 'Transactions',
+                    selected: _showTransactions,
+                    onSelected: (_) => setState(() => _showTransactions = true),
                   ),
-                  title: Text(walletMoney(row['amount_minor'] as int)),
-                  subtitle: Text(_status(row['status'] as String)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _open(row),
-                ),
-              if (_topupCursor != null)
-                TextButton(
-                  onPressed: _loading ? null : () => _more(false),
-                  child: const Text('More top-ups'),
-                ),
-              const SizedBox(height: 24),
-              Text(
-                'Balance activity',
-                style: Theme.of(context).textTheme.titleLarge,
+                ],
               ),
-              if (_entries.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'Confirmed credits and charging activity will appear here.',
+              const SizedBox(height: 16),
+              if (!_showTransactions) ...[
+                Text('Top-ups', style: Theme.of(context).textTheme.titleLarge),
+                if (_orders.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'No top-ups yet. Your pending and completed requests will appear here.',
+                    ),
                   ),
+                for (final row in _orders)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      row['status'] == 'paid'
+                          ? Icons.check_circle_outline
+                          : Icons.schedule,
+                    ),
+                    title: Text(walletMoney(row['amount_minor'] as int)),
+                    subtitle: Text(_topupStatus(row)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _open(row),
+                  ),
+                if (_topupCursor != null)
+                  TextButton(
+                    onPressed: _loading ? null : () => _more(false),
+                    child: const Text('More top-ups'),
+                  ),
+              ] else ...[
+                Text(
+                  'Balance activity',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              for (final entry in _entries)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(switch (entry['kind']) {
-                    'topup' => 'Top-up received',
-                    'reserved' => 'Reserved for charging',
-                    'released' => 'Reservation released',
-                    'spent' => 'Charging payment',
-                    _ => 'Balance activity',
-                  }),
-                  subtitle: Text(_date(entry['created_at'] as String?)),
-                  trailing: Text(walletMoney(entry['amount_minor'] as int)),
-                ),
-              if (_historyCursor != null)
-                TextButton(
-                  onPressed: _loading ? null : () => _more(true),
-                  child: const Text('More activity'),
-                ),
+                if (_entries.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Confirmed credits and charging activity will appear here.',
+                    ),
+                  ),
+                for (final entry in _entries)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(switch (entry['kind']) {
+                      'topup' => 'Top-up received',
+                      'reserved' => 'Reserved for charging',
+                      'released' => 'Reservation released',
+                      'spent' => 'Charging payment',
+                      _ => 'Balance activity',
+                    }),
+                    subtitle: Text(_date(entry['created_at'] as String?)),
+                    trailing: Text(walletMoney(entry['amount_minor'] as int)),
+                  ),
+                if (_historyCursor != null)
+                  TextButton(
+                    onPressed: _loading ? null : () => _more(true),
+                    child: const Text('More activity'),
+                  ),
+              ],
             ],
           ],
         ),
@@ -377,7 +400,9 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
 
   void _start() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
+    if (_row['status'] == 'pending' || _row['status'] == 'creating') {
+      _timer = Timer.periodic(const Duration(seconds: 5), (_) => _refresh());
+    }
   }
 
   @override
@@ -407,6 +432,7 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
           _row = row;
           _error = null;
         });
+        _start();
       }
     } on Object catch (error) {
       if (mounted) setState(() => _error = _message(error));
@@ -422,6 +448,13 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
     final status = _row['status'] as String;
     final qr = _row['qr_content'] as String?;
     final simulated = _row['mode'] == 'simulated';
+    final qrUnavailable =
+        !simulated &&
+        !expired &&
+        status != 'expired' &&
+        status != 'paid' &&
+        status != 'creating' &&
+        (status != 'pending' || qr == null || qr.isEmpty || expiry == null);
     return VtsaPageShell(
       eyebrow: simulated ? 'SIMULATED TOP-UP' : 'QR PH',
       title: 'Add prepaid credit',
@@ -435,7 +468,11 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
           Semantics(
             liveRegion: true,
             child: Text(
-              _status(status == 'pending' && expired ? 'expired' : status),
+              qrUnavailable
+                  ? 'Payment QR unavailable'
+                  : _status(
+                      status == 'pending' && expired ? 'expired' : status,
+                    ),
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
@@ -448,13 +485,76 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
                 'TEST ONLY — no money will move. Ask the staging operator to confirm this test request, then check its status.',
               ),
             )
-          else if (qr != null && !expired && status == 'pending') ...[
+          else if (qrUnavailable)
+            const Text(
+              'We could not prepare a usable payment QR for this request. '
+              'Keep the reference below and contact support before creating another top-up. '
+              'Refreshing checks this request; it does not create a new QR. '
+              'If you already paid, do not pay again while confirmation is pending.',
+            )
+          else if (qr != null &&
+              qr.isNotEmpty &&
+              expiry != null &&
+              !expired &&
+              status == 'pending') ...[
             Center(
-              child: QrImageView(
-                data: qr,
-                size: 260,
-                backgroundColor: Colors.white,
-                semanticsLabel: 'QR Ph payment code',
+              child: Container(
+                width: 292,
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFD8E4EB)),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF15386A),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'QR Ph',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'Scan to pay',
+                          style: TextStyle(
+                            color: Color(0xFF435665),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    QrImageView(
+                      data: qr,
+                      size: 260,
+                      padding: const EdgeInsets.all(16),
+                      backgroundColor: Colors.white,
+                      semanticsLabel: 'QR Ph payment code',
+                    ),
+                    const Text(
+                      'Pay through your bank or e-wallet',
+                      style: TextStyle(color: Color(0xFF435665), fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -475,7 +575,7 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
           if (_error != null) Text(_error!),
           if (status != 'paid')
             VtsaButton(
-              label: 'Check payment status',
+              label: qrUnavailable ? 'Refresh request' : 'Check payment status',
               onPressed: _busy ? null : _refresh,
               loading: _busy,
             ),
@@ -518,3 +618,9 @@ String _status(String value) => switch (value) {
   'review_required' => 'Payment is being checked',
   _ => 'Awaiting confirmation',
 };
+
+String _topupStatus(Map<String, dynamic> row) =>
+    row['mode'] == 'live' &&
+        (row['status'] == 'unknown' || row['status'] == 'review_required')
+    ? 'Payment QR unavailable'
+    : _status(row['status'] as String);

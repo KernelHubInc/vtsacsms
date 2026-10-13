@@ -48,6 +48,8 @@ final class TariffSnapshotFactory
             'effective_to' => $version->effective_to?->utc()->toISOString(),
             'selected_at' => $selectedAt->utc()->toISOString(),
             'timezone' => (string) $version->timezone,
+            'time_basis' => (string) $version->time_basis,
+            'energy_flow_max_gap_seconds' => 60,
             'scope' => [
                 'operator_id' => $version->operator_id,
                 'site_id' => $version->site_id,
@@ -57,6 +59,7 @@ final class TariffSnapshotFactory
                 'operator_id' => $connector->operatorId,
                 'site_id' => $connector->siteId,
                 'connector_id' => $connector->connectorId,
+                'connector_number' => $connector->connectorNumber,
             ],
             'components' => $version->components->map(fn ($component): array => [
                 'id' => (string) $component->getKey(),

@@ -7,6 +7,7 @@ namespace App\Filament\Operator\Resources\ConnectorStatuses;
 use App\Filament\Operator\Resources\ConnectorStatuses\Pages\ListConnectorStatuses;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
+use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Organizations\Application\AuthorizationService;
@@ -33,13 +34,23 @@ final class ConnectorStatusResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $connectorStates = null;
+
         return $table->poll('5s')->columns([
             TextColumn::make('connector_id')->label('Connector')->copyable()->searchable(),
-            TextColumn::make('status')->badge()->sortable(),
-            TextColumn::make('observed_at')->dateTime()->sortable(),
+            TextColumn::make('live_status')->label('Current status')->badge()
+                ->state(function (ConnectorStatus $record, $livewire) use (&$connectorStates): string {
+                    $connectorStates ??= app(StationConnectionQuery::class)->connectorStates(
+                        connectorIds: $livewire->getTableRecords()->pluck('connector_id')->all(),
+                    );
+
+                    return $connectorStates[$record->connector_id]['label'] ?? 'Unknown';
+                }),
+            TextColumn::make('status')->label('Last reported availability')->badge()->sortable(),
+            TextColumn::make('observed_at')->label('Status reported at (UTC)')->dateTime()->sortable(),
             TextColumn::make('stale_after_seconds')->label('Stale after (s)')->numeric(),
         ])->filters([
-            SelectFilter::make('status')->options([
+            SelectFilter::make('status')->label('Last reported availability')->options([
                 'available' => 'Available', 'occupied' => 'Occupied', 'faulted' => 'Faulted',
                 'offline' => 'Offline', 'unknown' => 'Unknown',
             ]),
@@ -47,6 +58,7 @@ final class ConnectorStatusResource extends Resource
             RecordViewAction::make([
                 'connector_id' => 'Connector',
                 'status' => 'Status',
+                'reported_status' => 'Last OCPP status',
                 'observed_at' => 'Observed at (UTC)',
                 'stale_after_seconds' => 'Stale after (seconds)',
                 'vendor_error_code' => 'Vendor error code',

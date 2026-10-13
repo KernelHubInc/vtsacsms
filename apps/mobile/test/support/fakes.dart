@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/config/app_environment.dart';
 import 'package:vtsa_mobile/core/config/feature_flags.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/core/maps/device_location_service.dart';
 import 'package:vtsa_mobile/core/maps/map_configuration.dart';
 import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
@@ -27,6 +28,9 @@ final class FakeAuthRepository implements AuthRepository {
   bool verificationEmailSent = true;
   int verificationEmailsSent = 0;
   AppFailure? currentUserFailure;
+  AppFailure? logoutFailure;
+  AppFailure? resetFailure;
+  Completer<void>? resetCompleter;
   Completer<UserProfile>? currentUserCompleter;
   UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
@@ -72,7 +76,10 @@ final class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async => signedIn = false;
+  Future<void> logout() async {
+    if (logoutFailure case final failure?) throw failure;
+    signedIn = false;
+  }
 
   @override
   Future<RegistrationResult> register({
@@ -91,8 +98,11 @@ final class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> requestPasswordReset(String email) async =>
-      passwordResetRequested = true;
+  Future<void> requestPasswordReset(String email) async {
+    passwordResetRequested = true;
+    if (resetFailure case final failure?) throw failure;
+    if (resetCompleter case final pending?) await pending.future;
+  }
 
   @override
   Future<void> resendEmailVerification() async => verificationEmailsSent++;
@@ -254,9 +264,14 @@ final class FakeChargingRepository implements ChargingRepository {
   AppFailure? prepareFailure;
   AppFailure? startFailure;
   AppFailure? stopFailure;
+  AppFailure? issueFailure;
+  AppFailure? historyFailure;
   Completer<ChargingSession>? startCompleter;
   Completer<ChargingSession>? stopCompleter;
+  AppFailure? getSessionFailure;
+  Completer<ChargingHistoryPage>? historyCompleter;
   int prepareCalls = 0;
+  String? lastPreparedCode;
   int startCalls = 0;
   int stopCalls = 0;
   int activeCalls = 0;
@@ -290,6 +305,7 @@ final class FakeChargingRepository implements ChargingRepository {
 
   @override
   Future<ChargingSession> getSession(String sessionId) async {
+    if (getSessionFailure case final failure?) throw failure;
     final result = sessions[sessionId] ?? active;
     if (result == null) {
       throw const AppFailure(
@@ -303,6 +319,8 @@ final class FakeChargingRepository implements ChargingRepository {
   @override
   Future<ChargingHistoryPage> history({String? cursor}) async {
     historyCalls++;
+    if (historyFailure case final failure?) throw failure;
+    if (historyCompleter case final pending?) return pending.future;
     return historyResult;
   }
 
@@ -312,6 +330,7 @@ final class FakeChargingRepository implements ChargingRepository {
     String? vehicleId,
   }) async {
     prepareCalls++;
+    lastPreparedCode = code.value;
     if (prepareFailure case final failure?) {
       throw failure;
     }
@@ -326,6 +345,7 @@ final class FakeChargingRepository implements ChargingRepository {
     required String idempotencyKey,
   }) async {
     issueCalls++;
+    if (issueFailure case final failure?) throw failure;
     lastIssueSessionId = sessionId;
   }
 
@@ -392,6 +412,8 @@ buildTestDependencies({
   FakeChargingRepository? chargingRepository,
   KycRepository? kycRepository,
   TokenStore? tokenStore,
+  MapConfiguration? maps,
+  DeviceLocationService location = const UnavailableDeviceLocationService(),
 }) async {
   SharedPreferences.setMockInitialValues({
     'onboarding_complete_v1': onboardingComplete,
@@ -417,23 +439,26 @@ buildTestDependencies({
       apiBaseUrl: Uri.parse('http://localhost:8000'),
       defaultTenantId: '01K0M0JJ5X0M0JJ5X0M0JJ5X0N',
       googleMapsApiKey: '',
-      maps: const MapConfiguration(
-        requestedProvider: MapProviderKind.openstreetmap,
-        provider: MapProviderKind.openstreetmap,
-        defaultLatitude: 14.5995,
-        defaultLongitude: 120.9842,
-        defaultZoom: 11,
-        minimumZoom: 3,
-        maximumZoom: 19,
-        tileUrlTemplate: '',
-        tileAttribution: '© OpenStreetMap contributors',
-        tileMaximumNativeZoom: 19,
-        clusteringEnabled: true,
-        googleReady: false,
-        status: 'widget_test_list_default',
-      ),
+      maps:
+          maps ??
+          const MapConfiguration(
+            requestedProvider: MapProviderKind.openstreetmap,
+            provider: MapProviderKind.openstreetmap,
+            defaultLatitude: 14.5995,
+            defaultLongitude: 120.9842,
+            defaultZoom: 11,
+            minimumZoom: 3,
+            maximumZoom: 19,
+            tileUrlTemplate: '',
+            tileAttribution: '© OpenStreetMap contributors',
+            tileMaximumNativeZoom: 19,
+            clusteringEnabled: true,
+            googleReady: false,
+            status: 'widget_test_list_default',
+          ),
     ),
     preferences: preferences,
+    location: location,
     tokenStore: tokens,
     connectivity: const AlwaysOnlineConnectivity(),
     authRepository: auth,

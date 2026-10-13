@@ -7,6 +7,8 @@
 
 The Python gateway is an independently deployable asynchronous service. Laravel never hosts charger sockets, and the gateway never imports Laravel code or connects to Laravel-owned PostgreSQL tables.
 
+Staging supports Docker or an isolated native systemd process under [ADR 0025](decisions/0025-native-staging-ocpp-runtime.md). The [runtime switcher](../runbooks/ocpp-native-staging.md) moves both public WebSockets and private core commands to the selected process; the existing Redis consumers and registration contracts remain shared.
+
 ```mermaid
 flowchart LR
     charger["Enrolled EV charger"] <-->|"OCPP 1.6J or 2.0.1 over WSS"| gateway["Async OCPP gateway"]
@@ -181,3 +183,6 @@ allowlist change is part of this update.
 ### URL-only registered chargers (ADR 0024)
 
 The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).
+
+
+Core tenant/station ULIDs may contain uppercase or lowercase Crockford Base32 characters. Gateway validation accepts both and preserves the exact identifier returned by core in leases and events; it must not uppercase database keys. The public charge-point identity remains an exact match. Regression coverage includes lowercase bindings returned by newly created platform stations.

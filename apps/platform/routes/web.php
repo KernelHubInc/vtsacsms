@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Foundation\Features\Feature;
+use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicArticleController;
 use App\Http\Controllers\PublicPageController;
@@ -15,6 +16,11 @@ use App\Http\Middleware\RequireEnabledFeature;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', PublicPageController::class)->defaults('slug', 'home')->name('home');
+
+Route::get('/reset-password/{token}', [PasswordController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{32,128}')->name('password.reset');
+Route::post('/reset-password', [PasswordController::class, 'reset'])
+    ->middleware('throttle:auth.recovery')->name('password.update');
 
 Route::get('/staging/kyc/{page}', StagingKycPolicyController::class)
     ->name('kyc.staging-policy');

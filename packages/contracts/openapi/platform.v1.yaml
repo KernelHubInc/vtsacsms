@@ -37,6 +37,20 @@ tags:
   - name: Wallet
     description: Verified driver prepaid balances and idempotent QR Ph top-ups.
 paths:
+  /api/v1/mobile/charging/prepare:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging~1prepare'
+  /api/v1/mobile/charging-sessions/remote-start:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions~1remote-start'
+  /api/v1/mobile/charging-sessions/active:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions~1active'
+  /api/v1/mobile/charging-sessions:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions'
+  /api/v1/mobile/charging-sessions/{session}:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions~1{session}'
+  /api/v1/mobile/charging-sessions/{session}/remote-stop:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions~1{session}~1remote-stop'
+  /api/v1/mobile/charging-sessions/{session}/cancel:
+    $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging-sessions~1{session}~1cancel'
   /api/internal/v1/ocpp/resolve:
     post:
       summary: Resolve a URL-only charger against active station and tenant state
@@ -1563,7 +1577,7 @@ components:
                   created_at: {type: [string, 'null'], format: date-time}
     Ulid:
       type: string
-      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+      pattern: '^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$'
       example: 01K0M0JJ5X0M0JJ5X0M0JJ5X0M
     MaintenanceWorkOrderInput:
       type: object
@@ -1982,6 +1996,7 @@ components:
         site_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
         connector_id: {oneOf: [{$ref: '#/components/schemas/Ulid'}, {type: 'null'}]}
         timezone: {type: string, description: IANA timezone used for day/time rules}
+        time_basis: {type: string, enum: [energy_flow], description: New time tariffs count only metered energy-flow seconds.}
         components:
           type: array
           minItems: 1
@@ -2047,6 +2062,7 @@ components:
         operator_id: {$ref: '#/components/schemas/Ulid'}
         operator_name: {type: string, maxLength: 160}
         availability: {type: string, enum: [available, busy, faulted, offline, stale, unknown]}
+        operational_status: {type: string, enum: [available, busy, faulted, unavailable, offline, stale, unknown], description: 'Preferred display status. Unlike legacy availability, unavailable does not imply loss of connectivity.'}
         connection_status: {type: string, enum: [online, offline, unknown], description: 'Recent authenticated station communication, independent of connector availability'}
         last_seen_at: {type: [string, 'null'], format: date-time, description: Last observed station communication in UTC}
         is_stale: {type: boolean}
@@ -2063,6 +2079,11 @@ components:
               standard: {type: string}
               name: {type: string}
               maximum_power_w: {type: integer, minimum: 0}
+              id: {$ref: '#/components/schemas/Ulid'}
+              current_type: {type: string}
+              availability: {type: string, enum: [available, occupied, reserved, unavailable, faulted, offline, stale, unknown]}
+              status_observed_at: {type: [string, 'null'], format: date-time}
+              reported_status: {type: [string, 'null'], enum: [available, preparing, charging, suspendedev, suspendedevse, finishing, occupied, reserved, unavailable, faulted, null], description: 'Detailed device status; null when disconnected, stale, replaced or superseded by orchestration.'}
         qr_identifier: {type: string, maxLength: 120}
         distance_m: {type: [number, 'null'], minimum: 0}
     ChargingStationMutableFields:

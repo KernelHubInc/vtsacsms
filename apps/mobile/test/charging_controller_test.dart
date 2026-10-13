@@ -148,7 +148,7 @@ void main() {
       );
       await controller.prepare(rawCode: 'VSTA-ABC_123');
 
-      expect(await controller.start(), isFalse);
+      expect(await controller.start(), isTrue);
       expect(controller.phase, ChargingFlowPhase.live);
       expect(repository.activeCalls, 1);
     },

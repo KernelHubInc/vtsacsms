@@ -254,7 +254,7 @@ final readonly class OcppEventConsumer
             'offline' => ConnectorAvailability::Offline,
             default => ConnectorAvailability::Unknown,
         };
-        if (! $this->setConnectorStatus($connector, $status, 'ocpp_status_notification', $sourceAt, (string) $event['event_id'], $data['connection_id'] ?? null)) {
+        if (! $this->setConnectorStatus($connector, $status, 'ocpp_status_notification', $sourceAt, (string) $event['event_id'], $data['connection_id'] ?? null, mb_strtolower((string) ($data['status'] ?? '')))) {
             return;
         }
         $faultCode = $data['error_code'] ?? $data['vendor_error_code'] ?? null;
@@ -357,6 +357,7 @@ final readonly class OcppEventConsumer
         CarbonImmutable $observedAt,
         string $eventId,
         ?string $connectionId = null,
+        ?string $reportedStatus = null,
     ): bool {
         $status = ConnectorStatus::query()->firstOrCreate(
             ['connector_id' => $connector->connectorId],
@@ -365,7 +366,11 @@ final readonly class OcppEventConsumer
         if ($reason === 'ocpp_status_notification' && ($status->last_ocpp_event_at ?? $status->observed_at)->greaterThan($observedAt)) {
             return false;
         }
-        $status->forceFill(['ocpp_connection_id' => $connectionId, 'last_ocpp_event_at' => $observedAt])->save();
+        $status->forceFill([
+            'ocpp_connection_id' => $connectionId,
+            'last_ocpp_event_at' => $observedAt,
+            'reported_status' => in_array($reportedStatus, ['available', 'preparing', 'charging', 'suspendedev', 'suspendedevse', 'finishing', 'reserved', 'unavailable', 'faulted', 'occupied'], true) ? $reportedStatus : null,
+        ])->save();
         $this->connectorStates->transition($status, $next, $reason, ['observed_at' => $observedAt], $eventId);
 
         return true;

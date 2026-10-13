@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 
 import 'support/fakes.dart';
 
@@ -14,14 +14,13 @@ void main() {
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
 
-      expect(find.text('Find your next charge'), findsOneWidget);
+      expect(find.text('Where would you like to charge?'), findsOneWidget);
       expect(find.byType(PowerSolutionsLogo), findsOneWidget);
       expect(find.text('Harbor Exchange'), findsOneWidget);
       expect(find.text('Status stale'), findsOneWidget);
       expect(fixture.stations.lastBounds?.west, 120.85);
 
-      final appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.toolbarHeight, 96);
+      expect(find.byType(NavigationBar), findsOneWidget);
     },
   );
 
@@ -48,25 +47,24 @@ void main() {
     expect(fixture.auth.signedIn, isTrue);
   });
 
-  testWidgets('primary destinations share the branded navigation header', (
-    tester,
-  ) async {
-    final fixture = await buildTestDependencies(signedIn: true);
-    await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(PowerSolutionsAppBar), findsOneWidget);
-
-    for (final destination in ['Activity', 'Wallet', 'Account']) {
-      await tester.tap(find.text(destination));
+  testWidgets(
+    'redesigned Explore retains navigation to branded account and payment screens',
+    (tester) async {
+      final fixture = await buildTestDependencies(signedIn: true);
+      await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
 
-      final header = tester.widget<PowerSolutionsAppBar>(
-        find.byType(PowerSolutionsAppBar),
-      );
-      expect(header.title, destination);
-    }
-  });
+      expect(find.text('Where would you like to charge?'), findsOneWidget);
+
+      for (final destination in ['Activity', 'Wallet', 'Account']) {
+        await tester.tap(find.text(destination));
+        await tester.pumpAndSettle();
+
+        final header = tester.widget<DriverTabPage>(find.byType(DriverTabPage));
+        expect(header.title, destination);
+      }
+    },
+  );
 
   testWidgets('station details expose connectors, hours, and amenities', (
     tester,
@@ -77,12 +75,27 @@ void main() {
     await tester.tap(find.text('Harbor Exchange'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Connectors'), findsOneWidget);
+    expect(find.text('Choose a plug'), findsOneWidget);
     expect(find.textContaining('CCS2'), findsOneWidget);
-    expect(find.text('Connection unconfirmed'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Operating hours'), 150);
+    expect(find.textContaining('Connection unconfirmed'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Station details & directions'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Station details & directions'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Operating hours'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Operating hours'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Restroom'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Restroom'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Restroom'), findsOneWidget);
   });
 }

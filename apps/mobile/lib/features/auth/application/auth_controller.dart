@@ -143,6 +143,7 @@ final class AuthController extends ChangeNotifier {
   }
 
   Future<bool> requestPasswordReset(String email) async {
+    if (_busy) return false;
     _setBusy(true);
     try {
       await _repository.requestPasswordReset(email);
@@ -172,6 +173,12 @@ final class AuthController extends ChangeNotifier {
     _setBusy(true);
     try {
       await _repository.logout();
+    } on AppFailure {
+      _failure = const AppFailure(
+        kind: FailureKind.offline,
+        message:
+            'Signed out on this device; server sign-out could not be confirmed. Sign in again to continue.',
+      );
     } finally {
       await _tokens.clear();
       _user = null;

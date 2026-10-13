@@ -91,6 +91,7 @@ final class ChargingStationResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $connectorStates = null;
         $table->modifyQueryUsing(fn (Builder $query): Builder => $query
             ->leftJoin('charging_station_connections as connection', function ($join): void {
                 $join->on('connection.charging_station_id', '=', 'charging_stations.id')
@@ -111,6 +112,17 @@ final class ChargingStationResource extends Resource
                     'online' => 'success', 'offline' => 'danger', default => 'gray',
                 }),
             TextColumn::make('ocpp_last_seen_at')->label('Last device message (UTC)')->dateTime()->placeholder('Not seen'),
+            TextColumn::make('connector_states')->label('Connector status')->listWithLineBreaks()
+                ->state(function (ChargingStation $record, $livewire) use (&$connectorStates): array {
+                    $connectorStates ??= app(StationConnectionQuery::class)->connectorStates(
+                        stationIds: $livewire->getTableRecords()->pluck('id')->all(),
+                    );
+
+                    return array_values(array_map(
+                        fn (array $state): string => $state['label'],
+                        array_filter($connectorStates, fn (array $state): bool => $state['station_id'] === (string) $record->getKey()),
+                    ));
+                })->placeholder('Not configured'),
             TextColumn::make('lifecycle_status')->badge(),
             IconColumn::make('is_public')->boolean(),
         ])

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -42,7 +44,7 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
       final charging = widget.dependencies.charging;
       final session = charging.session;
       if (session == null || session.id != widget.sessionId) {
-        return VtsaPageShell(
+        return DriverPage(
           title: 'Charging session',
           body: charging.failure == null
               ? const VtsaSkeleton(lines: 7)
@@ -58,9 +60,15 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
         );
       }
 
-      return VtsaPageShell(
-        eyebrow: _eyebrow(charging.phase),
-        title: session.stationName,
+      return DriverPage(
+        selectedIndex: 1,
+        title:
+            charging.phase == ChargingFlowPhase.live &&
+                session.state == ChargingSessionState.charging &&
+                !session.chargerDisconnected &&
+                charging.isOnline
+            ? 'You’re charging'
+            : 'Your charging session',
         actions: [
           IconButton(
             tooltip: 'Refresh session',
@@ -83,11 +91,12 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                     'Values are the last confirmed server state. Start and stop requests are disabled until the connection returns.',
               )
             else if (!charging.realtimeConnected && !session.isTerminal)
-              const _Notice(
-                icon: Icons.sync,
-                title: 'Live channel unavailable',
-                description:
-                    'Power Solutions is polling the authoritative session. Values may update less frequently.',
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Updates refresh periodically. Last confirmed readings are shown.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             if (session.chargerDisconnected)
               const _Notice(
@@ -100,23 +109,15 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
             const SizedBox(height: VtsaSpacing.md),
             _Metrics(session: session),
             const SizedBox(height: VtsaSpacing.md),
-            VtsaCard(
-              eyebrow: 'CHARGER',
-              title: session.connectorName,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(session.stationName),
-                  const SizedBox(height: VtsaSpacing.xs),
-                  SelectableText(
-                    'Session ${session.id}',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: context.vtsaColors.textMuted,
-                    ),
-                  ),
-                ],
+            if (charging.phase == ChargingFlowPhase.live &&
+                charging.isOnline &&
+                !session.chargerDisconnected)
+              const DriverNotice(
+                title: 'Your session stays with you',
+                message:
+                    'Check progress here or return through Activity. Final cost is confirmed after the charger stops.',
               ),
-            ),
+            const SizedBox(height: 12),
             if (charging.failure != null) ...[
               const SizedBox(height: VtsaSpacing.md),
               VtsaErrorState(
@@ -126,24 +127,76 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               ),
             ],
             const SizedBox(height: VtsaSpacing.lg),
+            VtsaButton(
+              label: 'Need help? We’re here',
+              variant: VtsaButtonVariant.secondary,
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your charging session',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'If charging has not started, check the cable and the vehicle’s charging schedule. Do not submit another start while this request is pending.',
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'To finish, request a stop and wait for charger confirmation before disconnecting. If a payment needs review, keep this session reference for your operator.',
+                        ),
+                        const SizedBox(height: 12),
+                        SelectableText(session.id),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _Actions(dependencies: widget.dependencies, session: session),
+            if (session.canRequestRemoteStop)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'We’ll ask you to confirm before ending.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Power & session details'),
+              children: [
+                ListTile(
+                  title: const Text('Current power'),
+                  trailing: Text(formatPower(session.currentPowerW)),
+                ),
+                ListTile(
+                  title: const Text('Energy-flow time'),
+                  trailing: Text(formatDuration(session.energyFlowSeconds)),
+                ),
+                SelectableText(
+                  'Session ${session.id}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ],
+            ),
           ],
         ),
       );
     },
   );
-
-  String _eyebrow(ChargingFlowPhase phase) => switch (phase) {
-    ChargingFlowPhase.startPending => 'START PENDING',
-    ChargingFlowPhase.startTimedOut => 'START NEEDS ATTENTION',
-    ChargingFlowPhase.live => 'LIVE CHARGING',
-    ChargingFlowPhase.stopPending => 'STOP PENDING',
-    ChargingFlowPhase.finalizing => 'FINALIZING',
-    ChargingFlowPhase.paymentProcessing => 'PAYMENT PROCESSING',
-    ChargingFlowPhase.completed => 'SESSION COMPLETE',
-    ChargingFlowPhase.failed => 'SESSION ENDED',
-    _ => 'CHARGING SESSION',
-  };
 }
 
 class _PhasePanel extends StatelessWidget {
@@ -194,8 +247,12 @@ class _PhasePanel extends StatelessWidget {
       ),
       ChargingFlowPhase.paymentProcessing => (
         Icons.payments_outlined,
-        'Payment confirmation pending',
-        'The charging session ended. Power Solutions is waiting for verified provider status and will not create a duplicate charge.',
+        session.paymentState == PaymentState.requiresAction
+            ? 'Charging payment requires review'
+            : 'Finalizing wallet payment',
+        session.paymentState == PaymentState.requiresAction
+            ? 'Your reserved funds are held while the operator checks the charger evidence. Do not start or pay again for this session.'
+            : 'The session ended. We are checking the final readings, deducting the charge once, and releasing unused reserved funds.',
         VtsaOperationalState.preparing,
       ),
       ChargingFlowPhase.completed => (
@@ -218,22 +275,50 @@ class _PhasePanel extends StatelessWidget {
         VtsaOperationalState.unknown,
       ),
     };
-    return VtsaCard(
-      child: Row(
+    final healthy =
+        phase == ChargingFlowPhase.live &&
+        session.state == ChargingSessionState.charging &&
+        dependencies.charging.isOnline &&
+        !session.chargerDisconnected;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: healthy
+            ? context.vtsaColors.successSurface
+            : context.vtsaColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: context.vtsaColors.forState(state), size: 30),
-          const SizedBox(width: VtsaSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: VtsaSpacing.xs),
-                Text(description),
-              ],
-            ),
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: healthy
+                    ? context.vtsaColors.success
+                    : context.vtsaColors.forState(state),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            '${session.stationName} · ${session.connectorName}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Text(
+            'Last server update ${DateFormat('MMM d, HH:mm:ss').format(session.updatedAt.toLocal())}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (!healthy) ...[const SizedBox(height: 8), Text(description)],
         ],
       ),
     );
@@ -242,46 +327,63 @@ class _PhasePanel extends StatelessWidget {
 
 class _Metrics extends StatelessWidget {
   const _Metrics({required this.session});
-
   final ChargingSession session;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth >= 600
-          ? (constraints.maxWidth - VtsaSpacing.sm) / 2
-          : constraints.maxWidth;
-      return Wrap(
-        spacing: VtsaSpacing.sm,
-        runSpacing: VtsaSpacing.sm,
-        children: [
-          _Metric(
-            width: width,
-            label: 'Energy consumed',
-            value: formatEnergy(session.energyWh),
-            icon: Icons.battery_charging_full,
-          ),
-          _Metric(
-            width: width,
-            label: 'Elapsed time',
-            value: formatDuration(session.durationSeconds),
-            icon: Icons.timer_outlined,
-          ),
-          _Metric(
-            width: width,
-            label: 'Current power',
-            value: formatPower(session.currentPowerW),
-            icon: Icons.speed,
-          ),
-          _Metric(
-            width: width,
-            label: session.finalCost == null ? 'Estimated cost' : 'Final cost',
-            value: formatMoney(session.finalCost ?? session.estimatedCost),
-            icon: Icons.payments_outlined,
-          ),
-        ],
-      );
-    },
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SizedBox(height: 8),
+      Text('ENERGY DELIVERED', style: Theme.of(context).textTheme.labelSmall),
+      const SizedBox(height: 8),
+      Text(
+        formatEnergy(session.energyWh),
+        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+          fontSize: 34,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      const SizedBox(height: 12),
+      Container(
+        height: 5,
+        decoration: BoxDecoration(
+          color: context.vtsaColors.border,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Energy so far · last reported value',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: 24),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final wideText = MediaQuery.textScalerOf(context).scale(14) > 20;
+          final width = wideText
+              ? constraints.maxWidth
+              : (constraints.maxWidth - 12) / 2;
+          return Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _Metric(
+                width: width,
+                label: 'TIME',
+                value: formatDuration(session.durationSeconds),
+              ),
+              _Metric(
+                width: width,
+                label: session.finalCost == null
+                    ? 'ESTIMATED COST'
+                    : 'FINAL COST',
+                value: formatMoney(session.finalCost ?? session.estimatedCost),
+              ),
+            ],
+          );
+        },
+      ),
+    ],
   );
 }
 
@@ -290,33 +392,32 @@ class _Metric extends StatelessWidget {
     required this.width,
     required this.label,
     required this.value,
-    required this.icon,
   });
-
   final double width;
   final String label;
   final String value;
-  final IconData icon;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => Container(
     width: width,
-    child: VtsaCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: VtsaSpacing.md),
-          Text(value, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: VtsaSpacing.xxs),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: context.vtsaColors.textMuted,
-            ),
-          ),
-        ],
-      ),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: context.vtsaColors.surfaceSubtle,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(fontSize: 10),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19),
+        ),
+      ],
     ),
   );
 }
@@ -334,8 +435,8 @@ class _Actions extends StatelessWidget {
     if (session.canRequestRemoteStop) {
       actions.add(
         VtsaButton(
-          label: 'Stop charging',
-          variant: VtsaButtonVariant.danger,
+          label: 'End charging',
+          variant: VtsaButtonVariant.secondary,
           loading: charging.mutationInFlight,
           onPressed: charging.isOnline
               ? () async {

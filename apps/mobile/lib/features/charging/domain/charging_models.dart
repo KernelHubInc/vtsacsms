@@ -173,6 +173,7 @@ final class TariffQuote {
     required this.name,
     required this.currency,
     required this.taxInclusive,
+    this.taxRateBasisPoints = 0,
     required this.lines,
     required this.estimatedPreauthorization,
     required this.expiresAt,
@@ -184,6 +185,7 @@ final class TariffQuote {
     name: json['name']! as String,
     currency: (json['currency']! as String).toUpperCase(),
     taxInclusive: json['tax_inclusive']! as bool,
+    taxRateBasisPoints: json['tax_rate_basis_points'] as int? ?? 0,
     lines: (json['lines']! as List<Object?>)
         .map((item) => TariffLine.fromJson(item! as Map<String, dynamic>))
         .toList(growable: false),
@@ -198,6 +200,7 @@ final class TariffQuote {
   final String name;
   final String currency;
   final bool taxInclusive;
+  final int taxRateBasisPoints;
   final List<TariffLine> lines;
   final Money estimatedPreauthorization;
   final DateTime expiresAt;
@@ -300,6 +303,7 @@ final class ChargingSession {
     this.receipt,
     this.invoice,
     this.refundable = false,
+    this.energyFlowSeconds = 0,
   });
 
   factory ChargingSession.fromJson(Map<String, dynamic> json) {
@@ -316,6 +320,7 @@ final class ChargingSession {
       connectorName: (json['connector_name'] ?? 'Connector') as String,
       energyWh: json['energy_wh']! as int,
       durationSeconds: json['duration_seconds']! as int,
+      energyFlowSeconds: json['energy_flow_seconds'] as int? ?? 0,
       currentPowerW: json['current_power_w'] as int?,
       estimatedCost: money('estimated_cost_minor'),
       finalCost: money('final_cost_minor'),
@@ -360,6 +365,7 @@ final class ChargingSession {
   final String connectorName;
   final int energyWh;
   final int durationSeconds;
+  final int energyFlowSeconds;
   final int? currentPowerW;
   final Money? estimatedCost;
   final Money? finalCost;

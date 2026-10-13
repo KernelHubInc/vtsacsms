@@ -49,6 +49,25 @@ void main() {
       await tester.pump();
       expect(discovery.selectedStationId, sampleStation.id);
 
+      final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(map.options.interactionOptions.flags & InteractiveFlag.rotate, 0);
+      expect(
+        map.options.interactionOptions.flags & InteractiveFlag.drag,
+        isNonZero,
+      );
+      expect(
+        map.options.interactionOptions.flags & InteractiveFlag.pinchZoom,
+        isNonZero,
+      );
+      await tester.tapAt(
+        tester.getTopLeft(find.byType(FlutterMap)) + const Offset(20, 20),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(discovery.selectedStationId, isNull);
+      await tester.tap(marker);
+      await tester.pump();
+      expect(discovery.selectedStationId, sampleStation.id);
+
       await tester.pumpWidget(const SizedBox.shrink());
       discovery.dispose();
     },
