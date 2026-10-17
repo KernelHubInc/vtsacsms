@@ -19,7 +19,9 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
   @override
   void initState() {
     super.initState();
-    widget.dependencies.vehicles.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.dependencies.vehicles.load();
+    });
   }
 
   @override
@@ -29,13 +31,23 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
       final controller = widget.dependencies.vehicles;
       return VtsaPageShell(
         eyebrow: 'COMPATIBILITY',
-        title: 'My vehicles',
+        title: widget.dependencies.accounts?.shared == true
+            ? 'Account vehicles'
+            : 'My vehicles',
         actions: [
-          IconButton(
-            tooltip: 'Add vehicle',
-            onPressed: () => context.push('/vehicles/new'),
-            icon: const Icon(Icons.add),
-          ),
+          if (widget.dependencies.accounts != null)
+            IconButton(
+              tooltip: 'Change charging account',
+              onPressed: () => context.push('/charging-accounts'),
+              icon: const Icon(Icons.switch_account_outlined),
+            ),
+          if (widget.dependencies.accounts?.shared != true ||
+              widget.dependencies.accounts?.selected?.can('vehicles') == true)
+            IconButton(
+              tooltip: 'Add vehicle',
+              onPressed: () => context.push('/vehicles/new'),
+              icon: const Icon(Icons.add),
+            ),
         ],
         body: controller.isLoading
             ? const VtsaSkeleton(lines: 5)
@@ -50,10 +62,17 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                 title: 'No vehicles yet',
                 description:
                     'Add connector standards to compare a vehicle with station connectors.',
-                action: VtsaButton(
-                  label: 'Add vehicle',
-                  onPressed: () => context.push('/vehicles/new'),
-                ),
+                action:
+                    widget.dependencies.accounts?.shared == true &&
+                        widget.dependencies.accounts?.selected?.can(
+                              'vehicles',
+                            ) !=
+                            true
+                    ? null
+                    : VtsaButton(
+                        label: 'Add vehicle',
+                        onPressed: () => context.push('/vehicles/new'),
+                      ),
               )
             : ListView.separated(
                 itemCount: controller.vehicles.length,
@@ -76,7 +95,14 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                       trailing: vehicle.isDefault
                           ? const Chip(label: Text('Default'))
                           : const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/vehicles/${vehicle.id}/edit'),
+                      onTap:
+                          widget.dependencies.accounts?.shared == true &&
+                              widget.dependencies.accounts?.selected?.can(
+                                    'vehicles',
+                                  ) !=
+                                  true
+                          ? null
+                          : () => context.push('/vehicles/${vehicle.id}/edit'),
                     ),
                   );
                 },

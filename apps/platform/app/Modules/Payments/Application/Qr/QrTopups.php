@@ -7,8 +7,11 @@ namespace App\Modules\Payments\Application\Qr;
 use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
+use App\Models\User;
 use App\Modules\Billing\Application\PrepaidWallet;
 use App\Modules\Identity\Application\Kyc\KycEligibility;
+use App\Modules\Organizations\Application\ChargingAccounts;
+use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Payments\Domain\Models\QrTopup;
 use App\Modules\Payments\Infrastructure\Aub\AubQrGateway;
 use App\Modules\Payments\Infrastructure\Aub\AubQrProtocol;
@@ -24,7 +27,7 @@ final readonly class QrTopups
     public function __construct(private QrAvailability $availability, private AubQrGateway $gateway, private AubQrProtocol $protocol,
         private PrepaidWallet $wallet, private KycEligibility $eligibility, private AuditRecorder $audit) {}
 
-    public function create(string $subject, int $amount, string $key): QrTopup
+    public function create(string $subject, int $amount, string $key, ?string $accountId = null): QrTopup
     {
         $book = $this->availability->requireCollection();
         $this->eligibility->assertAllowed($subject, 'wallet');
@@ -32,10 +35,16 @@ final readonly class QrTopups
             throw new WalletException('INVALID_TOPUP_AMOUNT', 'Choose an amount within the displayed limits.', 422);
         }
         // Persist the order before the network call. A retry always returns this same order.
-        $topup = DB::transaction(function () use ($subject, $amount, $key, $book): QrTopup {
+        $topup = DB::transaction(function () use ($subject, $amount, $key, $book, $accountId): QrTopup {
+            if ($accountId !== null) {
+                $actor = User::query()->where('public_id', $subject)->firstOrFail();
+                $account = app(ChargingAccounts::class)->require($actor, $accountId,
+                    PermissionKey::ChargingWalletFund, true);
+                abort_if($account->charging_account_type === 'personal', 422);
+            }
             $row = QrTopup::query()->firstOrCreate(['subject_id' => $subject, 'book' => $book, 'idempotency_key' => $key],
-                ['amount_minor' => $amount, 'currency' => 'PHP', 'merchant_id' => $book === 'live' ? config('wallet.aub.merchant_id') : null]);
-            if ($row->amount_minor !== $amount) {
+                ['amount_minor' => $amount, 'charging_account_id' => $accountId, 'currency' => 'PHP', 'merchant_id' => $book === 'live' ? config('wallet.aub.merchant_id') : null]);
+            if ($row->amount_minor !== $amount || $row->charging_account_id !== $accountId) {
                 throw new WalletException('IDEMPOTENCY_CONFLICT', 'This request reference belongs to a different amount.');
             }
             if ($row->wasRecentlyCreated) {
@@ -141,7 +150,7 @@ final readonly class QrTopups
                 return;
             }
             // Billing owns balance writes. This contract participates in the same local DB transaction.
-            $this->wallet->credit($row->subject_id, $book, $id, $amount);
+            $this->wallet->credit($row->subject_id, $book, $id, $amount, $row->charging_account_id);
             $row->forceFill(['status' => 'paid', 'transaction_id' => $transaction, 'confirmation_hash' => $evidenceHash, 'paid_at' => now('UTC'), 'qr_content' => null])->save();
             $this->record($row, 'confirmed');
         });

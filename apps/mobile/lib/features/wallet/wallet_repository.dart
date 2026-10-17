@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 
 abstract interface class WalletRepository {
@@ -8,13 +9,17 @@ abstract interface class WalletRepository {
 }
 
 final class ApiWalletRepository implements WalletRepository {
-  const ApiWalletRepository(this.client);
+  const ApiWalletRepository(this.client, {this.accountId});
+  final String? Function()? accountId;
+  Options get _options =>
+      Options(headers: {'X-Charging-Account-ID': ?accountId?.call()});
   final ApiClient client;
   Future<Map<String, dynamic>> _get(String path, {String? cursor}) async {
     try {
       final response = await client.dio.get<Map<String, dynamic>>(
         path,
         queryParameters: {'cursor': ?cursor},
+        options: _options,
       );
       return Map<String, dynamic>.from(response.data!['data'] as Map);
     } on Object catch (error) {
@@ -37,6 +42,7 @@ final class ApiWalletRepository implements WalletRepository {
       final response = await client.dio.post<Map<String, dynamic>>(
         '/api/v1/wallet/topups',
         data: {'amount_minor': amountMinor, 'idempotency_key': key},
+        options: _options,
       );
       return Map<String, dynamic>.from(response.data!['data'] as Map);
     } on Object catch (error) {

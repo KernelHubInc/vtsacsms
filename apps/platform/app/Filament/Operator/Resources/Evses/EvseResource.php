@@ -6,8 +6,10 @@ namespace App\Filament\Operator\Resources\Evses;
 
 use App\Filament\Operator\Resources\Evses\Pages\ListEvses;
 use App\Filament\Shared\Actions\AuditedEditAction;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
+use App\Modules\Assets\Application\AccessibleStationsQuery;
 use App\Modules\Assets\Domain\AssetLifecycleStatus;
 use App\Modules\Assets\Domain\Models\Evse;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
@@ -41,11 +43,15 @@ final class EvseResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Select::make('charging_station_id')->label('Charging station')->searchable()->required()->visibleOn('create')
+                ->default(fn ($livewire) => $livewire->tableFilters['station']['value'] ?? null)
+                ->options(fn (): array => app(AccessibleStationsQuery::class)->for(auth()->user(), PermissionKey::AssetManage)->orderBy('name')->get()->mapWithKeys(fn ($station): array => [$station->getKey() => $station->name.' · '.$station->charge_point_identity])->all()),
             TextInput::make('uid')->maxLength(100),
-            TextInput::make('evse_number')->integer()->minValue(1)->required(),
+            TextInput::make('evse_number')->integer()->minValue(1)->maxValue(65535)->required()->disabledOn('edit')
+                ->helperText('The outlet number on this station. Saved numbering is locked to protect session history.'),
             Select::make('lifecycle_status')
-                ->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()]))
-                ->required(),
+                ->options(fn (string $operation): array => collect(AssetLifecycleStatus::cases())->filter(fn ($status): bool => $operation !== 'create' || in_array($status->value, ['draft', 'active'], true))->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()])->all())
+                ->default('draft')->required(),
         ]);
     }
 
@@ -59,6 +65,8 @@ final class EvseResource extends Resource
             TextColumn::make('connectors_count')->counts('connectors')->label('Connectors'),
         ])
             ->filters([
+                SelectFilter::make('station')->label('Charging station')->attribute('charging_station_id')
+                    ->options(fn (): array => app(AccessibleStationsQuery::class)->for(auth()->user())->pluck('name', 'id')->all())->searchable(),
                 SelectFilter::make('lifecycle_status')
                     ->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(
                         fn (AssetLifecycleStatus $status): array => [
@@ -76,6 +84,7 @@ final class EvseResource extends Resource
                     'created_at' => 'Created at (UTC)',
                 ]),
                 AuditedEditAction::make('assets.evse.updated', 'evse'),
+                DeleteNetworkRecordAction::make(),
             ]);
     }
 
@@ -106,7 +115,7 @@ final class EvseResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return parent::canCreate();
     }
 
     public static function canEdit(Model $record): bool
@@ -124,6 +133,6 @@ final class EvseResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        return parent::canDelete($record);
     }
 }

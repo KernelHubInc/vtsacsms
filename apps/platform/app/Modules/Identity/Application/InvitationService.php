@@ -102,6 +102,7 @@ final readonly class InvitationService
         $invitation = UserInvitation::query()
             ->withoutGlobalScopes()
             ->where('token_hash', hash('sha256', $plainTextToken))
+            ->where('purpose', 'tenant')
             ->first();
 
         if ($invitation === null || ! $invitation->canBeAccepted()) {

@@ -2,7 +2,6 @@
     <div class="grid gap-6 xl:grid-cols-5">
         <section class="space-y-4 xl:col-span-2" aria-label="Identity verification queue">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-900">
-                <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Identity review</p>
                 <h2 class="mt-2 text-xl font-semibold">Verification queue</h2>
                 <p class="mt-2 text-sm text-gray-500">Search by verification or subject reference. Identity numbers never appear in this list.</p>
                 <form wire:submit="applyFilters" class="mt-5 space-y-3">

@@ -109,6 +109,32 @@ void main() {
     expect(failure.correlationId, '01K0M0JJ5X0M0JJ5X0M0JJ5X0M');
   });
 
+  test('account field errors stay attached to the invitation email', () {
+    final request = RequestOptions(
+      path: '/api/v1/charging-accounts/account/invitations',
+    );
+    final failure = AppFailure.fromDio(
+      DioException.badResponse(
+        statusCode: 422,
+        requestOptions: request,
+        response: Response<Map<String, dynamic>>(
+          requestOptions: request,
+          statusCode: 422,
+          data: {
+            'error': {
+              'code': 'invalid_request',
+              'message': 'Register first.',
+              'fields': {
+                'email': ['Use a registered email address.'],
+              },
+            },
+          },
+        ),
+      ),
+    );
+    expect(failure.fieldErrors['email'], ['Use a registered email address.']);
+  });
+
   test('server errors do not display private diagnostics', () {
     final request = RequestOptions(path: '/example');
     final failure = AppFailure.fromDio(

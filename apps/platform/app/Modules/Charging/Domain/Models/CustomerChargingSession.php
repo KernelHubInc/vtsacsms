@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property string $subject_id
+ * @property string|null $charging_account_id
+ * @property string|null $vehicle_id
+ * @property string|null $payer_account_id
+ * @property string|null $prepaid_account_id
  * @property string $session_id
  * @property string $quote_id
  * @property int $budget_minor

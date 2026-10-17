@@ -9,12 +9,12 @@ Every requested mobile release must return both links after verification:
 
 The demo URL points to the latest verified versioned APK and requires cache revalidation. Both downloads use the same staging build and backend; the demo link is not a separate simulated app.
 
-On 2026-10-13 both links serve version 1.0.16 (79,496,802 bytes). Both returned HTTP 200 with `Cache-Control: no-cache`. Nginx configuration passed validation before its graceful reload; older versioned APKs remain available.
+On 2026-10-13 both links serve version 1.0.20 / Android build 21 (79,989,002 bytes). Both returned HTTP 200 and their downloaded bytes matched SHA256 `023d3096e3381fa6773e67a2fa5f611a71228a0063c18b3e33fd6df6065036b7`. This release requires registered invitation recipients, supports durable pending-start cancellation, and separates account controls into readable sections. See [invitation and cancellation behavior](shared-charging-accounts.md#registered-invitations-and-start-cancellation--1020). The full mobile suite passed 203 tests; eight focused foundation tests include the additional API field-error regression. All 241 backend tests, 27 rollback-only deployed API checks, Flutter analysis, PHPStan, Pint and the locked Composer advisory audit passed. The existing signing certificate supports an in-place update from 1.0.19. The compatible API/worker/monitor release is deployed; no migration or gateway restart was required. Physical phone installation and an actual EV charging cycle remain acceptance checks.
 
 Package the APK and its `.sha256` file under `.cache/mobile-staging-lumina/`, then run:
 
 ```powershell
-.\scripts\publish-staging-apk.ps1 -Version 1.0.16 -Publish
+.\scripts\publish-staging-apk.ps1 -Version 1.0.20 -Publish
 ```
 
 The publisher refuses to replace an existing version with different bytes and advances the demo alias only after verifying the versioned download. Omit `-Publish` for local checksum verification. Historical instructions below describe their original releases; use this version parameter for new releases.
@@ -340,72 +340,17 @@ and StatusNotification; this does not require starting energy delivery.
 
 ### Setting up a location and charging station
 
-Use this order. Some menus currently edit existing records only; their presence
-in the sidebar does not mean the whole provisioning workflow is implemented.
-The existing LUMINA SUBIC hierarchy has already been provisioned.
+Use the [station setup guide](station-setup.md). The October 15 workflow adds
+Station setup checklists, Add EVSE, Add connector, Add operating day (including
+24-hour opening), and location publication to the shared administration/operator
+resources. Tariffs already supports Set pricing and publication.
 
-1. **Sites → Create:** enter the site name, unique code, actual operator,
-   address, latitude/longitude and IANA timezone. Choose the actual site type,
-   Active lifecycle and Public visibility when appropriate. For LUMINA SUBIC,
-   use the values above. Do not assign a fake municipality to make search work.
-   Public discovery also requires `published_at` at or before now. The current
-   site form does not expose publication or public slug, so a backend
-   administrative operation is still required for a newly created public site.
-   Active + Public alone is not a complete publication workflow.
-2. **Charging Stations → Create:** choose that site; enter the station name,
-   the exact hardware charge-point identity, real serial number and a unique QR
-   identifier. Select OCPP 1.6J for this charger, Active and Public. The current
-   form locks the site, identity, serial and QR after creation. The saved active
-   identity is resolved dynamically by the gateway; no per-station Nginx route
-   is needed. A new station does not automatically create its EVSE or connector.
-3. **EVSEs:** provision the independently controllable charging outlet, then
-   inspect/edit it here. For this charger it is EVSE number 1, Active. There is
-   currently no Create action in this menu; initial provisioning needs a
-   backend administrative operation. Do not create another site for an EVSE.
-4. **Connectors:** provision connector number 1 under that EVSE, standard
-   `TYPE_2`, current type `AC`, maximum power `7000` watts, Active. This menu
-   currently edits number, power and lifecycle; it cannot create a connector
-   or change its standard. The connector number must match the number reported
-   by OCPP. `AKR_SINGLE` is a device label, not the catalog connector standard.
-5. **Operating hours:** enter the real schedule in the site's timezone, one
-   record per weekday (0 = Monday through 6 = Sunday). Mark closed days closed.
-   Initial rows need backend provisioning; the menu edits existing rows. No
-   hours were supplied for LUMINA SUBIC, so it correctly reports hours unknown.
-   Do not enable an Open now filter when checking a site with unknown hours.
-6. **Tariffs:** Create makes the tariff header, not an effective price. A
-   version must be added with its scope, effective time, components and tax
-   settings, then published. The current supported staff API is
-   `POST /api/v1/tariffs/{tariff}/versions`, followed by
-   `POST /api/v1/tariff-versions/{version}/publish`. These require a staff token
-   with tariff-manage / tariff-publish permissions in the correct tenant.
-   The current admin list has no version editor/publish action. LUMINA's
-   published version above is already complete; do not add a duplicate.
-7. **Device configuration:** retain the manufacturer's working OCPP settings.
-   If firmware appends its separate ID field, use base URL
-   `wss://staging.evcspowersolutions.com/ocpp` and identity `202607010021`.
-   The final request path must be `/ocpp/202607010021`, with the identity once.
-   The staging gateway uses the explicitly requested URL-only enrollment.
-   Use `ocpp1.6` as WebSocket subprotocol. Do not infer firmware URL behavior
-   from a simulator or run two clients with this same identity.
-8. **Status and faults:** inspect device-reported connector status and faults.
-   Active lifecycle is an administrative setting; it does not prove Online or
-   Available. Online means recent gateway presence; Available additionally
-   requires a current connector status. Offline, stale/unknown, busy,
-   unavailable and faulted must remain distinct.
-9. **Session diagnostics / Command diagnostics:** inspect actual session events,
-   command delivery and responses. An accepted command is not proof that
-   energy flowed. A session needs device transaction and meter evidence.
-10. **Session review queue:** investigate ambiguous or incomplete transactions;
-    do not resolve them as successful solely because the charger is online.
-11. **Network map:** verify location, visibility and live status, then verify
-    the same station in the mobile map. Public, published location and active,
-    public station settings are required. A fresh connector report is needed
-    after the initial connector record is created.
-
-The remaining admin provisioning gaps (site publication, EVSE/connector/hour
-creation and tariff version publication) need a follow-up implementation before
-the full process can be completed entirely through admin. Do not describe the
-current sidebar as a finished self-service commissioning workflow.
+A station does not automatically invent its physical outlets. Create its actual
+EVSEs and connectors in order; the checklist links to the relevant records.
+The existing LUMINA SUBIC hierarchy is already provisioned and must not be
+created again. Public discovery requires an active, public, published location
+with map coordinates and an active public station. Online and Available remain
+separate, device-evidenced states. The checklist is not a physical charging test.
 
 ### Proposed deletion scope — not executed
 
@@ -481,3 +426,7 @@ No records were deleted or retired while preparing this plan. No backup or
 restore test has yet been performed for this proposed purge. Permanent deletion
 is pending because its scope extends into protected maintenance evidence and
 support history, beyond simply removing station listings.
+
+### Staging account audit (2026-10-15)
+
+The staging backend now supports guarded draft network deletion and improved password recovery. Existing APK 1.0.20 is compatible; no reinstall is required. Seeded staging demo logins now use `@evcspowersolutions.com`; the supplied staging password is deliberately not stored in this repository. See [administration audit](admin-staging-audit.md) for login mappings, deletion rules, verification results, and rollback notes. Local `.local` demo seed credentials are for isolated local development only.

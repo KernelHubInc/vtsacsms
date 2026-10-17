@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/consumer_shell.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:vtsa_mobile/features/auth/presentation/quick_unlock_screens.dart';
@@ -22,6 +23,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
   refreshListenable: Listenable.merge([
     dependencies.bootstrap,
     dependencies.auth,
+    ?dependencies.accounts,
   ]),
   redirect: (context, state) {
     final ready = dependencies.bootstrap.isReady;
@@ -59,6 +61,11 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     return null;
   },
   routes: [
+    GoRoute(
+      path: '/charging-accounts',
+      builder: (context, state) =>
+          ChargingAccountsScreen(dependencies: dependencies),
+    ),
     GoRoute(
       path: '/unlock',
       builder: (context, state) => UnlockScreen(dependencies: dependencies),
@@ -111,16 +118,40 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
         GoRoute(
           path: '/activity',
           pageBuilder: (context, state) => NoTransitionPage(
-            child: ActivityScreen(dependencies: dependencies),
+            child: ActivityScreen(
+              key: ValueKey(dependencies.accounts?.accountId),
+              dependencies: dependencies,
+            ),
           ),
         ),
         GoRoute(
           path: '/wallet',
           pageBuilder: (context, state) => NoTransitionPage(
-            child: WalletScreen(
-              repository: dependencies.walletRepository,
-              allowRealPayments: dependencies.featureFlags.realPayments,
-            ),
+            child:
+                dependencies.accounts?.shared == true &&
+                    dependencies.accounts?.selected?.can('wallet_view') != true
+                ? DriverTabPage(
+                    title: 'Account wallet',
+                    subtitle:
+                        '${dependencies.accounts!.selected!.name} · ${dependencies.accounts!.selected!.roleLabel}',
+                    body: ListView(
+                      children: [
+                        ChargingAccountSelector(dependencies: dependencies),
+                        const Text(
+                          'Funding and balance details are available to the account owner and billing manager. You can review your approved charging budget before starting a session.',
+                        ),
+                      ],
+                    ),
+                  )
+                : WalletScreen(
+                    key: ValueKey(dependencies.accounts?.accountId),
+                    accountName: dependencies.accounts?.selected?.name,
+                    accountSelector: ChargingAccountSelector(
+                      dependencies: dependencies,
+                    ),
+                    repository: dependencies.walletRepository,
+                    allowRealPayments: dependencies.featureFlags.realPayments,
+                  ),
           ),
         ),
         GoRoute(
@@ -136,6 +167,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
       builder: (context, state) => Theme(
         data: DriverTheme.of(context),
         child: ChargingStartScreen(
+          key: ValueKey(dependencies.accounts?.accountId),
           dependencies: dependencies,
           initialCode: state.uri.queryParameters['code'],
         ),

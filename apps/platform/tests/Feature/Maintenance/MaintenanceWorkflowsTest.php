@@ -65,6 +65,9 @@ final class MaintenanceWorkflowsTest extends TenantSecurityTestCase
         $user = $this->createUser();
 
         $this->withinTenant($tenant, $user, function (): void {
+            // Recreate the legacy schema before inserting the state this migration repairs.
+            $migration = require database_path('migrations/2026_07_29_001300_repair_work_order_states.php');
+            $migration->down();
             $workOrder = WorkOrder::factory()->create([
                 'acknowledged_at' => now('UTC'),
             ]);
@@ -72,11 +75,13 @@ final class MaintenanceWorkflowsTest extends TenantSecurityTestCase
                 ->where('id', $workOrder->getKey())
                 ->update(['state' => 'acknowledged']);
 
-            $migration = require database_path('migrations/2026_07_29_001300_repair_work_order_states.php');
             $migration->up();
 
             self::assertSame(WorkOrderState::Triaged, $workOrder->refresh()->state);
             self::assertNotNull($workOrder->acknowledged_at);
+            if (DB::getDriverName() === 'pgsql') {
+                self::assertTrue((bool) DB::table('pg_constraint')->where('conname', 'maintenance_work_orders_state_check')->value('convalidated'));
+            }
         });
     }
 

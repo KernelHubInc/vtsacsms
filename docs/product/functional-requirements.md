@@ -256,3 +256,33 @@
 Implementation/test mapping and operational constraints: [KYC runbook](../runbooks/kyc.md). No legal compliance or certified liveness claim is implied.
 
 Before implementation, each delivery increment must map applicable `FR-*` requirements to user stories, authorization rules, API/event schemas, migrations, threat cases, automated tests, operational dashboards, and an acceptance owner. Deferred/open items remain non-requirements until approved in the PRD or an ADR.
+
+## Shared customer charging accounts (approved 2026-10-13)
+
+- **FR-ACC-001:** One authenticated person MAY belong to multiple personal, business or fleet charging accounts. Existing tenant/operator boundaries and individual profile privacy MUST remain intact.
+- **FR-ACC-002:** Existing RBAC MUST implement exact account-scoped owner, admin, billing manager, fleet manager and driver permissions. Invitations MUST require the verified recipient's own login, expire, be revocable and be accepted at most once. Member revocation MUST take effect server-side while preserving history.
+- **FR-ACC-003:** Shared vehicles MUST remain Assets-owned and require explicit driver assignments unless an account management role permits account-wide vehicle access. Changing account or vehicle IDs MUST NOT bypass authorization.
+- **FR-ACC-004:** Personal and shared prepaid balances MUST remain separate. Quotes and sessions MUST freeze the driver, account, selected vehicle and original payer. A failed/inaccessible selected payer MUST NOT fall back to another wallet; verified credits and settlement MUST retain their original destination.
+- **FR-ACC-005:** Account owners MAY set per-driver and per-vehicle per-session reservation caps in minor PHP units. These MUST be checked again before a new hold, preserve reservation idempotency and use the lower applicable cap. Monthly budgets and offline hardware cutoff guarantees are not implied.
+- **FR-ACC-006:** Mobile MUST expose account selection, authorized membership/vehicle controls and driver/vehicle/payer review while preserving personal features and OCPP start/stop semantics. Drivers see only their own account charging history; managers see account history according to permission.
+
+Implementation, tests, exact role permissions and release acceptance: [shared charging accounts](../runbooks/shared-charging-accounts.md), [ADR 0027](../architecture/decisions/0027-shared-charging-accounts.md).
+
+### Station provisioning workflow
+
+- **FR-AST-006:** Authorized staff MUST be able to create EVSEs and connectors
+  under an authorized station, with protocol-scoped duplicate checks, immutable
+  saved numbering, physical plug/current/power selection and audited changes.
+- **FR-AST-007:** Station setup MUST show configuration gaps separately from live
+  connectivity and connector state and link to location, equipment, hours and
+  pricing controls. Read-only users MUST NOT receive management capabilities.
+- **FR-LOC-SETUP-001:** Authorized location managers MUST be able to maintain
+  weekday schedules, including overnight/24-hour/closed days, and explicitly
+  publish or unpublish a complete active public location. Missing hours MUST
+  remain unknown. Publication MUST NOT imply equipment availability.
+
+### Network monitoring dashboard
+
+- **FR-RPT-DASH-001:** Admin and operator dashboards MUST distinguish charger connectivity, connector availability, equipment lifecycle and charging-session workflow state. Missing or stale connection evidence MUST NOT be counted as available.
+- **FR-RPT-DASH-002:** Monitoring MUST provide permission-scoped location filters, station search and pagination, live freshness timestamps, connector breakdowns, and delayed-start, fault, payment and maintenance attention counts.
+- **FR-RPT-DASH-003:** Period reports MUST use explicit calendar timezone boundaries, distinguish completed-session energy from live readings, separate monetary currencies, and keep posted live wallet top-ups separate from charging charges. Wallet funding totals MUST require tenant-wide Reporting and Payment permissions.

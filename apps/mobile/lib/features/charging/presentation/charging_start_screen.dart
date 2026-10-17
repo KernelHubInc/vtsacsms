@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
 
@@ -29,11 +30,16 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
   bool _cameraEnabled = false;
   bool _scanHandled = false;
   bool _preparedHere = false;
+  String? _vehicleId;
+  String? _preparedVehicleId;
 
   @override
   void initState() {
     super.initState();
     _manualCode.text = widget.initialCode ?? '';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.dependencies.vehicles.load();
+    });
     _scanner = MobileScannerController(
       formats: const [BarcodeFormat.qrCode],
       detectionSpeed: DetectionSpeed.noDuplicates,
@@ -67,11 +73,34 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
       animation: widget.dependencies.charging,
       builder: (context, _) {
         final charging = widget.dependencies.charging;
+        if (charging.hasUnfinishedSession) {
+          return DriverPage(
+            title: 'Your current charging request',
+            body: ListView(
+              children: [
+                ChargingAccountSelector(dependencies: widget.dependencies),
+                const SizedBox(height: 16),
+                const DriverNotice(
+                  title: 'Finish or resolve the current request first',
+                  message:
+                      'You can browse another account, but a new charging session cannot start yet. The current request keeps its original account, tariff and wallet.',
+                ),
+                const SizedBox(height: 16),
+                VtsaButton(
+                  label: 'View current charging request',
+                  onPressed: () =>
+                      context.push('/charging/${charging.session!.id}'),
+                ),
+              ],
+            ),
+          );
+        }
         if (_preparedHere &&
             charging.phase == ChargingFlowPhase.reviewing &&
             charging.preparation != null) {
           return _ChargeReview(
             dependencies: widget.dependencies,
+            fallbackVehicleId: _preparedVehicleId,
             onConfirm: _confirmStart,
             onBack: () {
               charging.resetStartFlow();
@@ -88,6 +117,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             title: 'You’re nearly ready',
             body: ListView(
               children: [
+                _contextPicker(),
                 const Text('A quick check, then we’ll take it from here.'),
                 const SizedBox(height: 16),
                 const LinearProgressIndicator(
@@ -162,6 +192,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
           title: 'Identify the connector',
           body: ListView(
             children: [
+              _contextPicker(),
               if (!charging.isOnline) ...[
                 const VtsaErrorState(
                   title: 'Network connection required',
@@ -304,18 +335,35 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
   }
 
   Future<void> _prepare(String code) async {
-    final vehicle = widget.dependencies.vehicles.defaultVehicle;
+    if (widget.dependencies.accounts?.selected == null) {
+      await widget.dependencies.accounts?.load();
+    }
+    final vehicleId =
+        _vehicleId ?? widget.dependencies.vehicles.defaultVehicle?.id;
     final prepared = await widget.dependencies.charging.prepare(
       rawCode: code,
-      vehicleId: vehicle?.id,
+      vehicleId: vehicleId == '' ? null : vehicleId,
     );
-    if (mounted) setState(() => _preparedHere = prepared);
+    if (mounted) {
+      setState(() {
+        _preparedHere = prepared;
+        _preparedVehicleId = vehicleId;
+      });
+    }
   }
 
   Future<void> _confirmStart() async {
     final charging = widget.dependencies.charging;
     final preparation = charging.preparation!;
-    final vehicle = widget.dependencies.vehicles.defaultVehicle;
+    final vehicle = widget.dependencies.vehicles.vehicles
+        .where(
+          (v) =>
+              v.id ==
+              (preparation.attribution.isEmpty
+                  ? _preparedVehicleId
+                  : (preparation.attribution['vehicle'] as Map?)?['id']),
+        )
+        .firstOrNull;
     final incompatible =
         vehicle != null &&
         !vehicle.supports(preparation.target.connectorStandard);
@@ -325,7 +373,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
           ? 'Start despite compatibility warning?'
           : 'Start charging?',
       description:
-          '${preparation.target.stationName}, ${preparation.target.connectorName}. Reserve ${formatMoney(preparation.quote.estimatedPreauthorization)} from your prepaid wallet. We request a stop before this limit; the charger must confirm it. Final cost uses charger readings and unused funds return to your wallet.',
+          '${preparation.target.stationName}, ${preparation.target.connectorName}. Reserve ${formatMoney(preparation.quote.estimatedPreauthorization)} from ${preparation.attribution['payer'] ?? 'your prepaid wallet'}. We request a stop before this limit; the charger must confirm it. Final cost uses charger readings and unused funds return to the same wallet.',
       confirmLabel: 'Request start',
     );
     if (!confirmed) {
@@ -337,6 +385,44 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
       context.go('/charging/${session.id}');
     }
   }
+
+  Widget _contextPicker() => AnimatedBuilder(
+    animation: widget.dependencies.vehicles,
+    builder: (context, _) {
+      final vehicles = widget.dependencies.vehicles;
+      final selected = _vehicleId ?? vehicles.defaultVehicle?.id ?? '';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ChargingAccountSelector(dependencies: widget.dependencies),
+          if (vehicles.isLoading) const LinearProgressIndicator(),
+          if (vehicles.failure != null) Text(vehicles.failure!.message),
+          DropdownButtonFormField<String>(
+            key: ValueKey(
+              '$selected:${vehicles.vehicles.map((v) => v.id).join(',')}',
+            ),
+            initialValue: vehicles.vehicles.any((v) => v.id == selected)
+                ? selected
+                : '',
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Vehicle for this session',
+            ),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Select vehicle')),
+              for (final vehicle in vehicles.vehicles)
+                DropdownMenuItem(
+                  value: vehicle.id,
+                  child: Text(vehicle.nickname),
+                ),
+            ],
+            onChanged: (id) => setState(() => _vehicleId = id),
+          ),
+          const SizedBox(height: 16),
+        ],
+      );
+    },
+  );
 }
 
 class _ChargeReview extends StatelessWidget {
@@ -344,11 +430,13 @@ class _ChargeReview extends StatelessWidget {
     required this.dependencies,
     required this.onConfirm,
     required this.onBack,
+    this.fallbackVehicleId,
   });
 
   final AppDependencies dependencies;
   final VoidCallback onConfirm;
   final VoidCallback onBack;
+  final String? fallbackVehicleId;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +444,15 @@ class _ChargeReview extends StatelessWidget {
     final preparation = charging.preparation!;
     final target = preparation.target;
     final quote = preparation.quote;
-    final vehicle = dependencies.vehicles.defaultVehicle;
+    final vehicle = dependencies.vehicles.vehicles
+        .where(
+          (v) =>
+              v.id ==
+              (preparation.attribution.isEmpty
+                  ? fallbackVehicleId
+                  : (preparation.attribution['vehicle'] as Map?)?['id']),
+        )
+        .firstOrNull;
     final compatible = vehicle?.supports(target.connectorStandard);
     return DriverPage(
       title: 'Review your charge',
@@ -369,6 +465,28 @@ class _ChargeReview extends StatelessWidget {
       ],
       body: ListView(
         children: [
+          if (preparation.attribution.isNotEmpty) ...[
+            VtsaCard(
+              eyebrow: 'DRIVER · VEHICLE · PAYER',
+              title:
+                  preparation.attribution['account_name'] as String? ??
+                  'Personal',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Driver: ${preparation.attribution['driver_name'] ?? ''}',
+                  ),
+                  Text(
+                    'Vehicle: ${(preparation.attribution['vehicle'] as Map?)?['nickname'] ?? 'Not selected'}',
+                  ),
+                  Text('Paid by: ${preparation.attribution['payer']}'),
+                  const Text('This session uses only the selected wallet.'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           Text(
             'REVIEW BEFORE START',
             style: Theme.of(context).textTheme.labelSmall,

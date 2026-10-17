@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
 
@@ -25,9 +26,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => widget.dependencies.charging.loadHistory(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.dependencies.charging.loadHistory();
+    });
   }
 
   @override
@@ -50,7 +51,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           )
           .toList(growable: false);
       return DriverTabPage(
-        subtitle: 'Charging activity and receipts',
+        subtitle: widget.dependencies.accounts?.selected == null
+            ? 'Charging activity and receipts'
+            : 'History for ${widget.dependencies.accounts!.selected!.name}',
         title: 'Activity',
         body: RefreshIndicator(
           onRefresh: () async {
@@ -59,6 +62,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
+              ChargingAccountSelector(dependencies: widget.dependencies),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -79,6 +83,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   correlationId: charging.failure!.correlationId,
                 ),
               if (active != null && !active.isTerminal) ...[
+                if (active.attribution['payer'] case final String payer)
+                  Text('Current session payer: $payer'),
                 Text(
                   'CURRENT SESSION',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -220,6 +226,41 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                 ],
               ),
             ),
+            if (session.attribution.isNotEmpty) ...[
+              const SizedBox(height: VtsaSpacing.md),
+              VtsaCard(
+                title: 'Charged to',
+                child: Column(
+                  children: [
+                    _Fact(
+                      label: 'Account',
+                      value:
+                          session.attribution['account_name'] as String? ??
+                          'Personal',
+                    ),
+                    _Fact(
+                      label: 'Driver',
+                      value:
+                          session.attribution['driver_name'] as String? ??
+                          session.attribution['driver_id'] as String? ??
+                          'Recorded driver',
+                    ),
+                    if (session.attribution['vehicle']
+                        case final Map<String, dynamic> vehicle)
+                      _Fact(
+                        label: 'Vehicle',
+                        value: vehicle['nickname'] as String,
+                      ),
+                    _Fact(
+                      label: 'Payer',
+                      value:
+                          session.attribution['payer'] as String? ??
+                          'Personal prepaid wallet',
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: VtsaSpacing.md),
             VtsaCard(
               title: 'Evidence',

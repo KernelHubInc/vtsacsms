@@ -7,6 +7,7 @@ namespace App\Filament\Operator\Resources\Sites;
 use App\Filament\Operator\Resources\Sites\Pages\CreateSite;
 use App\Filament\Operator\Resources\Sites\Pages\EditSite;
 use App\Filament\Operator\Resources\Sites\Pages\ListSites;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Integrations\Application\MapConfigurationResolver;
@@ -82,7 +83,7 @@ final class SiteResource extends Resource
                 ->searchable()
                 ->nullable(),
             Select::make('lifecycle_status')->options(collect(SiteLifecycleStatus::cases())->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()]))->required(),
-            TextInput::make('timezone')->required()->maxLength(64),
+            TextInput::make('timezone')->required()->maxLength(64)->rules(['timezone:all'])->default('Asia/Manila'),
             Select::make('site_type')
                 ->options([
                     'public_parking' => 'Public parking',
@@ -119,6 +120,7 @@ final class SiteResource extends Resource
             TextColumn::make('code')->searchable(),
             TextColumn::make('lifecycle_status')->badge(),
             IconColumn::make('is_public')->boolean(),
+            TextColumn::make('published_at')->label('Published (UTC)')->dateTime()->placeholder('Not published'),
             TextColumn::make('timezone'),
         ])
             ->filters([
@@ -145,6 +147,7 @@ final class SiteResource extends Resource
                     'longitude' => 'Longitude',
                 ]),
                 EditAction::make(),
+                DeleteNetworkRecordAction::make(),
             ]);
     }
 
@@ -169,6 +172,6 @@ final class SiteResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        return parent::canDelete($record);
     }
 }

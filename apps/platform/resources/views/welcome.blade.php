@@ -23,7 +23,6 @@
 
                 <div class="grid gap-12 py-20 lg:grid-cols-[1.3fr_.7fr] lg:items-end">
                     <div class="max-w-3xl">
-                        <p class="mb-5 text-xs font-bold uppercase tracking-[0.24em] text-brand">Currentline design foundation</p>
                         <h1 class="text-balance text-5xl font-semibold leading-[0.98] tracking-[-0.05em] sm:text-7xl">Clear signals for connected charging.</h1>
                         <p class="mt-8 max-w-2xl text-pretty text-base leading-7 text-muted sm:text-lg">The shared visual language, accessible primitives, and operational state vocabulary are ready. Business modules remain intentionally untouched.</p>
                         <div class="mt-8 flex flex-wrap gap-3">
@@ -35,7 +34,7 @@
                     </div>
 
                     <x-ui.card class="lg:mb-1">
-                        <x-slot:eyebrow>Runtime surfaces</x-slot:eyebrow>
+                        <x-slot:title>Runtime surfaces</x-slot:title>
                         <dl class="grid gap-4 text-sm">
                             <div class="flex items-center justify-between gap-6"><dt>Liveness</dt><dd><a class="font-mono font-semibold text-brand hover:text-brand-strong" href="{{ route('health.live') }}">/health/live</a></dd></div>
                             <div class="flex items-center justify-between gap-6"><dt>Readiness</dt><dd><a class="font-mono font-semibold text-brand hover:text-brand-strong" href="{{ route('health.ready') }}">/health/ready</a></dd></div>

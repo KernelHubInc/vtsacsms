@@ -1,6 +1,5 @@
 @props([
     'description' => null,
-    'eyebrow' => null,
     'title',
 ])
 
@@ -15,9 +14,6 @@
             <div class="mx-auto max-w-7xl">
                 <header class="mb-8 border-b border-border pb-7 sm:flex sm:items-end sm:justify-between sm:gap-8">
                     <div class="max-w-3xl">
-                        @if ($eyebrow)
-                            <p class="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-brand">{{ $eyebrow }}</p>
-                        @endif
                         <h1 class="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">{{ $title }}</h1>
                         @if ($description)
                             <p class="mt-3 text-base leading-7 text-muted">{{ $description }}</p>

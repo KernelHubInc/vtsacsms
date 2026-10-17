@@ -76,7 +76,7 @@ final readonly class MeterValueService
                 'energy_flow_seconds' => $flow['seconds'],
                 'energy_flow_evidence_complete' => $flow['complete'],
                 'energy_wh' => $energyWh,
-                'duration_seconds' => $locked->started_at === null ? 0 : max(0, $locked->started_at->diffInSeconds($receivedAt)),
+                'duration_seconds' => $locked->started_at === null ? 0 : max(0, (int) $locked->started_at->diffInSeconds($receivedAt)),
                 'anomaly_flags' => array_values(array_unique($anomalies)),
                 'last_protocol_event_at' => $receivedAt,
             ]);

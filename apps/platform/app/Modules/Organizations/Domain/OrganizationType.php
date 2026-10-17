@@ -6,6 +6,8 @@ namespace App\Modules\Organizations\Domain;
 
 enum OrganizationType: string
 {
+    case Personal = 'personal';
+    case Business = 'business';
     case Platform = 'platform';
     case ChargePointOperator = 'charge_point_operator';
     case SiteHost = 'site_host';

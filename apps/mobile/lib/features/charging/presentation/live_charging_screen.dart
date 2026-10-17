@@ -28,7 +28,8 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.dependencies.charging.session?.id != widget.sessionId) {
+      if (mounted &&
+          widget.dependencies.charging.session?.id != widget.sessionId) {
         widget.dependencies.charging.recoverSession(widget.sessionId);
       }
     });
@@ -107,6 +108,8 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               ),
             _PhasePanel(dependencies: widget.dependencies, session: session),
             const SizedBox(height: VtsaSpacing.md),
+            _Actions(dependencies: widget.dependencies, session: session),
+            const SizedBox(height: VtsaSpacing.md),
             _Metrics(session: session),
             const SizedBox(height: VtsaSpacing.md),
             if (charging.phase == ChargingFlowPhase.live &&
@@ -165,7 +168,6 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _Actions(dependencies: widget.dependencies, session: session),
             if (session.canRequestRemoteStop)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -208,73 +210,88 @@ class _PhasePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phase = dependencies.charging.phase;
-    final (icon, title, description, state) = switch (phase) {
-      ChargingFlowPhase.startPending => (
-        Icons.hourglass_top,
-        'Waiting for physical start',
-        'The request was accepted, but charging is not active until the charger reports a transaction.',
-        VtsaOperationalState.preparing,
-      ),
-      ChargingFlowPhase.startTimedOut => (
-        Icons.schedule_outlined,
-        'The transaction did not begin in time',
-        'Power Solutions has not received start evidence. Refresh or cancel the pending request; do not submit another start.',
-        VtsaOperationalState.suspended,
-      ),
-      ChargingFlowPhase.live => (
-        Icons.bolt,
-        session.state == ChargingSessionState.charging
-            ? 'Charging in progress'
-            : 'Charging session suspended',
-        'Live values remain subject to final meter validation.',
-        session.state == ChargingSessionState.charging
-            ? VtsaOperationalState.charging
-            : VtsaOperationalState.suspended,
-      ),
-      ChargingFlowPhase.stopPending => (
-        Icons.stop_circle_outlined,
-        'Stop requested',
-        'A command acknowledgment does not prove the charger stopped. Waiting for terminal transaction evidence.',
-        VtsaOperationalState.finishing,
-      ),
-      ChargingFlowPhase.finalizing => (
-        Icons.receipt_long_outlined,
-        session.state == ChargingSessionState.reviewRequired
-            ? 'Session requires review'
-            : 'Finalizing measurements',
-        'Energy, duration, tariff, and payment are being finalized. Totals are not final yet.',
-        VtsaOperationalState.finishing,
-      ),
-      ChargingFlowPhase.paymentProcessing => (
-        Icons.payments_outlined,
-        session.paymentState == PaymentState.requiresAction
-            ? 'Charging payment requires review'
-            : 'Finalizing wallet payment',
-        session.paymentState == PaymentState.requiresAction
-            ? 'Your reserved funds are held while the operator checks the charger evidence. Do not start or pay again for this session.'
-            : 'The session ended. We are checking the final readings, deducting the charge once, and releasing unused reserved funds.',
-        VtsaOperationalState.preparing,
-      ),
-      ChargingFlowPhase.completed => (
-        Icons.check_circle_outline,
-        'Session complete',
-        'Final server evidence is available below.',
-        VtsaOperationalState.available,
-      ),
-      ChargingFlowPhase.failed => (
-        Icons.info_outline,
-        'Session did not complete normally',
-        session.failureReason ??
-            'Review the session details or report an issue.',
-        VtsaOperationalState.faulted,
-      ),
-      _ => (
-        Icons.sync,
-        'Updating session',
-        'Retrieving the latest authoritative state.',
-        VtsaOperationalState.unknown,
-      ),
-    };
+    final (icon, title, description, state) =
+        session.cancellationRequested &&
+            !session.isTerminal &&
+            session.stoppedAt == null
+        ? (
+            Icons.pending_actions_outlined,
+            'Cancellation requested',
+            session.state == ChargingSessionState.stopping
+                ? 'A stop has been requested. Wait for the charger to confirm it has stopped before unplugging.'
+                : 'Your request is saved. If the charger reports a transaction, we will request a stop automatically. Reserved funds stay held until the outcome is confirmed. If this remains pending, contact your operator with the session reference below.',
+            VtsaOperationalState.finishing,
+          )
+        : switch (phase) {
+            ChargingFlowPhase.startPending => (
+              Icons.hourglass_top,
+              'Waiting for physical start',
+              'The request was accepted, but charging is not active until the charger reports a transaction.',
+              VtsaOperationalState.preparing,
+            ),
+            ChargingFlowPhase.startTimedOut => (
+              Icons.schedule_outlined,
+              'The transaction did not begin in time',
+              'Power Solutions has not received start evidence. Refresh or cancel the pending request; do not submit another start.',
+              VtsaOperationalState.suspended,
+            ),
+            ChargingFlowPhase.live => (
+              Icons.bolt,
+              session.state == ChargingSessionState.charging
+                  ? 'Charging in progress'
+                  : 'Charging session suspended',
+              'Live values remain subject to final meter validation.',
+              session.state == ChargingSessionState.charging
+                  ? VtsaOperationalState.charging
+                  : VtsaOperationalState.suspended,
+            ),
+            ChargingFlowPhase.stopPending => (
+              Icons.stop_circle_outlined,
+              'Stop requested',
+              'A command acknowledgment does not prove the charger stopped. Waiting for terminal transaction evidence.',
+              VtsaOperationalState.finishing,
+            ),
+            ChargingFlowPhase.finalizing => (
+              Icons.receipt_long_outlined,
+              session.state == ChargingSessionState.reviewRequired
+                  ? 'Session requires review'
+                  : 'Finalizing measurements',
+              'Energy, duration, tariff, and payment are being finalized. Totals are not final yet.',
+              VtsaOperationalState.finishing,
+            ),
+            ChargingFlowPhase.paymentProcessing => (
+              Icons.payments_outlined,
+              session.paymentState == PaymentState.requiresAction
+                  ? 'Charging payment requires review'
+                  : 'Finalizing wallet payment',
+              session.paymentState == PaymentState.requiresAction
+                  ? 'Your reserved funds are held while the operator checks the charger evidence. Do not start or pay again for this session.'
+                  : 'The session ended. We are checking the final readings, deducting the charge once, and releasing unused reserved funds.',
+              VtsaOperationalState.preparing,
+            ),
+            ChargingFlowPhase.completed => (
+              Icons.check_circle_outline,
+              'Session complete',
+              'Final server evidence is available below.',
+              VtsaOperationalState.available,
+            ),
+            ChargingFlowPhase.failed => (
+              Icons.info_outline,
+              session.state == ChargingSessionState.cancelled
+                  ? 'Start request cancelled'
+                  : 'Charging did not start or complete',
+              session.state == ChargingSessionState.cancelled
+                  ? 'The request was cancelled before it reached the charger. No charging fee was taken and the reserved funds are available again.'
+                  : 'Check the charger and cable before trying again. Your session details and any payment review remain available in Activity.',
+              VtsaOperationalState.faulted,
+            ),
+            _ => (
+              Icons.sync,
+              'Updating session',
+              'Retrieving the latest authoritative state.',
+              VtsaOperationalState.unknown,
+            ),
+          };
     final healthy =
         phase == ChargingFlowPhase.live &&
         session.state == ChargingSessionState.charging &&
@@ -456,15 +473,35 @@ class _Actions extends StatelessWidget {
         ),
       );
     }
-    if (charging.phase == ChargingFlowPhase.startTimedOut) {
+    if (session.canCancelStart) {
       actions.addAll([
-        VtsaButton(label: 'Refresh status', onPressed: charging.refresh),
         VtsaButton(
           label: 'Cancel pending start',
           variant: VtsaButtonVariant.secondary,
-          onPressed: charging.isOnline ? charging.cancelPendingStart : null,
+          loading: charging.mutationInFlight,
+          onPressed: charging.isOnline
+              ? () async {
+                  final confirmed = await showVtsaConfirmationDialog(
+                    context: context,
+                    title: 'Cancel this start request?',
+                    description:
+                        'If Start has not been sent, we will cancel it and release your reserved funds. Otherwise, we will save the cancellation and request a stop when the charger reports its transaction. Funds remain held until the outcome is confirmed.',
+                    confirmLabel: 'Cancel start request',
+                  );
+                  if (confirmed) await charging.cancelPendingStart();
+                }
+              : null,
         ),
       ]);
+    }
+    if (session.cancellationRequested && !session.isTerminal) {
+      actions.add(
+        VtsaButton(
+          label: 'Refresh status',
+          loading: charging.syncing,
+          onPressed: charging.isOnline ? charging.refresh : null,
+        ),
+      );
     }
     if (charging.phase == ChargingFlowPhase.completed) {
       if (session.receipt != null) {

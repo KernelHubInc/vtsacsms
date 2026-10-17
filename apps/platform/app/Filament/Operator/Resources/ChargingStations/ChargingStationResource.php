@@ -7,6 +7,8 @@ namespace App\Filament\Operator\Resources\ChargingStations;
 use App\Filament\Operator\Resources\ChargingStations\Pages\CreateChargingStation;
 use App\Filament\Operator\Resources\ChargingStations\Pages\EditChargingStation;
 use App\Filament\Operator\Resources\ChargingStations\Pages\ListChargingStations;
+use App\Filament\Operator\Resources\ChargingStations\Pages\SetupChargingStation;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Assets\Application\AccessibleStationsQuery;
@@ -17,6 +19,7 @@ use App\Modules\Charging\Application\StationConnectionQuery;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -29,6 +32,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rules\Unique;
 use UnitEnum;
 
@@ -51,7 +55,9 @@ final class ChargingStationResource extends Resource
                     $user = auth()->user();
 
                     return $user instanceof User
-                        ? app(AccessibleSitesQuery::class)->for($user)->orderBy('name')->pluck('name', 'id')->all()
+                        ? app(AccessibleSitesQuery::class)->for($user)->orderBy('name')->get()
+                            ->filter(fn ($site): bool => Gate::allows('update', new ChargingStation(['tenant_id' => $site->tenant_id, 'site_id' => $site->getKey()])))
+                            ->pluck('name', 'id')->all()
                         : [];
                 })
                 ->searchable()
@@ -148,6 +154,9 @@ final class ChargingStationResource extends Resource
                     'retired_at' => 'Retired at (UTC)',
                 ]),
                 EditAction::make(),
+                Action::make('setup')->label('Setup')->icon(Heroicon::OutlinedWrenchScrewdriver)
+                    ->url(fn (ChargingStation $record): string => self::getUrl('setup', ['record' => $record->getKey()])),
+                DeleteNetworkRecordAction::make(),
             ]);
     }
 
@@ -157,6 +166,7 @@ final class ChargingStationResource extends Resource
             'index' => ListChargingStations::route('/'),
             'create' => CreateChargingStation::route('/create'),
             'edit' => EditChargingStation::route('/{record}/edit'),
+            'setup' => SetupChargingStation::route('/{record}/setup'),
         ];
     }
 
@@ -172,6 +182,6 @@ final class ChargingStationResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        return parent::canDelete($record);
     }
 }

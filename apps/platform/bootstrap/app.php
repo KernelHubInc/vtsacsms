@@ -82,6 +82,22 @@ return Application::configure(basePath: dirname(__DIR__))
                     $response->headers->set('Retry-After', $retryAfter);
                 }
             }
+            if ($request->is('api/v1/charging-accounts', 'api/v1/charging-accounts/*') && $response->getStatusCode() >= 400) {
+                $status = $response->getStatusCode();
+                $original = json_decode((string) $response->getContent(), true);
+                $retryAfter = $response->headers->get('Retry-After');
+                $response = response()->json(['error' => [
+                    'code' => match ($status) {
+                        401 => 'unauthenticated', 403 => 'forbidden', 404 => 'resource_not_found', 409 => 'account_conflict', 422 => 'invalid_request', 429 => 'rate_limited', default => 'account_unavailable'
+                    },
+                    'message' => $status === 500 ? 'The account service is unavailable.' : ($original['message'] ?? 'The account request could not be completed.'),
+                    'correlation_id' => $request->attributes->get('correlation_id'),
+                    'fields' => $status === 422 ? ($original['errors'] ?? []) : [],
+                ]], $status)->header('Cache-Control', 'no-store');
+                if ($retryAfter !== null) {
+                    $response->headers->set('Retry-After', $retryAfter);
+                }
+            }
             if ($request->attributes->has('request_id')) {
                 $response->headers->set('X-Request-ID', (string) $request->attributes->get('request_id'));
                 $response->headers->set(

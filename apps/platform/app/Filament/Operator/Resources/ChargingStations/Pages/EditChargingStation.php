@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\ChargingStations\Pages;
 
 use App\Filament\Operator\Resources\ChargingStations\ChargingStationResource;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\EditRecord;
 
 final class EditChargingStation extends EditRecord
 {
     protected static string $resource = ChargingStationResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [Action::make('setup')->label('Setup checklist')->url(fn (): string => self::getResource()::getUrl('setup', ['record' => $this->getRecord()])), DeleteNetworkRecordAction::make()];
+    }
 
     protected ?bool $hasDatabaseTransactions = true;
 

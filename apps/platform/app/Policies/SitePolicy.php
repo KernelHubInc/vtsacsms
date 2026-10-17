@@ -59,7 +59,7 @@ final readonly class SitePolicy
 
     public function delete(User $user, Site $site): bool
     {
-        return false;
+        return $this->update($user, $site);
     }
 
     public function restore(User $user, Site $site): bool

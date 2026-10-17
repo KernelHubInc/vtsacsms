@@ -6,6 +6,15 @@ namespace App\Modules\Organizations\Domain;
 
 enum PermissionKey: string
 {
+    case ChargingAccountView = 'organizations.charging_accounts.view';
+    case ChargingMembersManage = 'organizations.charging_accounts.members';
+    case ChargingVehiclesManage = 'organizations.charging_accounts.vehicles';
+    case ChargingWalletView = 'organizations.charging_accounts.wallet_view';
+    case ChargingWalletFund = 'organizations.charging_accounts.wallet_fund';
+    case ChargingLimitsManage = 'organizations.charging_accounts.limits';
+    case ChargingAccountCharge = 'organizations.charging_accounts.charge';
+    case ChargingHistoryView = 'organizations.charging_accounts.history';
+    case ChargingSessionControl = 'organizations.charging_accounts.control';
     case IdentityContextView = 'identity.context.view';
     case KycView = 'identity.kyc.view';
     case KycReview = 'identity.kyc.review';

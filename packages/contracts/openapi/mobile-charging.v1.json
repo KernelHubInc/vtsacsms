@@ -73,7 +73,19 @@
             }
           }
         }
-      }
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
     },
     "/api/v1/mobile/charging-sessions/remote-start": {
       "post": {
@@ -159,7 +171,19 @@
             }
           }
         }
-      }
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
     },
     "/api/v1/mobile/charging-sessions/active": {
       "get": {
@@ -282,7 +306,19 @@
             }
           }
         ]
-      }
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
     },
     "/api/v1/mobile/charging-sessions/{session}": {
       "get": {
@@ -404,7 +440,7 @@
     },
     "/api/v1/mobile/charging-sessions/{session}/cancel": {
       "post": {
-        "summary": "Cancel a start only before command dispatch",
+        "summary": "Cancel an unsent start or record cancellation pending charger confirmation",
         "operationId": "cancelCustomerCharging",
         "tags": [
           "Charging"
@@ -473,7 +509,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Idempotent. Unsent requests cancel and release reserved funds. A dispatched request persists cancellation_requested and retains its hold; the monitor requests Stop once a transaction ID is known. A successful response is not proof of physical cancellation. Authoritative rejection or final transaction evidence resolves payment."
       }
     }
   },
@@ -610,6 +647,14 @@
           },
           "invoice": {
             "type": "null"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/ChargingAttribution"
+          },
+          "cancellation_requested": {
+            "type": "boolean",
+            "description": "A durable customer cancellation awaits charger confirmation; it does not mean stopped or funds released.",
+            "default": false
           }
         },
         "required": [
@@ -809,12 +854,76 @@
               ],
               "additionalProperties": false
             }
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/ChargingAttribution"
           }
         },
         "required": [
           "target",
           "quote",
           "payment_methods"
+        ],
+        "additionalProperties": false
+      },
+      "ChargingAttribution": {
+        "type": "object",
+        "properties": {
+          "driver_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "driver_name": {
+            "type": "string"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "account_name": {
+            "type": "string"
+          },
+          "payer": {
+            "type": "string"
+          },
+          "wallet_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vehicle": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "nickname"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit_period": {
+            "type": "string",
+            "const": "per_session"
+          }
+        },
+        "required": [
+          "driver_id",
+          "payer"
         ],
         "additionalProperties": false
       }

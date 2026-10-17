@@ -25,7 +25,7 @@ final class CmsSectionResource extends CmsResource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('cms_page_id')->relationship('page', 'title')->searchable()->preload()->required(), TextInput::make('kind')->required()->maxLength(32), TextInput::make('eyebrow')->maxLength(120), TextInput::make('heading')->required()->maxLength(240), Textarea::make('copy')->columnSpanFull(), TagsInput::make('items')->columnSpanFull(), TextInput::make('action_label')->maxLength(80), TextInput::make('action_url')->maxLength(500), TextInput::make('sort_order')->numeric()->minValue(0)->required(), Toggle::make('is_enabled'),
+            Select::make('cms_page_id')->relationship('page', 'title')->searchable()->preload()->required(), TextInput::make('kind')->required()->maxLength(32), TextInput::make('heading')->required()->maxLength(240), Textarea::make('copy')->columnSpanFull(), TagsInput::make('items')->columnSpanFull(), TextInput::make('action_label')->maxLength(80), TextInput::make('action_url')->maxLength(500), TextInput::make('sort_order')->numeric()->minValue(0)->required(), Toggle::make('is_enabled'),
         ])->columns(2);
     }
 

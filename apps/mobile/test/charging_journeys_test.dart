@@ -1,14 +1,88 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/activity_screens.dart';
+import 'package:vtsa_mobile/features/charging/presentation/live_charging_screen.dart';
 
+import 'driver_journey_design_test.dart' show preview;
 import 'support/fakes.dart';
 
 void main() {
+  setUpAll(() async {
+    final root = Platform.environment['FLUTTER_ROOT']!;
+    for (final entry in {
+      'Roboto': 'roboto-regular.ttf',
+      'MaterialIcons': 'materialicons-regular.otf',
+    }.entries) {
+      await (FontLoader(entry.key)..addFont(
+            Future.value(
+              ByteData.sublistView(
+                File(
+                  '$root/bin/cache/artifacts/material_fonts/${entry.value}',
+                ).readAsBytesSync(),
+              ),
+            ),
+          ))
+          .load();
+    }
+  });
+  for (final width in [320.0, 390.0]) {
+    testWidgets('pending start can be cancelled before timeout at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final repository = FakeChargingRepository()
+        ..active = sampleChargingSession()
+        ..cancelResult = sampleChargingSession(
+          cancellationRequested: true,
+          paymentState: PaymentState.requiresAction,
+          aggregateVersion: 2,
+        );
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      await fixture.dependencies.charging.recoverSession(repository.active!.id);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: RepaintBoundary(
+            key: const ValueKey('driver-preview'),
+            child: LiveChargingScreen(
+              dependencies: fixture.dependencies,
+              sessionId: repository.active!.id,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel pending start'), findsOneWidget);
+      await tester.tap(find.text('Cancel pending start'));
+      await tester.pumpAndSettle();
+      expect(repository.cancelCalls, 0);
+      await tester.ensureVisible(find.text('Cancel start request'));
+      await tester.tap(find.text('Cancel start request'));
+      await tester.pumpAndSettle();
+      expect(repository.cancelCalls, 1);
+      expect(find.text('Cancellation requested'), findsOneWidget);
+      expect(find.text('Cancel pending start'), findsNothing);
+      expect(fixture.dependencies.charging.hasUnfinishedSession, isTrue);
+      expect(tester.takeException(), isNull);
+      await preview(tester, 'start-cancellation-${width.toInt()}');
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dependencies.dispose();
+    });
+  }
+
   testWidgets('history failure is shown instead of claiming no sessions', (
     tester,
   ) async {
@@ -92,6 +166,8 @@ void main() {
     expect(find.text('Charger code (required)'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
+    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
@@ -119,6 +195,8 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
+    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
@@ -174,7 +252,7 @@ void main() {
     expect(find.text('48.8 kW'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('End charging'),
-      300,
+      -300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('End charging'), findsOneWidget);

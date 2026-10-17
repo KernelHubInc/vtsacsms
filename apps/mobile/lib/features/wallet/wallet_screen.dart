@@ -12,10 +12,14 @@ class WalletScreen extends StatefulWidget {
   const WalletScreen({
     required this.repository,
     this.allowRealPayments = false,
+    this.accountName,
+    this.accountSelector,
     super.key,
   });
   final WalletRepository? repository;
   final bool allowRealPayments;
+  final String? accountName;
+  final Widget? accountSelector;
   @override
   State<WalletScreen> createState() => _WalletScreenState();
 }
@@ -121,7 +125,9 @@ class _WalletScreenState extends State<WalletScreen> {
   Widget build(BuildContext context) {
     final wallet = _wallet;
     return DriverTabPage(
-      subtitle: 'Balance, payments and activity',
+      subtitle: widget.accountName == null
+          ? 'Balance, payments and activity'
+          : '${widget.accountName} · prepaid balance',
       title: 'Wallet',
       actions: [
         IconButton(
@@ -135,6 +141,7 @@ class _WalletScreenState extends State<WalletScreen> {
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
+            ?widget.accountSelector,
             if (_loading) const LinearProgressIndicator(),
             if (_error != null)
               Padding(

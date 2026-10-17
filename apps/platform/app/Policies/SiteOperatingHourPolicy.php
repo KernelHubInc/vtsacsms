@@ -21,6 +21,11 @@ final readonly class SiteOperatingHourPolicy
         return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::LocationView);
     }
 
+    public function create(User $user): bool
+    {
+        return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::LocationManage);
+    }
+
     public function view(User $user, SiteOperatingHour $hour): bool
     {
         return $this->allows($user, $hour, PermissionKey::LocationView);
@@ -29,6 +34,11 @@ final readonly class SiteOperatingHourPolicy
     public function update(User $user, SiteOperatingHour $hour): bool
     {
         return $this->allows($user, $hour, PermissionKey::LocationManage);
+    }
+
+    public function delete(User $user, SiteOperatingHour $hour): bool
+    {
+        return $this->update($user, $hour);
     }
 
     private function allows(User $user, SiteOperatingHour $hour, PermissionKey $permission): bool

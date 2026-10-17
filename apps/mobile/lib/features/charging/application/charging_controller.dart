@@ -80,6 +80,7 @@ final class ChargingController extends ChangeNotifier {
   String? _historyCursor;
   bool _historyLoading = false;
   int _generation = 0;
+  int _accountGeneration = 0;
   bool _disposed = false;
 
   bool _isCurrent((int, String) request) =>
@@ -97,6 +98,9 @@ final class ChargingController extends ChangeNotifier {
   List<ChargingSession> get history => _history;
   bool get historyLoading => _historyLoading;
   bool get hasMoreHistory => _historyCursor != null;
+  bool get hasUnfinishedSession =>
+      _session != null &&
+      (!_session!.isTerminal || _phase == ChargingFlowPhase.paymentProcessing);
 
   Future<void> restoreAuthoritativeSession() async {
     if (!_isAuthenticated() || !_network.isOnline) {
@@ -141,7 +145,18 @@ final class ChargingController extends ChangeNotifier {
     if (!_isAuthenticated() || !_network.isOnline || _mutationInFlight) {
       return false;
     }
+    if (hasUnfinishedSession) {
+      _failure = const AppFailure(
+        kind: FailureKind.validation,
+        code: 'session_already_active',
+        message:
+            'Review your current charging request before starting another session. Switching accounts does not change its payer.',
+      );
+      notifyListeners();
+      return false;
+    }
     final request = (_generation, _ownerId());
+    final accountGeneration = _accountGeneration;
     ChargerCode code;
     try {
       code = ChargerCode.parse(rawCode);
@@ -163,7 +178,11 @@ final class ChargingController extends ChangeNotifier {
         code: code,
         vehicleId: vehicleId,
       );
-      if (!_isCurrent(request) || !_isAuthenticated()) return false;
+      if (!_isCurrent(request) ||
+          !_isAuthenticated() ||
+          accountGeneration != _accountGeneration) {
+        return false;
+      }
       _preparation = result;
       _selectedPaymentMethod = result.paymentMethods
           .where((method) => method.isDefault)
@@ -172,13 +191,18 @@ final class ChargingController extends ChangeNotifier {
       _phase = ChargingFlowPhase.reviewing;
       return true;
     } on AppFailure catch (failure) {
-      if (!_isCurrent(request)) return false;
+      if (!_isCurrent(request) || accountGeneration != _accountGeneration) {
+        return false;
+      }
       _failure = failure;
       _phase = ChargingFlowPhase.failed;
       return false;
     } finally {
       if (_isCurrent(request)) {
         _mutationInFlight = false;
+        if (accountGeneration != _accountGeneration && !hasUnfinishedSession) {
+          _phase = ChargingFlowPhase.idle;
+        }
         notifyListeners();
       }
     }
@@ -313,7 +337,7 @@ final class ChargingController extends ChangeNotifier {
         !_network.isOnline ||
         _mutationInFlight ||
         current == null ||
-        current.isPhysicalActive) {
+        !current.canCancelStart) {
       return false;
     }
     _mutationInFlight = true;
@@ -405,6 +429,7 @@ final class ChargingController extends ChangeNotifier {
 
   Future<void> loadHistory({bool nextPage = false}) async {
     final request = (_generation, _ownerId());
+    final accountGeneration = _accountGeneration;
     if (!_isAuthenticated() || _historyLoading || !_network.isOnline) {
       return;
     }
@@ -414,15 +439,21 @@ final class ChargingController extends ChangeNotifier {
       final page = await _repository.history(
         cursor: nextPage ? _historyCursor : null,
       );
-      if (!_isCurrent(request) || !_isAuthenticated()) return;
+      if (!_isCurrent(request) ||
+          !_isAuthenticated() ||
+          accountGeneration != _accountGeneration) {
+        return;
+      }
       _failure = null;
       _history = nextPage ? [..._history, ...page.sessions] : page.sessions;
       _historyCursor = page.nextCursor;
     } on AppFailure catch (failure) {
-      if (!_isCurrent(request)) return;
+      if (!_isCurrent(request) || accountGeneration != _accountGeneration) {
+        return;
+      }
       _failure = failure;
     } finally {
-      if (_isCurrent(request)) {
+      if (_isCurrent(request) && accountGeneration == _accountGeneration) {
         _historyLoading = false;
         notifyListeners();
       }
@@ -500,6 +531,23 @@ final class ChargingController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void onChargingAccountChanged() {
+    // Browsing another payer must not invalidate a dispatched command or the
+    // original session's polling/realtime subscription.
+    _accountGeneration++;
+    _history = const [];
+    _historyCursor = null;
+    _historyLoading = false;
+    _preparation = null;
+    _selectedPaymentMethod = null;
+    if (!hasUnfinishedSession && !_mutationInFlight) {
+      _startIdempotencyKey = null;
+      _phase = ChargingFlowPhase.idle;
+    }
+    _failure = null;
+    notifyListeners();
+  }
+
   Future<void> onResumed() => restoreAuthoritativeSession();
 
   Future<void> onSignedOut({String? ownerId}) async {
@@ -560,6 +608,15 @@ final class ChargingController extends ChangeNotifier {
   }
 
   ChargingFlowPhase _phaseFor(ChargingSession value) {
+    if (value.isTerminal &&
+        !const {
+          PaymentState.notRequired,
+          PaymentState.captured,
+          PaymentState.partiallyRefunded,
+          PaymentState.refunded,
+        }.contains(value.paymentState)) {
+      return ChargingFlowPhase.paymentProcessing;
+    }
     if (value.state == ChargingSessionState.completed) {
       return switch (value.paymentState) {
         PaymentState.notRequired ||

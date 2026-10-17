@@ -3,6 +3,8 @@
 **Status:** Normative architecture baseline  
 **Rule:** A durable concept has exactly one context authorized to change it.
 
+The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composition of authorized Locations/Assets, Charging connection and session facts, posted Billing prepaid credits, session Payments and Maintenance work orders. It never writes these sources. Location lists intersect resource-specific permission scopes through `AccessibleSitesQuery`; wallet funding is tenant-wide and requires tenant-wide Reporting and Payment permissions. Metric semantics and operational limits are defined in `docs/runbooks/monitoring-dashboard.md`.
+
 ## 1. Ownership Rules
 
 1. The owning context defines the concept's invariants, schema, lifecycle, write API, and emitted facts.
@@ -188,3 +190,21 @@ The operator-authorized URL-only mode supersedes mandatory device credentials in
 ## Prepaid mobile charging (ADR 0026)
 
 Charging owns customer quotes, session ownership, idempotency guards and their payment projection. It requests wallet reservation and settlement only through Billing's `PrepaidWallet` application contract; Charging does not write wallet or ledger tables. Tariffs owns append-only version applicability endings and immutable price snapshots. Assets supplies public connector and pricing-scope queries; Locations supplies site-scope options. These contracts are tenant-scoped. Payments continues to own verified AUB credits independently of charging settlement.
+
+## Shared customer accounts (ADR 0027)
+
+Organizations owns charging-account metadata and exact organization-scoped roles through `ChargingAccounts`; Identity owns verified recipient invitations through `ChargingAccountInvitations`. Assets extends its existing garages/vehicles and owns driver assignments through `DriverVehicles`. Billing owns shared prepaid balances and per-session caps. Payments freezes the top-up destination; Charging freezes driver/account/vehicle/payer attribution and asks Billing to settle that original wallet. Personal subject ownership is retained without moving balances or historical rows. Account selection does not change tenant, operator or OCPP identity. See [ADR 0027](decisions/0027-shared-charging-accounts.md) and the [role/release runbook](../runbooks/shared-charging-accounts.md).
+
+### Network deletion preflight
+
+`Reporting\Application\NetworkReferencesQuery` is a read-only cross-context deletion preflight for tenant-owned network identifiers. It checks current schema columns for location, equipment, generic asset, delegated scope, and target references, including references without foreign keys. Audit records are retained and do not themselves prevent deleting an unused draft. Assets and Locations remain the only writers through `DeleteDraftAsset` and `DeleteUnusedLocation`; no dependent context records are cascaded or rewritten. This preflight runs only on an authorized deletion, never in a list-render loop. Operational and financial records remain protected.
+
+### Station setup and publication (October 2026)
+
+`ProvisionChargingEquipment` owns audited, authorized EVSE/connector creation in
+Assets; `ConfigureSiteAccess` owns operating schedules and site publication in
+Locations. `StationSetupQuery` is an authorized, read-only Reporting composition
+of the asset/location hierarchy, existing Charging presence queries and Tariffs
+selection. It never writes observations or financial records. Filament actions
+use these owning-context workflows; configuration does not synthesize device
+connectivity, availability or a completed session.

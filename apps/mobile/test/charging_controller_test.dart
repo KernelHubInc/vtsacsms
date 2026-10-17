@@ -51,6 +51,39 @@ void main() {
     await push.dispose();
   });
 
+  test(
+    'a saved cancellation stays recoverable without releasing an uncertain session',
+    () async {
+      await controller.prepare(rawCode: 'VSTA-ABC_123');
+      await controller.start();
+      repository.cancelResult = sampleChargingSession(
+        cancellationRequested: true,
+        paymentState: PaymentState.requiresAction,
+        aggregateVersion: 2,
+      );
+      expect(await controller.cancelPendingStart(), isTrue);
+      expect(controller.session!.cancellationRequested, isTrue);
+      expect(controller.hasUnfinishedSession, isTrue);
+      expect(controller.session!.state, ChargingSessionState.starting);
+      expect(await controller.cancelPendingStart(), isFalse);
+      expect(repository.cancelCalls, 1);
+      expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isFalse);
+    },
+  );
+
+  test(
+    'cancelled requests with held funds remain blocked until settlement',
+    () async {
+      repository.active = sampleChargingSession(
+        state: ChargingSessionState.cancelled,
+        paymentState: PaymentState.requiresAction,
+      );
+      await controller.recoverSession(repository.active!.id);
+      expect(controller.phase, ChargingFlowPhase.paymentProcessing);
+      expect(controller.hasUnfinishedSession, isTrue);
+    },
+  );
+
   test('manual or scanned code resolves a server preparation', () async {
     expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isTrue);
 
@@ -62,6 +95,81 @@ void main() {
       sampleChargePreparation.paymentMethods.single,
     );
   });
+
+  test(
+    'account switching preserves the active session and realtime updates',
+    () async {
+      await _start(controller);
+      final sessionId = controller.session!.id;
+      controller.onChargingAccountChanged();
+      expect(controller.session!.id, sessionId);
+      expect(controller.preparation, isNull);
+      realtime.emit(
+        sampleChargingSession(
+          state: ChargingSessionState.charging,
+          energyWh: 340,
+          aggregateVersion: 2,
+        ),
+      );
+      await _flush();
+      expect(controller.session!.energyWh, 340);
+      expect(controller.phase, ChargingFlowPhase.live);
+      expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isFalse);
+      expect(repository.prepareCalls, 1);
+      expect(controller.failure?.code, 'session_already_active');
+      expect(repository.stopCalls, 0);
+    },
+  );
+
+  test(
+    'account permission refresh cannot discard a dispatched start',
+    () async {
+      repository.startCompleter = Completer<ChargingSession>();
+      await controller.prepare(rawCode: 'VSTA-ABC_123');
+      final starting = controller.start();
+      controller.onChargingAccountChanged();
+      expect(controller.mutationInFlight, isTrue);
+      repository.startCompleter!.complete(sampleChargingSession());
+      expect(await starting, isTrue);
+      expect(controller.session, isNotNull);
+      expect(controller.mutationInFlight, isFalse);
+    },
+  );
+
+  test(
+    'account switch rejects late history from the previous account',
+    () async {
+      final oldHistory = Completer<ChargingHistoryPage>();
+      repository.historyCompleter = oldHistory;
+      final loading = controller.loadHistory();
+      controller.onChargingAccountChanged();
+      repository.historyCompleter = null;
+      await controller.loadHistory();
+      oldHistory.complete(
+        ChargingHistoryPage(
+          sessions: [sampleChargingSession()],
+          nextCursor: null,
+        ),
+      );
+      await loading;
+      expect(controller.history, isEmpty);
+      expect(controller.historyLoading, isFalse);
+    },
+  );
+
+  test(
+    'account change discards a pending estimate and releases its loading state',
+    () async {
+      repository.prepareCompleter = Completer<ChargePreparation>();
+      final preparing = controller.prepare(rawCode: 'VSTA-ABC_123');
+      controller.onChargingAccountChanged();
+      repository.prepareCompleter!.complete(sampleChargePreparation);
+      expect(await preparing, isFalse);
+      expect(controller.preparation, isNull);
+      expect(controller.mutationInFlight, isFalse);
+      expect(controller.phase, ChargingFlowPhase.idle);
+    },
+  );
 
   test('connector becoming unavailable prevents the start request', () async {
     repository.preparation = _preparationWith(

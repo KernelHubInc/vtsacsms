@@ -67,7 +67,7 @@ final class AppFailure implements Exception {
           : message ?? _safeMessage(status),
       code: details?['code']?.toString(),
       correlationId: correlation,
-      fieldErrors: _fieldErrors(details?['errors']),
+      fieldErrors: _fieldErrors(details?['errors'] ?? details?['fields']),
     );
   }
 

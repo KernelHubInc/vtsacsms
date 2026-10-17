@@ -19,7 +19,7 @@
         @endphp
 
         <x-ui.page-shell
-            eyebrow="Power Solutions Currentline · visual catalog"
+
             title="Designed for clear decisions."
             description="A theme-aware inventory of reusable foundations. Catalog content is illustrative and creates no product or domain records."
         >
@@ -127,7 +127,7 @@
                         </div>
                         <div class="mt-6 grid gap-4 md:grid-cols-3">
                             <x-ui.card subtle>
-                                <x-slot:eyebrow>Connectivity</x-slot:eyebrow>
+
                                 <x-slot:title>Charger C-104</x-slot:title>
                                 <div class="flex items-center justify-between gap-4">
                                     <span>Last evidence 24 s ago</span>
@@ -135,7 +135,7 @@
                                 </div>
                             </x-ui.card>
                             <x-ui.card selected>
-                                <x-slot:eyebrow>Connector</x-slot:eyebrow>
+
                                 <x-slot:title>CCS2 · 01</x-slot:title>
                                 <div class="flex items-center justify-between gap-4">
                                     <span>Selected state</span>
@@ -143,7 +143,7 @@
                                 </div>
                             </x-ui.card>
                             <x-ui.card subtle>
-                                <x-slot:eyebrow>Data confidence</x-slot:eyebrow>
+
                                 <x-slot:title>Projection delayed</x-slot:title>
                                 <div class="flex items-center justify-between gap-4">
                                     <span>Updated 8 min ago</span>

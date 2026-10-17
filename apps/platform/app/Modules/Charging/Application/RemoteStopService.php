@@ -32,7 +32,7 @@ final readonly class RemoteStopService
         private AuditRecorder $audit,
     ) {}
 
-    public function request(ChargingSession $session, string $idempotencyKey, bool $spendingLimit = false): RemoteCommandResult
+    public function request(ChargingSession $session, string $idempotencyKey, bool $spendingLimit = false, bool $cancelPendingStart = false): RemoteCommandResult
     {
         $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existing !== null) {
@@ -44,12 +44,15 @@ final readonly class RemoteStopService
         }
 
         $context = $this->tenant->get();
-        if ($context->actorId === null && ! $spendingLimit) {
+        if ($context->actorId === null && ! $spendingLimit && ! $cancelPendingStart) {
             throw new DomainException('Remote stop requires an authenticated human actor.');
         }
         $expiresAt = CarbonImmutable::now('UTC')->addSeconds(max(10, (int) config('services.ocpp_gateway.timeout_seconds', 20) + 5));
-        $result = DB::transaction(function () use ($session, $idempotencyKey, $context, $expiresAt, $spendingLimit): RemoteCommandResult {
+        $result = DB::transaction(function () use ($session, $idempotencyKey, $context, $expiresAt, $spendingLimit, $cancelPendingStart): RemoteCommandResult {
             $locked = ChargingSession::query()->whereKey($session->getKey())->lockForUpdate()->firstOrFail();
+            if ($cancelPendingStart && $locked->cancellation_reason !== 'customer_cancel_requested') {
+                throw new DomainException('A recorded customer cancellation is required.');
+            }
             // Re-check after acquiring the aggregate lock so concurrent retries return the committed intent.
             $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existing !== null) {
@@ -84,10 +87,10 @@ final readonly class RemoteStopService
                 'state' => ChargerCommandState::Requested,
                 'idempotency_key' => $idempotencyKey,
                 'correlation_id' => $context->correlationId,
-                'actor_id' => $spendingLimit
+                'actor_id' => ($spendingLimit || $cancelPendingStart)
                     ? CustomerChargingSession::query()->where('session_id', $locked->getKey())->firstOrFail()->subject_id
                     : $context->actorId,
-                'reason_code' => $spendingLimit ? 'prepaid.spending_limit_or_stale_meter' : 'driver.remote_stop',
+                'reason_code' => $cancelPendingStart ? 'driver.cancel_pending_start' : ($spendingLimit ? 'prepaid.spending_limit_or_stale_meter' : 'driver.remote_stop'),
                 'payload' => $payload,
                 'secret_payload' => null,
                 'expected_state' => ['session_state' => $previousState->value],

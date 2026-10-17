@@ -36,7 +36,27 @@ tags:
     description: Signature-verified provider callbacks with tenant-bound destination identifiers and replay protection.
   - name: Wallet
     description: Verified driver prepaid balances and idempotent QR Ph top-ups.
+  - name: Charging Accounts
+    description: Personal, business and fleet charging accounts with explicit organization-scoped roles.
 paths:
+  /api/v1/charging-accounts:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts'
+  /api/v1/charging-accounts/invitations:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1invitations'
+  /api/v1/charging-accounts/invitations/{invitation}/accept:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1invitations~1{invitation}~1accept'
+  /api/v1/charging-accounts/{account}/members:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1members'
+  /api/v1/charging-accounts/{account}/members/{subject}:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1members~1{subject}'
+  /api/v1/charging-accounts/{account}/invitations:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1invitations'
+  /api/v1/charging-accounts/{account}/invitations/{invitation}:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1invitations~1{invitation}'
+  /api/v1/charging-accounts/{account}/vehicles/{vehicle}/assignments:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1vehicles~1{vehicle}~1assignments'
+  /api/v1/charging-accounts/{account}/limits:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}~1limits'
   /api/v1/mobile/charging/prepare:
     $ref: './mobile-charging.v1.json#/paths/~1api~1v1~1mobile~1charging~1prepare'
   /api/v1/mobile/charging-sessions/remote-start:
@@ -630,10 +650,12 @@ paths:
         '422': {$ref: '#/components/responses/ValidationError'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
   /api/v1/vehicles:
+    parameters:
+      - {$ref: '#/components/parameters/ChargingAccountSelector'}
     get:
       operationId: listDriverVehicles
       tags: [Assets]
-      summary: List only the verified authenticated driver's vehicles in the current tenant
+      summary: List personal vehicles or shared vehicles authorized for the selected account role
       responses:
         '200':
           description: Account garage; no-store response.
@@ -647,6 +669,7 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
   /api/v1/vehicles/{vehicle}:
     parameters:
+      - {$ref: '#/components/parameters/ChargingAccountSelector'}
       - {name: vehicle, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
     put:
       operationId: saveDriverVehicle
@@ -1359,6 +1382,8 @@ paths:
           description: Open work, SLA, downtime, availability, MTTA, MTTR, repeat failure, cost, parts, and warranty metrics.
         '403': {$ref: '#/components/responses/Forbidden'}
   /api/v1/wallet:
+    parameters:
+      - {$ref: '#/components/parameters/ChargingAccountSelector'}
     get:
       operationId: getPrepaidWallet
       summary: Read the current account wallet and paginated balance activity
@@ -1378,6 +1403,8 @@ paths:
         '401': {$ref: '#/components/responses/Unauthenticated'}
         '403': {$ref: '#/components/responses/Forbidden'}
   /api/v1/wallet/topups:
+    parameters:
+      - {$ref: '#/components/parameters/ChargingAccountSelector'}
     get:
       operationId: listWalletTopups
       summary: List owned top-ups for the current wallet book
@@ -1431,6 +1458,7 @@ paths:
         '503': {description: Collection is disabled or configuration is not approved.}
   /api/v1/wallet/topups/{topup}:
     parameters:
+      - {$ref: '#/components/parameters/ChargingAccountSelector'}
       - {name: topup, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
     get:
       operationId: getWalletTopup
@@ -1480,6 +1508,7 @@ components:
       scheme: bearer
       bearerFormat: Opaque Sanctum token
   parameters:
+    ChargingAccountSelector: {"name": "X-Charging-Account-ID", "in": "header", "required": false, "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.", "schema": {"type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"}}
     TenantSelector:
       name: X-Tenant-ID
       in: header
@@ -1551,6 +1580,7 @@ components:
       type: object
       required: [currency, balance_minor, reserved_minor, available_minor, mode, book, topups_enabled, minimum_minor, maximum_minor, history]
       properties:
+        id: {type: [string, 'null'], description: Selected prepaid account ULID; null before its first funding.}
         currency: {type: string, const: PHP}
         balance_minor: {type: integer, minimum: 0}
         reserved_minor: {type: integer, minimum: 0}

@@ -238,10 +238,14 @@ final class ChargePreparation {
     required this.target,
     required this.quote,
     required this.paymentMethods,
+    this.attribution = const {},
   });
 
   factory ChargePreparation.fromJson(Map<String, dynamic> json) =>
       ChargePreparation(
+        attribution: Map<String, dynamic>.from(
+          json['attribution'] as Map? ?? const {},
+        ),
         target: ChargeTarget.fromJson(json['target']! as Map<String, dynamic>),
         quote: TariffQuote.fromJson(json['quote']! as Map<String, dynamic>),
         paymentMethods: (json['payment_methods']! as List<Object?>)
@@ -255,6 +259,7 @@ final class ChargePreparation {
   final ChargeTarget target;
   final TariffQuote quote;
   final List<PaymentMethodSummary> paymentMethods;
+  final Map<String, dynamic> attribution;
 }
 
 @immutable
@@ -303,7 +308,9 @@ final class ChargingSession {
     this.receipt,
     this.invoice,
     this.refundable = false,
+    this.cancellationRequested = false,
     this.energyFlowSeconds = 0,
+    this.attribution = const {},
   });
 
   factory ChargingSession.fromJson(Map<String, dynamic> json) {
@@ -312,6 +319,9 @@ final class ChargingSession {
         ? null
         : Money(minorUnits: json[key]! as int, currency: currency);
     return ChargingSession(
+      attribution: Map<String, dynamic>.from(
+        json['attribution'] as Map? ?? const {},
+      ),
       id: json['id']! as String,
       state: _sessionState(json['state']! as String),
       stationId: (json['site_id'] ?? json['station_id'])! as String,
@@ -354,6 +364,7 @@ final class ChargingSession {
           ? null
           : ChargingDocument.fromJson(json['invoice']! as Map<String, dynamic>),
       refundable: json['refundable'] as bool? ?? false,
+      cancellationRequested: json['cancellation_requested'] as bool? ?? false,
     );
   }
 
@@ -375,12 +386,24 @@ final class ChargingSession {
   final DateTime? startDeadlineAt;
   final int aggregateVersion;
   final PaymentState paymentState;
+  final Map<String, dynamic> attribution;
   final DateTime updatedAt;
   final String? failureReason;
   final List<String> anomalyFlags;
   final ChargingDocument? receipt;
   final ChargingDocument? invoice;
   final bool refundable;
+  final bool cancellationRequested;
+
+  bool get canCancelStart =>
+      !cancellationRequested &&
+      startedAt == null &&
+      const {
+        ChargingSessionState.requested,
+        ChargingSessionState.authorizing,
+        ChargingSessionState.authorized,
+        ChargingSessionState.starting,
+      }.contains(state);
 
   bool get isPhysicalActive => const {
     ChargingSessionState.charging,

@@ -40,7 +40,15 @@ final readonly class AuthorizationService
         return $this->permissionQuery($user, $permission)?->exists() ?? false;
     }
 
-    private function permissionQuery(User $user, PermissionKey $permission): ?Builder
+    public function allowsChargingAccount(User $user, PermissionKey $permission, string $accountId): bool
+    {
+        // Customer accounts require explicit membership; workforce tenant-wide grants do not imply it.
+        return $this->permissionQuery($user, $permission)
+            ?->where('assignments.scope_type', ScopeType::Organization->value)
+            ->where('assignments.scope_id', $accountId)->exists() ?? false;
+    }
+
+    private function permissionQuery(User $user, ?PermissionKey $permission): ?Builder
     {
         if (! $user->isEnabled()) {
             return null;
@@ -75,7 +83,21 @@ final readonly class AuthorizationService
                 $query->whereNull('assignments.expires_at')
                     ->orWhere('assignments.expires_at', '>', now('UTC'));
             })
-            ->where('role_permissions.permission_key', $permission->value);
+            ->when($permission !== null, fn (Builder $q) => $q->where('role_permissions.permission_key', $permission?->value));
+    }
+
+    /** @return array<string, list<string>> */
+    public function chargingAccountPermissions(User $user): array
+    {
+        $rows = $this->permissionQuery($user, null)?->where('assignments.scope_type', ScopeType::Organization->value)
+            ->where('role_permissions.permission_key', 'like', 'organizations.charging_accounts.%')
+            ->get(['assignments.scope_id', 'role_permissions.permission_key']);
+        $result = [];
+        foreach ($rows ?? [] as $row) {
+            $result[$row->scope_id][] = (string) $row->permission_key;
+        }
+
+        return $result;
     }
 
     /**

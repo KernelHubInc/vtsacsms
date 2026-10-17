@@ -12,7 +12,6 @@
     <main class="mx-auto max-w-lg px-5 py-10 sm:py-16">
         <img src="{{ asset('branding/power-solutions-logo-horizontal-dark.svg') }}" alt="Power Solutions" class="mx-auto mb-10 h-10 max-w-full">
         <section class="rounded-3xl bg-white p-7 shadow-xl sm:p-10">
-            <p class="mb-3 text-xs font-bold uppercase tracking-widest text-teal-700">Account recovery</p>
             <h1 class="text-3xl font-semibold tracking-tight">{{ $completed ? 'Password updated' : 'Choose a new password' }}</h1>
             @if ($completed)
                 <p class="mt-5 leading-7 text-slate-600">Return to the Power Solutions app and sign in with your new password. Existing signed-in sessions have been revoked. You can set up quick unlock again after signing in.</p>

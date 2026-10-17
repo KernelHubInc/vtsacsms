@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/core/platform/platform_services.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -41,6 +42,7 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
             ] else ...[
+              ChargingAccountSelector(dependencies: dependencies),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(

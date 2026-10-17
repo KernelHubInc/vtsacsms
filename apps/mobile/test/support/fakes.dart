@@ -9,6 +9,7 @@ import 'package:vtsa_mobile/core/maps/device_location_service.dart';
 import 'package:vtsa_mobile/core/maps/map_configuration.dart';
 import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -18,6 +19,7 @@ import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 final class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.signedIn = false});
@@ -223,6 +225,7 @@ ChargingSession sampleChargingSession({
   ChargingDocument? receipt,
   ChargingDocument? invoice,
   bool refundable = false,
+  bool cancellationRequested = false,
 }) => ChargingSession(
   id: id,
   state: state,
@@ -250,6 +253,7 @@ ChargingSession sampleChargingSession({
   receipt: receipt,
   invoice: invoice,
   refundable: refundable,
+  cancellationRequested: cancellationRequested,
 );
 
 final class FakeChargingRepository implements ChargingRepository {
@@ -267,6 +271,7 @@ final class FakeChargingRepository implements ChargingRepository {
   AppFailure? issueFailure;
   AppFailure? historyFailure;
   Completer<ChargingSession>? startCompleter;
+  Completer<ChargePreparation>? prepareCompleter;
   Completer<ChargingSession>? stopCompleter;
   AppFailure? getSessionFailure;
   Completer<ChargingHistoryPage>? historyCompleter;
@@ -274,6 +279,8 @@ final class FakeChargingRepository implements ChargingRepository {
   String? lastPreparedCode;
   int startCalls = 0;
   int stopCalls = 0;
+  int cancelCalls = 0;
+  ChargingSession? cancelResult;
   int activeCalls = 0;
   int historyCalls = 0;
   int refundCalls = 0;
@@ -294,11 +301,15 @@ final class FakeChargingRepository implements ChargingRepository {
     required String sessionId,
     required String reason,
   }) async {
-    final cancelled = sampleChargingSession(
-      id: sessionId,
-      state: ChargingSessionState.cancelled,
-      aggregateVersion: 9,
-    );
+    cancelCalls++;
+    final cancelled =
+        cancelResult ??
+        sampleChargingSession(
+          id: sessionId,
+          state: ChargingSessionState.cancelled,
+          paymentState: PaymentState.notRequired,
+          aggregateVersion: 9,
+        );
     sessions[sessionId] = cancelled;
     return cancelled;
   }
@@ -334,7 +345,7 @@ final class FakeChargingRepository implements ChargingRepository {
     if (prepareFailure case final failure?) {
       throw failure;
     }
-    return preparation;
+    return prepareCompleter?.future ?? preparation;
   }
 
   @override
@@ -411,6 +422,8 @@ buildTestDependencies({
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
   KycRepository? kycRepository,
+  WalletRepository? walletRepository,
+  ChargingAccountsController? accounts,
   TokenStore? tokenStore,
   MapConfiguration? maps,
   DeviceLocationService location = const UnavailableDeviceLocationService(),
@@ -467,6 +480,8 @@ buildTestDependencies({
     favoritesRepository: LocalFavoritesRepository(preferences),
     chargingRepository: charging,
     kycRepository: kycRepository,
+    walletRepository: walletRepository,
+    accounts: accounts,
     featureFlags: const FeatureFlags(
       ocpp: false,
       remoteCharging: false,

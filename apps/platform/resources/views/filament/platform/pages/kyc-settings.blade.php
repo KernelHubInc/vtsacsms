@@ -1,7 +1,6 @@
 <x-filament-panels::page>
     <form wire:submit="save" class="max-w-3xl space-y-6">
         <section class="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
-            <p class="text-xs font-semibold uppercase tracking-widest text-primary-600">Verification policy</p>
             <h2 class="mt-2 text-xl font-semibold">Who makes the final decision?</h2>
             <p class="mt-3 text-sm text-gray-500">Checks run after each submission. This setting applies to new submissions in the current tenant; existing applications keep their recorded policy.</p>
             @if (config('kyc.assurance_profile') === 'optical_v1')

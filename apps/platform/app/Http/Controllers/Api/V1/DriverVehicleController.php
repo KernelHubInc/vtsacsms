@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Modules\Assets\Application\DriverVehicles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 final class DriverVehicleController extends Controller
 {
@@ -17,17 +18,17 @@ final class DriverVehicleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->vehicles->list($this->subject($request))])->header('Cache-Control', 'no-store');
+        return response()->json(['data' => $this->vehicles->list($this->subject($request), $this->account($request))])->header('Cache-Control', 'no-store');
     }
 
     public function store(DriverVehicleRequest $request, string $vehicle): JsonResponse
     {
-        return response()->json(['data' => $this->vehicles->save($this->subject($request), $vehicle, $request->validated())])->header('Cache-Control', 'no-store');
+        return response()->json(['data' => $this->vehicles->save($this->subject($request), $vehicle, $request->validated(), $this->account($request))])->header('Cache-Control', 'no-store');
     }
 
     public function destroy(Request $request, string $vehicle): JsonResponse
     {
-        $this->vehicles->remove($this->subject($request), $vehicle);
+        $this->vehicles->remove($this->subject($request), $vehicle, $this->account($request));
 
         return response()->json(['data' => ['removed' => true]]);
     }
@@ -38,5 +39,13 @@ final class DriverVehicleController extends Controller
         abort_unless($user instanceof User, 401);
 
         return (string) $user->public_id;
+    }
+
+    private function account(Request $request): ?string
+    {
+        $id = $request->header('X-Charging-Account-ID');
+        abort_if($id !== null && ! Str::isUlid($id), 422, 'Invalid charging account selector.');
+
+        return $id;
     }
 }

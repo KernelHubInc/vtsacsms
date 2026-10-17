@@ -42,7 +42,7 @@ final readonly class PrepaidChargingMonitor
 
                     return;
                 }
-                $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, (int) $cdr->total_minor);
+                $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, (int) $cdr->total_minor, $owner->payer_account_id);
                 $owner->forceFill(['payment_state' => 'captured', 'settled_at' => now('UTC')])->save();
 
                 return;
@@ -52,10 +52,21 @@ final readonly class PrepaidChargingMonitor
                 $definitive = $command !== null && ($command->state->value === 'rejected'
                     || ($command->dispatched_at === null && $command->state->isTerminal()));
                 if ($definitive) {
-                    $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, 0);
+                    $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, 0, $owner->payer_account_id);
                     $owner->forceFill(['payment_state' => 'not_required', 'settled_at' => now('UTC')])->save();
                 } else {
                     $owner->forceFill(['payment_state' => 'requires_action'])->save();
+                }
+
+                return;
+            }
+            if ($session->cancellation_reason === 'customer_cancel_requested'
+                && in_array($session->state->value, ['starting', 'charging', 'suspended_by_ev', 'suspended_by_evse'], true)) {
+                $attempts = ChargerCommand::query()->where('session_id', $sessionId)->where('reason_code', 'driver.cancel_pending_start')->count();
+                if ($session->protocol_transaction_id === null || $attempts >= 3) {
+                    $owner->forceFill(['payment_state' => 'requires_action'])->save();
+                } else {
+                    app(RemoteStopService::class)->request($session, 'cancel-start-stop-'.$sessionId.'-'.$attempts, cancelPendingStart: true);
                 }
 
                 return;

@@ -3,7 +3,6 @@
 @section('content')
 <section class="map-intro">
     <div class="public-shell">
-        <p class="eyebrow">Demo station profile</p>
         <h1>{{ $station['site_name'] }}</h1>
         <p>{{ $station['address_line_1'] }}{{ $station['city_name'] ? ', '.$station['city_name'] : '' }}</p>
     </div>
@@ -22,8 +21,7 @@
                 <strong>Demo · Test data</strong>
                 <span>This is a fictional location and is not a real operational EV charger.</span>
             </div>
-            <p class="eyebrow">Availability</p>
-            <h2>{{ ucfirst($station['availability']) }}</h2>
+            <h2>Availability: {{ ucfirst($station['availability']) }}</h2>
             <p class="section-copy">Status {{ $station['is_stale'] ? 'is stale and should be confirmed on arrival' : 'was recently observed' }}. No charger command is sent from this Milestone 1 page.</p>
             <div class="connector-tags">
                 @foreach ($siteStations->flatMap(fn ($item) => $item['connectors'])->unique(fn ($connector) => $connector['standard'].'-'.$connector['maximum_power_w']) as $connector)

@@ -29,7 +29,7 @@ final readonly class ChargingStationPolicy
     public function create(User $user): bool
     {
         return $this->tenant->getOrNull() !== null
-            && $this->authorization->allows($user, PermissionKey::AssetManage);
+            && $this->authorization->holdsAnywhere($user, PermissionKey::AssetManage);
     }
 
     public function update(User $user, ChargingStation $station): bool
@@ -39,7 +39,7 @@ final readonly class ChargingStationPolicy
 
     public function delete(User $user, ChargingStation $station): bool
     {
-        return false;
+        return $this->update($user, $station);
     }
 
     public function restore(User $user, ChargingStation $station): bool

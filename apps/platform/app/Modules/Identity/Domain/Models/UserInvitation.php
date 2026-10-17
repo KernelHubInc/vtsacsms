@@ -46,6 +46,7 @@ final class UserInvitation extends Model
         'expires_at',
         'accepted_at',
         'revoked_at',
+        'purpose',
     ];
 
     protected $hidden = ['token_hash'];

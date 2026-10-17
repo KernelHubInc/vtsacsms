@@ -11,6 +11,10 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property string $subject_id
+ * @property string|null $charging_account_id
+ * @property string|null $vehicle_id
+ * @property string|null $payer_account_id
+ * @property string|null $prepaid_account_id
  * @property string $connector_id
  * @property string $tariff_version_id
  * @property int $budget_minor
