@@ -12,6 +12,7 @@ use App\Modules\Assets\Application\ConnectorSnapshotQuery;
 use App\Modules\Assets\Application\DriverVehicles;
 use App\Modules\Billing\Application\PrepaidWallet;
 use App\Modules\Charging\Domain\ChargerCommandState;
+use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingQuote;
 use App\Modules\Charging\Domain\Models\ChargingSession;
@@ -200,6 +201,10 @@ final readonly class CustomerCharging
             }
             if (in_array($session->state->value, ['finalizing', 'review_required'], true)) {
                 throw new DomainException('This session is already being finalized. Its charger and payment evidence must be checked.');
+            }
+            if ($session->started_at === null && $session->protocol_transaction_id === null) {
+                AuthorizationToken::query()->where('session_id', $id)->whereNull('revoked_at')
+                    ->update(['status' => 'revoked', 'revoked_at' => now('UTC')]);
             }
             if ($command->dispatched_at === null && $command->state->value === 'requested'
                 && $session->started_at === null && $session->protocol_transaction_id === null && ! $session->state->isPhysicallyActive()) {

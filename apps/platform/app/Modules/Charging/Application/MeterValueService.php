@@ -40,6 +40,10 @@ final readonly class MeterValueService
 
                     continue;
                 }
+                // Auxiliary telemetry remains in the inbound event; it is not a billing measurement.
+                if ($this->isAuxiliaryTelemetry($sample)) {
+                    continue;
+                }
                 $reading = $this->normalize($sample, $receivedAt);
                 if ($reading === null) {
                     $anomalies[] = SessionAnomaly::InvalidMeterValue->value;
@@ -177,6 +181,25 @@ final readonly class MeterValueService
         }
 
         return [$energy, $reset];
+    }
+
+    /** @param array<string, mixed> $sample */
+    private function isAuxiliaryTelemetry(array $sample): bool
+    {
+        $units = match ($sample['measurand'] ?? null) {
+            'Voltage' => ['V'],
+            'Current.Import', 'Current.Export', 'Current.Offered' => ['A'],
+            'Temperature' => ['Celsius', 'Fahrenheit', 'K'],
+            default => [],
+        };
+        $value = $sample['value'] ?? null;
+        if (! in_array($sample['unit'] ?? null, $units, true)
+            || ! is_numeric($value) || ! is_finite((float) $value)
+            || ($sample['measurand'] !== 'Temperature' && (float) $value < 0)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function integer(mixed $value): ?int

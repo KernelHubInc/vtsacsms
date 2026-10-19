@@ -61,7 +61,7 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
           .firstOrNull;
       final vehicle = dependencies.vehicles.defaultVehicle;
       return DriverPage(
-        title: 'A good place to charge',
+        title: 'Charging station',
         body: ListView(
           children: [
             DriverNotice(
@@ -182,31 +182,99 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
             const SizedBox(height: 16),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
+              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+              childrenPadding: const EdgeInsets.only(top: 8, bottom: 24),
+              shape: const Border(),
+              collapsedShape: const Border(),
               title: const Text('Station details & directions'),
               children: [
-                Wrap(
-                  children: [
-                    TextButton.icon(
-                      onPressed: dependencies.discovery.refresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Refresh station status'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () =>
-                          dependencies.favorites.toggle(station.id),
-                      icon: Icon(
-                        favorite ? Icons.favorite : Icons.favorite_border,
+                VtsaCard(
+                  key: const ValueKey('station-status-details'),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 3),
+                            child: Icon(Icons.sensors, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  station.isStale
+                                      ? 'Status needs a refresh'
+                                      : station.connectionLabel,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  station.lastSeenAt == null
+                                      ? 'No recent contact reported'
+                                      : 'Last contact · ${DateFormat('MMM d, h:mm a').format(station.lastSeenAt!.toLocal())}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Refresh station status',
+                            onPressed: dependencies.discovery.isLoading
+                                ? null
+                                : dependencies.discovery.refresh,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
                       ),
-                      label: Text(
-                        favorite ? 'Remove from favorites' : 'Add to favorites',
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Divider(height: 1),
                       ),
-                    ),
-                  ],
-                ),
-                if (station.lastSeenAt != null)
-                  Text(
-                    'Last heard ${DateFormat('MMM d, HH:mm:ss').format(station.lastSeenAt!.toLocal())}',
+                      Semantics(
+                        toggled: favorite,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () =>
+                              dependencies.favorites.toggle(station.id),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  favorite
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  size: 22,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    favorite
+                                        ? 'Remove from favorites'
+                                        : 'Add to favorites',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ),
+                                if (favorite) const Icon(Icons.check, size: 20),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                const SizedBox(height: 16),
                 VtsaButton(
                   label: 'Directions',
                   icon: Icons.directions_outlined,
@@ -225,22 +293,30 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
                     }
                   },
                 ),
+                const SizedBox(height: 8),
                 VtsaButton(
                   label: 'Scan charger to start',
                   icon: Icons.qr_code_scanner,
-                  variant: VtsaButtonVariant.quiet,
+                  variant: VtsaButtonVariant.secondary,
                   onPressed: () => context.push('/charge'),
                 ),
+                const SizedBox(height: 24),
                 _DetailSection(
+                  key: const ValueKey('station-hours-details'),
+                  icon: Icons.schedule_outlined,
                   title: 'Operating hours',
-                  emptyText: 'Hours have not been published.',
+                  emptyText:
+                      'Hours not provided. Check with the site before visiting.',
                   values: station.operatingHours,
                 ),
                 const SizedBox(height: 12),
                 _DetailSection(
+                  key: const ValueKey('station-amenities-details'),
+                  icon: Icons.local_cafe_outlined,
                   title: 'Amenities',
-                  emptyText: 'No amenities are published.',
+                  emptyText: 'No amenities listed yet.',
                   values: station.amenities,
+                  chips: true,
                 ),
               ],
             ),
@@ -301,29 +377,77 @@ class FavoritesScreen extends StatelessWidget {
 
 class _DetailSection extends StatelessWidget {
   const _DetailSection({
+    required this.icon,
     required this.title,
     required this.emptyText,
     required this.values,
+    this.chips = false,
+    super.key,
   });
 
+  final IconData icon;
   final String title;
   final String emptyText;
   final List<String> values;
+  final bool chips;
 
   @override
   Widget build(BuildContext context) => VtsaCard(
-    title: title,
-    child: values.isEmpty
-        ? Text(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 22, color: context.vtsaColors.textMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (values.isEmpty)
+          Text(
             emptyText,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: context.vtsaColors.textMuted,
             ),
           )
-        : Wrap(
-            spacing: VtsaSpacing.xs,
-            runSpacing: VtsaSpacing.xs,
-            children: [for (final value in values) Chip(label: Text(value))],
+        else if (chips)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final value in values)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.vtsaColors.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(value),
+                ),
+            ],
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < values.length; index++)
+                Padding(
+                  padding: EdgeInsets.only(top: index == 0 ? 0 : 8),
+                  child: Text(values[index]),
+                ),
+            ],
           ),
+      ],
+    ),
   );
 }

@@ -2,6 +2,12 @@
 
 Requirements: FR-AST-001/002/003, FR-MOB-002, FR-CHG-003.
 
+For staff training, see [Operator quick start](operator-station-quick-start.md).
+Both panels expose **Charging Stations → Setup guide**, and **Setup → Operator
+instructions** on existing stations. Online stations with an Unknown connector
+also explain the idle-reconnect step. Guidance does not issue commands or change
+device status.
+
 The same resources are shared by administration and operator panels. Permissions,
 not job titles, determine access. Equipment managers need `assets.manage` in the
 station's site scope plus viewing/panel permissions. Location managers control
@@ -79,7 +85,7 @@ Deployment must rebuild/recreate the platform and application workers using the
 existing private staging overrides. It does not require changing/restarting the
 OCPP gateway or rebuilding the mobile APK. Preserve the prior image for rollback.
 
-## Staging verification � 2026-10-15
+## Staging verification — 2026-10-15
 
 Deployed image: `vtsa-prepaid-platform:20261015-station-setup-r2`. The final
 release container passed 254 backend tests / 2,150 assertions. PHPStan, Pint,
@@ -98,3 +104,22 @@ station-filtered connector/site-filtered hours links. Its Type 2 AC 7000 W
 connector and effective tariff are present. Operating days are unconfigured;
 the charger is offline, last seen 2026-10-13 14:28:21 UTC. This release does not
 claim a completed physical charging session. The mobile APK is unchanged.
+
+## Operator guide update — 2026-10-17
+
+The shared station list now has a read-only Setup guide dialog, also available
+as a collapsible Operator instructions section on Station setup. Online stations
+with Unknown connector status explain that fresh physical-plug evidence is
+needed. No settings, permissions, tariff rules or device commands change.
+
+Release image: `vtsa-prepaid-platform:20261017-operator-guide-r2`, based on the
+existing cancel-start release. Only the platform web service is recreated;
+workers and the native gateway retain their existing processes. No migration or
+APK update is required. Rollback configuration and verification logs are retained
+under `/opt/vtsa-releases/operator-guide-20261017-r2/`.
+
+The candidate passed the full isolated PHP suite (262 tests / 2,249 assertions),
+including admin/operator guide access and the live-status explanation. PHPStan,
+targeted Pint, frontend production build and four map tests passed. Authenticated
+admin browser checks covered the guide dialog and the station instructions.
+Physical charging and payment transactions were not part of this UI-only update.

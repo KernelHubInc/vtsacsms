@@ -18,9 +18,12 @@ use App\Modules\Charging\Application\CustomerCharging;
 use App\Modules\Charging\Application\MeterValueService;
 use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\PrepaidChargingMonitor;
+use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
+use App\Modules\Charging\Domain\Models\InboundOcppEvent;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Organizations\Application\ChargingAccounts;
 use App\Modules\Organizations\Domain\ChargingAccountRole;
@@ -279,6 +282,86 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
             self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
             self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
+    public function test_cancelled_unknown_start_recovers_only_after_current_idle_evidence_and_releases_once(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('idle-cancel');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'idle-cancel-start');
+            $id = (string) $session->getKey();
+            $requestedAt = $session->requested_at;
+            $command = ChargerCommand::query()->where('session_id', $id)->firstOrFail();
+            $command->forceFill(['state' => 'delivery_unknown', 'dispatched_at' => now()])->save();
+            app(CommandOutcomeService::class)->apply($command);
+            $service->cancel($actor->public_id, $id, null);
+            self::assertNotNull(AuthorizationToken::query()->where('session_id', $id)->firstOrFail()->revoked_at);
+            $socket = (string) Str::ulid();
+            $this->event((string) $tenant->getKey(), $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Available', 'connection_id' => $socket]);
+            $this->travel(240)->seconds();
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value, 'An idle report from before the deadline is insufficient.');
+            $this->event((string) $tenant->getKey(), $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Preparing', 'connection_id' => $socket]);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value);
+            $this->event((string) $tenant->getKey(), $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Available', 'connection_id' => $socket]);
+            $connection = StationConnection::query()->firstOrFail();
+            $connection->update(['connected' => false]);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value, 'Offline evidence must not release funds.');
+            $connection->update(['connected' => true, 'connection_id' => (string) Str::ulid()]);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value, 'A different socket must report its own status.');
+            $connection->update(['connection_id' => $socket]);
+            $evidence = InboundOcppEvent::query()->create([
+                'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.start_transaction.received.v1',
+                'schema_version' => 1, 'aggregate_id' => $session->charging_station_id, 'correlation_id' => (string) Str::ulid(),
+                'payload' => [], 'occurred_at' => now(), 'received_at' => now(), 'outcome' => 'quarantined',
+            ]);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value, 'Unresolved transaction evidence must block release.');
+            $evidence->delete();
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            $service->cancel($actor->public_id, $id, null);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('cancelled', $session->refresh()->state->value);
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
+            self::assertNull($service->active($actor->public_id));
+            self::assertSame(0, ChargerCommand::query()->where('type', 'remote_stop')->count());
+            self::assertSame('delivery_unknown', $command->refresh()->state->value);
+
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $next = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'next-start');
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 991, 'meter_start_wh' => 1000, 'protocol_timestamp' => $requestedAt->addSecond()->toISOString()]);
+            self::assertSame('starting', $next->refresh()->state->value, 'A delayed old transaction must not attach to the new request.');
+            self::assertNull($next->protocol_transaction_id);
+        });
+    }
+
+    public function test_pending_cancellation_does_not_release_when_meter_evidence_exists(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('idle-meter');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'meter-cancel-start');
+            $id = (string) $session->getKey();
+            ChargerCommand::query()->where('session_id', $id)->update(['state' => 'delivery_unknown', 'dispatched_at' => now()]);
+            $service->cancel($actor->public_id, $id, null);
+            $session->update(['meter_start_wh' => 0]);
+            $this->travel(240)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Available', 'connection_id' => (string) Str::ulid()]);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            self::assertSame('starting', $session->refresh()->state->value);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
         });
     }
 

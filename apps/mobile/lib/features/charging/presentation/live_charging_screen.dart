@@ -281,7 +281,7 @@ class _PhasePanel extends StatelessWidget {
                   ? 'Start request cancelled'
                   : 'Charging did not start or complete',
               session.state == ChargingSessionState.cancelled
-                  ? 'The request was cancelled before it reached the charger. No charging fee was taken and the reserved funds are available again.'
+                  ? 'The start request is cancelled. No charging fee was taken and the reserved funds are available again.'
                   : 'Check the charger and cable before trying again. Your session details and any payment review remain available in Activity.',
               VtsaOperationalState.faulted,
             ),

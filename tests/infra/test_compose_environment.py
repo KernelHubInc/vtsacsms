@@ -103,6 +103,7 @@ class ComposeEnvironmentTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         services = json.loads(result.stdout)["services"]
         redis = services["redis"]
+        self.assertEqual(redis["restart"], "unless-stopped")
         self.assertEqual(redis["ports"][0]["host_ip"], "127.0.0.1")
         password_index = redis["command"].index("--requirepass") + 1
         self.assertEqual(redis["command"][password_index], values["REDIS_PASSWORD"])

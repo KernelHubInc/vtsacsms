@@ -13,6 +13,17 @@ Examples: 1,250 Wh at PHP 1/kWh costs PHP 1.25. PHP 1/session costs PHP 1 for a 
 
 ## Driver flow
 
+For the supervised CSMS/device/EV start, stop and wallet checks, use
+[Charging acceptance test](charging-acceptance-test.md).
+
+OCPP authorization tags issued for new sessions use 20 random alphanumeric
+characters, compatible with OCPP 1.6's idTag limit and OCPP 2.0.1. The former
+45-character format failed outgoing OCPP 1.6 schema validation before sending
+RemoteStartTransaction. Authorization remains hashed, station/session scoped,
+expiring and revocable; command secrets remain encrypted. Existing tokens and
+command history are preserved. Retry through a new quoted request, not by
+replaying a failed or cancelled command. No device configuration change is needed.
+
 1. Install the release APK; complete sign-in and required verification.
 2. Use Wallet > Add money > QR Ph. Confirm credited funds before starting.
 3. Plug in the EV. Scan the connector QR or enter `202607010021` while it has exactly one connector.
@@ -24,6 +35,34 @@ Examples: 1,250 Wh at PHP 1/kWh costs PHP 1.25. PHP 1/session costs PHP 1 for a 
 The PHP 1 test budget can stop before 1 kWh to leave time for the charger to respond. It is separate from the PHP 1/kWh unit price. Charging completion debits the wallet; AUB funds the wallet. Network loss or charger refusal can delay a remote stop; this is not a hard hardware energy cap.
 
 ## Runtime requirements
+
+### Cancelling a stuck start
+
+Use **Cancel pending start** in the mobile activity screen. An unsent command cancels immediately. For a sent command, **Cancellation requested** means the server saved the intent and revoked the unused authorization; it is waiting for physical evidence, not another tap. Refresh the activity after the charger reconnects.
+
+The prepaid monitor can finish cancellation and release the wallet hold after the start/command deadlines plus 60 seconds, provided the current online connection has reported Available after that window and there is no transaction/meter evidence or unresolved inbound transaction event. Offline, Preparing, Charging, stale-connection or conflicting evidence cannot release funds automatically. Reconnect the charger while idle; do not connect a simulator with its identity to fabricate an Available report. If physical charging started, the normal stop and settlement flow applies.
+
+This recovery requires the 2026-10-17 backend release in the API, event consumer, worker and prepaid monitor. The existing mobile cancellation and refresh API contract is unchanged; no APK update or migration is needed. Inspect the `charging.session.cancelled` audit event for reason `customer_cancelled_after_idle_confirmation` and its evidence instead of directly editing session/wallet rows.
+
+Staging verification on 2026-10-17: image `vtsa-prepaid-platform:20261017-cancel-start` is deployed to all five application services. The full candidate suite passed 261 tests / 2,238 assertions; the new regression failed against the preceding image. Pint, PHPStan and the locked Composer advisory audit passed. Forty rollback-only PostgreSQL API checks and a rehearsal against the affected request passed. The live monitor then completed that cancellation, recorded one 100-centavo release with zero spend and cleared the account's active request. Readiness and authorization checks passed; native OCPP gateway PID was unchanged. Backup, source manifest, test output and previous Compose selections are retained privately under `/opt/vtsa-releases/cancel-start-20261017/`. No physical charging cycle was initiated during this verification.
+
+### Auxiliary telemetry and session review
+
+The charger can include voltage, current and temperature alongside billing energy/power samples. `MeterValueService` recognizes finite numeric Voltage/V, Current.Import/Export/Offered/A and Temperature/Celsius/Fahrenheit/K values as auxiliary telemetry. These remain in the retained inbound event and are not stored as billing readings. Voltage/current must be non-negative; signed temperatures are allowed. Malformed or unsupported samples still trigger review. Energy/power validation and meter-reset detection are unchanged.
+
+The earlier Wh/W-only validator flagged Lumina's valid auxiliary samples as `invalid_meter_value`, blocking CDR generation and wallet settlement after a successful stop. Existing review flags are not erased automatically. Recovery must validate the original session's complete retained evidence using the corrected code in a rollback rehearsal, retain the agreed tariff snapshot, and resolve through `ManualSessionReviewService` with an audit note. `PrepaidChargingMonitor` then performs the existing idempotent wallet settlement. Do not edit wallet rows, clear all anomalies, or replay device commands.
+
+The mobile shell currently labels both finalizing and review-required phases as “Finalizing session”; opening the session shows its review state. A blocked review does not resolve by waiting, reconnecting the charger, cancelling a physically completed session or paying again. The portal's Session review queue is currently read-only; recovery uses the authorized backend workflow.
+
+Staging release `vtsa-prepaid-platform:20261017-meter` passed 264 tests / 2,294 assertions, Pint and PHPStan; the mixed-telemetry regression failed against the preceding image. All five application services were updated, readiness passed, and the native gateway process was unchanged. No schema or APK change was required. Release helpers and rollback evidence are retained privately at `/opt/vtsa-releases/meter-20261017/`.
+
+Lumina session `01m54njdaynr91xgbxpew5kfs1` was resolved at 18:49:06 GMT+8 on October 17 after validating its 46 retained meter events and StopTransaction against the corrected validator and recalculating in a rolled-back transaction. Original energy (2,482 Wh), elapsed duration (1,368 seconds), flow duration (1,320 seconds), tariff and historical anomaly evidence were preserved. The saved tariff was PHP 1/hour of energy flow despite the tariff's per-kWh name; it was not changed retrospectively. The audited review finalized PHP 0.37, the wallet recorded one 37-centavo spend and one 63-centavo release from the 100-centavo reservation, and the mobile projection returned completed/captured with no active request. Review the current tariff configuration separately before the next test.
+
+### Services
+
+Redis must use `restart: unless-stopped` in Compose and on the existing container. On October 18, staging returned HTTP 500 because the app VPS had restarted at 22:37 GMT+8 on October 17 while Redis had restart policy `no`. The persisted Redis container remained stopped; session/rate-limit lookups failed with `getaddrinfo for redis failed`, and consumers/workers restarted repeatedly. Starting the same Redis container restored its AOF data and service connectivity. The runtime policy and `infra/compose.yaml` were corrected, without starting the unused local PostgreSQL or Docker OCPP fallback. Staging uses its external database and native gateway.
+
+Recovery checks: authenticated Charging Stations page loaded; login and readiness returned HTTP 200; application workers resumed; all five Compose environment tests passed. The regression asserts Redis's restart policy alongside password protection and loopback binding. Do not flush Redis or remove its volume during this recovery. `unless-stopped` does not undo an intentional operator stop; start the existing service explicitly when appropriate.
 
 Run one worker consuming `charging`, plus one prepaid monitor every ten seconds. Keep queue retry time longer than worker timeout and gateway request timeout. The monitor and Stop route must remain available when new starts are disabled. Never replay unrelated queues as a deployment shortcut.
 

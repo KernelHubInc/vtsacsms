@@ -12,6 +12,7 @@ use App\Modules\Assets\Domain\Models\Connector;
 use App\Modules\Assets\Domain\Models\ConnectorStandard;
 use App\Modules\Assets\Domain\Models\Evse;
 use App\Modules\Assets\Domain\Models\OcppVersion;
+use App\Modules\Charging\Application\AuthorizationTokenService;
 use App\Modules\Charging\Application\ChargerCommandStateMachine;
 use App\Modules\Charging\Application\CommandOutcomeService;
 use App\Modules\Charging\Application\Gateway\GatewayCommandClient;
@@ -49,8 +50,35 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
 {
+    public function test_remote_start_tokens_fit_ocpp_wire_limits_and_remain_bound_to_the_station(): void
+    {
+        $this->freezeTime();
+        Queue::fake();
+        foreach (['1.6J', '2.0.1'] as $protocol) {
+            $actor = $this->createUser();
+            $tenant = $this->createTenant('wire-token-'.str_replace('.', '-', $protocol));
+            $this->withinTenant($tenant, $actor, function () use ($tenant, $actor, $protocol): void {
+                [$connector, $version] = $this->fixture($tenant, $actor, 'WIRE-'.$protocol, $protocol);
+                $result = app(RemoteStartService::class)->request((string) $connector->getKey(), 'wire-token-request', (string) $version->getKey());
+                $secret = $result->command->secret_payload;
+                $plainText = $protocol === '1.6J' ? $secret['id_tag'] : $secret['id_token']['id_token'];
+                self::assertSame(20, strlen($plainText), 'Authorization tags must fit OCPP 1.6 idTag maxLength=20.');
+                self::assertMatchesRegularExpression('/\A[A-Za-z0-9]{20}\z/', $plainText);
+                $token = AuthorizationToken::query()->whereKey($result->session->authorization_token_id)->firstOrFail();
+                self::assertSame(hash('sha256', $plainText), $token->token_hash);
+                self::assertStringNotContainsString($plainText, $result->command->getRawOriginal('secret_payload'));
+                $tokens = app(AuthorizationTokenService::class);
+                self::assertSame('Invalid', $tokens->authorize($plainText, (string) Str::ulid())['status']);
+                self::assertSame('Accepted', $tokens->authorize($plainText, $result->session->charging_station_id)['status']);
+                $token->update(['revoked_at' => now()]);
+                self::assertSame('Invalid', $tokens->authorize($plainText, $result->session->charging_station_id)['status']);
+            });
+        }
+    }
+
     public function test_acknowledged_remote_start_remains_starting_until_transaction_evidence_arrives(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T09:59:59Z'));
         Queue::fake();
         $actor = $this->createUser();
         $tenant = $this->createTenant('remote-start');
@@ -115,6 +143,7 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
 
     public function test_clean_meter_and_stop_evidence_finalize_cost_and_immutable_cdr(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T09:59:59Z'));
         Queue::fake();
         $actor = $this->createUser();
         $tenant = $this->createTenant('clean-cdr');
@@ -127,7 +156,12 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
         ]));
         $this->consume($tenant, $actor, $this->event($tenant, $connector, 'meter_values', '2026-07-22T10:10:00Z', [
             'connector_id' => 1, 'protocol_transaction_id' => 90,
-            'samples' => [$this->meterSample('2026-07-22T10:10:00Z', 1500)],
+            'samples' => [
+                ['timestamp' => '2026-07-22T10:10:00Z', 'measurand' => 'Voltage', 'unit' => 'V', 'value' => 233.2, 'phase' => 'L1-N'],
+                ['timestamp' => '2026-07-22T10:10:00Z', 'measurand' => 'Current.Import', 'unit' => 'A', 'value' => '28.5'],
+                $this->meterSample('2026-07-22T10:10:00Z', 1500),
+                ['timestamp' => '2026-07-22T10:10:00Z', 'measurand' => 'Temperature', 'unit' => 'Celsius', 'value' => -5.2],
+            ],
         ]));
         $this->consume($tenant, $actor, $this->event($tenant, $connector, 'stop_transaction', '2026-07-22T10:20:00Z', [
             'protocol_transaction_id' => 90, 'meter_stop_wh' => 2000, 'reason' => 'Local', 'samples' => [],
@@ -135,6 +169,7 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
 
         $session->refresh();
         self::assertSame(ChargingSessionState::Completed, $session->state);
+        self::assertNotContains(SessionAnomaly::InvalidMeterValue->value, $session->anomaly_flags);
         self::assertSame(1000, $session->energy_wh);
         self::assertSame(1200, $session->duration_seconds);
         self::assertSame(30, $session->final_cost_minor);
@@ -155,8 +190,43 @@ final class ChargingSessionsAndTariffsTest extends TenantSecurityTestCase
         ]);
     }
 
+    public function test_malformed_measurements_still_require_review_with_auxiliary_telemetry(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T09:59:59Z'));
+        Queue::fake();
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('invalid-telemetry');
+        $invalid = [
+            ['measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 'bad'],
+            ['measurand' => 'Power.Active.Import', 'unit' => 'W', 'value' => -1],
+            ['measurand' => 'Voltage', 'unit' => 'V', 'value' => 'bad'],
+            ['measurand' => 'Voltage', 'unit' => 'Wh', 'value' => 'bad'],
+            ['measurand' => 'Temperature', 'unit' => 'Celsius', 'value' => 'NaN'],
+        ];
+        foreach ($invalid as $index => $sample) {
+            [$connector, $version] = $this->withinTenant($tenant, $actor, fn (): array => $this->fixture($tenant, $actor, 'INVALID-'.$index, '1.6J'));
+            $session = $this->withinTenant($tenant, $actor, fn () => app(RemoteStartService::class)
+                ->request((string) $connector->getKey(), 'invalid-'.$index, (string) $version->getKey())->session);
+            $this->consume($tenant, $actor, $this->event($tenant, $connector, 'start_transaction', '2026-07-22T10:00:00Z', [
+                'connector_id' => 1, 'protocol_transaction_id' => 100 + $index, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted',
+            ]));
+            $this->consume($tenant, $actor, $this->event($tenant, $connector, 'meter_values', '2026-07-22T10:10:00Z', [
+                'connector_id' => 1, 'protocol_transaction_id' => 100 + $index,
+                'samples' => [$this->meterSample('2026-07-22T10:10:00Z', 1500),
+                    ['measurand' => 'Voltage', 'unit' => 'V', 'value' => 233.2], $sample],
+            ]));
+            $this->consume($tenant, $actor, $this->event($tenant, $connector, 'stop_transaction', '2026-07-22T10:20:00Z', [
+                'protocol_transaction_id' => 100 + $index, 'meter_stop_wh' => 2000, 'reason' => 'Remote', 'samples' => [],
+            ]));
+            self::assertSame(ChargingSessionState::ReviewRequired, $session->refresh()->state);
+            self::assertContains(SessionAnomaly::InvalidMeterValue->value, $session->anomaly_flags);
+            self::assertNull($session->final_cost_minor);
+        }
+    }
+
     public function test_out_of_order_and_reset_meter_values_are_recalculated_and_sent_to_review(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-22T09:59:59Z'));
         Queue::fake();
         $actor = $this->createUser();
         $tenant = $this->createTenant('meter-review');

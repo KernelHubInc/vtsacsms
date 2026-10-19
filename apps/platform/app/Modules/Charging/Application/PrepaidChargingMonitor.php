@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Charging\Application;
 
 use App\Modules\Billing\Application\PrepaidWallet;
+use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargeDetailRecord;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingSession;
+use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
+use App\Modules\Charging\Domain\Models\InboundOcppEvent;
 use App\Modules\Charging\Domain\Models\MeterReading;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Tariffs\Application\RatingInput;
 use App\Modules\Tariffs\Application\TariffEngine;
 use Carbon\CarbonImmutable;
@@ -25,6 +29,12 @@ final readonly class PrepaidChargingMonitor
             $session = ChargingSession::query()->whereKey($sessionId)->lockForUpdate()->firstOrFail();
             $owner = CustomerChargingSession::query()->where('session_id', $sessionId)->lockForUpdate()->firstOrFail();
             if ($owner->settled_at !== null) {
+                return;
+            }
+            if ($this->cancelConfirmedIdleStart($session)) {
+                $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, 0, $owner->payer_account_id);
+                $owner->forceFill(['payment_state' => 'not_required', 'settled_at' => now('UTC')])->save();
+
                 return;
             }
             if ($session->failure_reason === 'prepaid_start_unconfirmed' || $session->state->value === 'review_required') {
@@ -104,5 +114,45 @@ final readonly class PrepaidChargingMonitor
             // This service identity acts under the driver's recorded spending-limit consent.
             app(RemoteStopService::class)->request($session, 'budget-stop-'.$sessionId.'-'.$attempts, true);
         });
+    }
+
+    private function cancelConfirmedIdleStart(ChargingSession $session): bool
+    {
+        if ($session->cancellation_reason !== 'customer_cancel_requested'
+            || ! in_array($session->state->value, ['requested', 'authorizing', 'authorized', 'starting'], true)
+            || $session->started_at !== null || $session->protocol_transaction_id !== null
+            || $session->meter_start_wh !== null || $session->energy_wh !== 0
+            || $session->start_deadline_at === null) {
+            return false;
+        }
+        $command = ChargerCommand::query()->where('session_id', $session->getKey())->where('type', 'remote_start')->first();
+        if ($command === null || ! $command->state->isTerminal()) {
+            return false;
+        }
+        // An elapsed deadline alone cannot prove the charger stayed idle. Allow time for queued evidence, too.
+        $after = $command->expires_at->max($session->start_deadline_at)->addMinute();
+        $signal = ConnectorStatus::query()->where('connector_id', $session->connector_id)->lockForUpdate()->first();
+        $connection = StationConnection::query()->where('charging_station_id', $session->charging_station_id)->first();
+        if ($after->isFuture() || $signal === null || $connection === null
+            || $signal->status->value !== 'available' || $signal->reported_status !== 'available'
+            || $signal->ocpp_connection_id !== $connection->connection_id
+            || $signal->last_ocpp_event_at === null || $signal->last_ocpp_event_at->lte($after)
+            || $signal->last_ocpp_event_at->isFuture() || $signal->last_ocpp_event_at->lt($connection->connected_at)
+            || app(StationConnectionQuery::class)->status($connection->connected, $connection->last_seen_at->toIso8601String()) !== 'online'
+            || MeterReading::query()->where('session_id', $session->getKey())->exists()
+            || InboundOcppEvent::query()->where('aggregate_id', $session->charging_station_id)
+                ->where('received_at', '>=', $session->requested_at)->where('outcome', '!=', 'processed')
+                ->whereIn('event_type', ['gateway.ocpp.start_transaction.received.v1', 'gateway.ocpp.stop_transaction.received.v1',
+                    'gateway.ocpp.transaction_event.received.v1', 'gateway.ocpp.meter_values.received.v1'])->exists()) {
+            return false;
+        }
+        AuthorizationToken::query()->where('session_id', $session->getKey())->whereNull('revoked_at')
+            ->update(['status' => 'revoked', 'revoked_at' => now('UTC')]);
+        app(SessionLifecycleService::class)->cancel($session, 'customer_cancelled_after_idle_confirmation', [
+            'command_id' => (string) $command->getKey(), 'command_state' => $command->state->value,
+            'connection_id' => $connection->connection_id, 'idle_observed_at' => $signal->last_ocpp_event_at->toIso8601String(),
+        ]);
+
+        return true;
     }
 }

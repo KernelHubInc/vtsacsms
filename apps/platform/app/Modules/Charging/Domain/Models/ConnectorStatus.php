@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property ConnectorAvailability $status
  * @property CarbonImmutable $observed_at
  * @property string|null $ocpp_connection_id
+ * @property string|null $reported_status
  * @property CarbonImmutable|null $last_ocpp_event_at
  * @property int $stale_after_seconds
  */

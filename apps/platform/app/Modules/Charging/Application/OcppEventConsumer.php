@@ -291,6 +291,7 @@ final readonly class OcppEventConsumer
         }
         $reserved = ChargingSession::query()
             ->where('connector_id', $connector->connectorId)
+            ->where('requested_at', '<=', $sourceAt)
             ->whereIn('state', [ChargingSessionState::Requested->value, ChargingSessionState::Authorizing->value, ChargingSessionState::Authorized->value, ChargingSessionState::Starting->value])
             ->whereHas('commands', fn ($query) => $query->where('type', 'remote_start'))
             ->latest('requested_at')

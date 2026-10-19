@@ -9,6 +9,23 @@ Every requested mobile release must return both links after verification:
 
 The demo URL points to the latest verified versioned APK and requires cache revalidation. Both downloads use the same staging build and backend; the demo link is not a separate simulated app.
 
+## Station details layout — 1.0.21 / Android build 22
+
+Published on 2026-10-17. Both the [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.21.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200; complete downloaded bytes matched the SHA256 below. The demo alias was advanced only after the versioned download passed verification.
+
+The station details section now uses equal-width cards and actions, a grouped connection/favorites panel, consistent padding, readable hours rows and compact amenity labels. The page title is **Charging station**. Refresh, favorites, directions, scanning and plug selection retain their existing controllers and APIs. The cancellation confirmation also covers starts cancelled after idle confirmation, rather than claiming every cancelled command was never sent.
+
+Verification: 207 mobile tests passed; Flutter analysis and formatting passed. Rendered previews were inspected at 360 and 390 logical pixels and at 320 pixels with 1.6× text. Regression checks cover section/button alignment, missing information, favorites, refresh, directions fallback and navigation to charging. No dependency or backend change is required for this APK. Physical phone installation remains a user acceptance check.
+
+The release APK is 79,989,258 bytes; SHA256 `5fd32fc41f00e7d0793fd72cf65608b9b187cb924bc265540e911fb3f790b1d7`. Its package identity and signing certificate match 1.0.20 for an in-place update. Staging API, real-payment and remote-charging configuration were retained and checked. Run tests before building, not concurrently: Flutter test setup can regenerate the Android plugin registrant with test-only plugins while a release build is compiling it. The existing `mobile_scanner` Kotlin Gradle migration warning is non-blocking on the current SDK; no dependency upgrade is included.
+
+```powershell
+cd "C:\Users\Migz\Documents\VSTA Charging\apps\mobile"
+flutter build apk --release --build-name=1.0.21 --build-number=22 --dart-define-from-file=dart_defines.staging-demo.json
+```
+
+## Previous release — 1.0.20
+
 On 2026-10-13 both links serve version 1.0.20 / Android build 21 (79,989,002 bytes). Both returned HTTP 200 and their downloaded bytes matched SHA256 `023d3096e3381fa6773e67a2fa5f611a71228a0063c18b3e33fd6df6065036b7`. This release requires registered invitation recipients, supports durable pending-start cancellation, and separates account controls into readable sections. See [invitation and cancellation behavior](shared-charging-accounts.md#registered-invitations-and-start-cancellation--1020). The full mobile suite passed 203 tests; eight focused foundation tests include the additional API field-error regression. All 241 backend tests, 27 rollback-only deployed API checks, Flutter analysis, PHPStan, Pint and the locked Composer advisory audit passed. The existing signing certificate supports an in-place update from 1.0.19. The compatible API/worker/monitor release is deployed; no migration or gateway restart was required. Physical phone installation and an actual EV charging cycle remain acceptance checks.
 
 Package the APK and its `.sha256` file under `.cache/mobile-staging-lumina/`, then run:

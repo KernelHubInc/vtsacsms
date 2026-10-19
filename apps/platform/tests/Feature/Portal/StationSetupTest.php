@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Portal;
 
+use App\Filament\Operator\Resources\ChargingStations\Pages\ListChargingStations;
 use App\Filament\Operator\Resources\ChargingStations\Pages\SetupChargingStation;
 use App\Filament\Operator\Resources\Connectors\Pages\ListConnectors;
 use App\Filament\Operator\Resources\Evses\Pages\ListEvses;
@@ -16,6 +17,8 @@ use App\Modules\Assets\Domain\Models\Connector;
 use App\Modules\Assets\Domain\Models\ConnectorStandard;
 use App\Modules\Assets\Domain\Models\Evse;
 use App\Modules\Assets\Domain\Models\OcppVersion;
+use App\Modules\Charging\Domain\Models\ConnectorStatus;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Application\ConfigureSiteAccess;
 use App\Modules\Locations\Domain\Models\SiteOperatingHour;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -26,12 +29,43 @@ use App\Modules\Tenancy\Application\CurrentTenant;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\Support\TenantSecurityTestCase;
 
 final class StationSetupTest extends TenantSecurityTestCase
 {
+    public function test_setup_guide_is_available_before_creation_and_explains_missing_live_status(): void
+    {
+        $this->manager(function ($user): void {
+            Livewire::test(ListChargingStations::class)->mountAction('setupGuide')
+                ->assertMountedActionModalSee('Set up a charging station')->assertMountedActionModalSee('Online + Unknown')
+                ->assertMountedActionModalSee('Close guide')->assertMountedActionModalSee('Energy-flow time');
+            $this->assertSame(0, ChargingStation::query()->count());
+
+            $station = ChargingStation::factory()->create(['lifecycle_status' => 'active']);
+            $service = app(ProvisionChargingEquipment::class);
+            $evse = $service->evse($user, ['charging_station_id' => $station->getKey(), 'evse_number' => 1, 'lifecycle_status' => 'active']);
+            $connector = $service->connector($user, $this->connectorData($evse));
+            $connectionId = (string) Str::ulid();
+            StationConnection::query()->create([
+                'tenant_id' => $station->tenant_id, 'charging_station_id' => $station->getKey(),
+                'connection_id' => $connectionId, 'connected' => true,
+                'connected_at' => now(), 'last_event_at' => now(), 'last_seen_at' => now(),
+            ]);
+            Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])
+                ->assertSee('Operator instructions')->assertSee('Connected, waiting for a plug status');
+            ConnectorStatus::query()->create([
+                'tenant_id' => $station->tenant_id, 'connector_id' => $connector->getKey(),
+                'status' => 'available', 'reported_status' => 'available', 'observed_at' => now(),
+                'last_ocpp_event_at' => now(), 'ocpp_connection_id' => $connectionId, 'stale_after_seconds' => 300,
+            ]);
+            Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])
+                ->assertDontSee('Connected, waiting for a plug status');
+        });
+    }
+
     public function test_staff_can_complete_equipment_and_location_steps_through_panel_actions(): void
     {
         $this->manager(function ($user): void {
@@ -181,7 +215,9 @@ final class StationSetupTest extends TenantSecurityTestCase
             $this->actingAs($viewer);
             Livewire::test(ListEvses::class)->assertActionHidden('create');
             Livewire::test(ListConnectors::class)->assertActionHidden('create');
-            Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])->assertSuccessful()->assertSee('Configuration checklist');
+            Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])->assertSuccessful()->assertSee('Configuration checklist')->assertSee('Operator instructions');
+            Livewire::test(ListChargingStations::class)->mountAction('setupGuide')
+                ->assertMountedActionModalSee('Set up a charging station')->assertMountedActionModalSee('Close guide');
         });
     }
 

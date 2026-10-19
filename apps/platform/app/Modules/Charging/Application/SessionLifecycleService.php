@@ -20,16 +20,17 @@ final readonly class SessionLifecycleService
         private AuditRecorder $audit,
     ) {}
 
-    public function cancel(ChargingSession $session, string $reason): void
+    /** @param array<string, mixed> $evidence */
+    public function cancel(ChargingSession $session, string $reason, array $evidence = []): void
     {
-        DB::transaction(function () use ($session, $reason): void {
+        DB::transaction(function () use ($session, $reason, $evidence): void {
             $locked = ChargingSession::query()->whereKey($session->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->state->isPhysicallyActive() || $locked->started_at !== null) {
                 throw new DomainException('A physically started session cannot be cancelled. Request a stop instead.');
             }
             $before = $locked->only(['state', 'cancellation_reason']);
             $locked->forceFill(['cancellation_reason' => $reason])->save();
-            $this->states->transition($locked, ChargingSessionState::Cancelled, 'session_cancelled');
+            $this->states->transition($locked, ChargingSessionState::Cancelled, 'session_cancelled', $evidence);
             $this->reservations->release((string) $locked->getKey(), 'session_cancelled', true);
             $this->audit->record(new AuditEntry(
                 'charging.session.cancelled',
@@ -39,6 +40,7 @@ final readonly class SessionLifecycleService
                 reason: $reason,
                 before: $before,
                 after: $locked->fresh()->only(['state', 'cancellation_reason']),
+                metadata: $evidence,
             ));
         });
     }

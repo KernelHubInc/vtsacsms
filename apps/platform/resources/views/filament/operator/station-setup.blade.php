@@ -10,6 +10,10 @@
         </nav>
     </x-filament::section>
 
+    <x-filament::section heading="Operator instructions" collapsible collapsed>
+        @include('filament.operator.partials.station-setup-guide')
+    </x-filament::section>
+
     <div class="grid gap-6 lg:grid-cols-2">
         <x-filament::section heading="Configuration checklist">
             <ul class="space-y-3">
@@ -29,6 +33,12 @@
                 <p class="text-sm">Required final WebSocket path: <code class="break-all">/ocpp/{{ $setup['identity'] }}</code></p>
                 <p class="text-sm text-gray-500">Use your deployment's configured WebSocket host. If the charger appends its identifier, enter the base URL ending in /ocpp and the identity separately. Include the identity only once.</p>
                 <p class="text-sm text-gray-500">Online is connection evidence. Available, Charging and Faulted come from device reports. Reconnect the idle device after configuring its connectors to receive fresh status.</p>
+                @if ($setup['connection'] === 'online' && collect($setup['outlets'])->contains('status', 'Unknown'))
+                    <div role="status" class="rounded-lg border border-gray-200 p-4 text-sm dark:border-gray-700">
+                        <p class="font-semibold">Connected, waiting for a plug status</p>
+                        <p class="mt-2">Check the EVSE and connector numbers below, then reconnect the charger while idle. A fresh StatusNotification must identify the physical connector. Heartbeats confirm the connection but do not confirm that a plug is available.</p>
+                    </div>
+                @endif
             </div>
         </x-filament::section>
     </div>
