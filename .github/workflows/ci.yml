@@ -65,6 +65,8 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate --force
       - run: composer audit
       - run: composer lint
+      - run: npm ci
+      - run: npm run build
       - run: composer test
       - name: Verify PostgreSQL migrations
         env:
@@ -74,8 +76,6 @@ jobs:
           DB_DATABASE: vtsa_test
           DB_USERNAME: vtsa
         run: php artisan migrate:fresh --force && php artisan migrate:status
-      - run: npm ci
-      - run: npm run build
 
   mobile:
     name: Flutter mobile
@@ -204,7 +204,10 @@ jobs:
           python scripts/integration_smoke.py
       - name: Stop isolated KYC integration services
         if: always()
-        run: docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml down --remove-orphans
+        run: |
+          if [[ -f .env ]]; then
+            docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml down --remove-orphans
+          fi
 
   containers:
     name: Container images

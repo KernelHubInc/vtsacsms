@@ -24,5 +24,5 @@ from app.main import app  # noqa: E402
 
 root = Path(__file__).resolve().parents[3]
 target = root / "packages/contracts/openapi/kyc.internal.v1.json"
-target.write_text(json.dumps(app.openapi(), indent=2, sort_keys=True) + "\n")
+target.write_bytes((json.dumps(app.openapi(), indent=2, sort_keys=True) + "\n").encode())
 print("Exported KYC internal v1 OpenAPI contract.")

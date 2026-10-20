@@ -294,7 +294,10 @@ void main() {
     await tester.enterText(find.byType(TextField), '1.00');
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-    expect(find.text('Enter an amount within the displayed limits.'), findsOneWidget);
+    expect(
+      find.text('Enter an amount within the displayed limits.'),
+      findsOneWidget,
+    );
     expect(repository.keys, isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
   });
