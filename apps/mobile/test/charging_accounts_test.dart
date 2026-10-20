@@ -506,7 +506,7 @@ void main() {
       router.pop();
       await tester.pumpAndSettle();
       expect(
-        find.textContaining('Funding and balance details'),
+        find.textContaining('cannot view the shared balance'),
         findsOneWidget,
       );
       expect(find.text('PHP 2.22'), findsNothing);
@@ -518,6 +518,9 @@ void main() {
         ),
         isEmpty,
       );
+      await tester.tap(find.text('Choose another account'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChargingAccountsScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

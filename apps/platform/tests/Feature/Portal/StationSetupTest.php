@@ -55,7 +55,9 @@ final class StationSetupTest extends TenantSecurityTestCase
                 'connected_at' => now(), 'last_event_at' => now(), 'last_seen_at' => now(),
             ]);
             Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])
-                ->assertSee('Operator instructions')->assertSee('Connected, waiting for a plug status');
+                ->assertSee('Guided station setup')->assertSee('Prepare the site')
+                ->assertSee('Next step')->assertSee('Operator instructions')
+                ->assertSee('Connected, waiting for a plug status');
             ConnectorStatus::query()->create([
                 'tenant_id' => $station->tenant_id, 'connector_id' => $connector->getKey(),
                 'status' => 'available', 'reported_status' => 'available', 'observed_at' => now(),

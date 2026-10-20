@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/consumer_shell.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
+import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_screens.dart';
@@ -137,8 +138,36 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
                     body: ListView(
                       children: [
                         ChargingAccountSelector(dependencies: dependencies),
-                        const Text(
-                          'Funding and balance details are available to the account owner and billing manager. You can review your approved charging budget before starting a session.',
+                        const SizedBox(height: 16),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.lock_outline, size: 28),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Shared wallet access is restricted',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Your ${dependencies.accounts!.selected!.roleLabel.toLowerCase()} role can charge with assigned vehicles, but cannot view the shared balance or payment history. Ask the account owner to grant billing access, or switch to an account whose wallet you can view.',
+                                ),
+                                const SizedBox(height: 16),
+                                VtsaButton(
+                                  label: 'Choose another account',
+                                  icon: Icons.swap_horiz,
+                                  variant: VtsaButtonVariant.secondary,
+                                  onPressed: () =>
+                                      context.push('/charging-accounts'),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
