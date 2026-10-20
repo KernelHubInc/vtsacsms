@@ -462,21 +462,27 @@ Route::prefix('v1')->middleware([
 
 Route::post('/v1/webhooks/aub/qrph', AubQrWebhookController::class)
     ->middleware('throttle:120,1')->name('api.v1.webhooks.aub.qrph');
-Route::prefix('v1/charging-accounts')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class, 'throttle:30,1'])->group(function (): void {
+Route::prefix('v1/charging-accounts')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class])->group(function (): void {
     $controller = ChargingAccountController::class;
-    Route::get('/', [$controller, 'index']);
-    Route::post('/', [$controller, 'store']);
-    Route::get('/invitations', [$controller, 'invitations']);
-    Route::post('/invitations/{invitation}/accept', [$controller, 'accept'])->whereUlid('invitation');
-    Route::get('/{account}/members', [$controller, 'members'])->whereUlid('account');
-    Route::patch('/{account}/members/{subject}', [$controller, 'member'])->whereUlid(['account', 'subject']);
-    Route::get('/{account}/invitations', [$controller, 'invitations'])->whereUlid('account');
-    Route::post('/{account}/invitations', [$controller, 'invite'])->whereUlid('account');
-    Route::delete('/{account}/invitations/{invitation}', [$controller, 'revoke'])->whereUlid(['account', 'invitation']);
-    Route::get('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assignments'])->whereUlid(['account', 'vehicle']);
-    Route::put('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assign'])->whereUlid(['account', 'vehicle']);
-    Route::get('/{account}/limits', [$controller, 'limits'])->whereUlid('account');
-    Route::put('/{account}/limits', [$controller, 'limit'])->whereUlid('account');
+    Route::middleware('throttle:120,1,charging-accounts-read:')->group(function () use ($controller): void {
+        Route::get('/', [$controller, 'index']);
+        Route::get('/invitations', [$controller, 'invitations']);
+        Route::get('/{account}/members', [$controller, 'members'])->whereUlid('account');
+        Route::get('/{account}/invitations', [$controller, 'invitations'])->whereUlid('account');
+        Route::get('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assignments'])->whereUlid(['account', 'vehicle']);
+        Route::get('/{account}/limits', [$controller, 'limits'])->whereUlid('account');
+    });
+    Route::middleware('throttle:30,1,charging-accounts-write:')->group(function () use ($controller): void {
+        Route::post('/', [$controller, 'store']);
+        Route::patch('/{account}', [$controller, 'update'])->whereUlid('account');
+        Route::delete('/{account}', [$controller, 'destroy'])->whereUlid('account');
+        Route::post('/invitations/{invitation}/accept', [$controller, 'accept'])->whereUlid('invitation');
+        Route::patch('/{account}/members/{subject}', [$controller, 'member'])->whereUlid(['account', 'subject']);
+        Route::post('/{account}/invitations', [$controller, 'invite'])->whereUlid('account');
+        Route::delete('/{account}/invitations/{invitation}', [$controller, 'revoke'])->whereUlid(['account', 'invitation']);
+        Route::put('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assign'])->whereUlid(['account', 'vehicle']);
+        Route::put('/{account}/limits', [$controller, 'limit'])->whereUlid('account');
+    });
 });
 Route::prefix('v1/wallet')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class, 'throttle:30,1'])->group(function (): void {
     $controller = WalletController::class;

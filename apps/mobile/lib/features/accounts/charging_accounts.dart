@@ -143,6 +143,16 @@ final class ChargingAccountsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void remove(String id) {
+    _generation++;
+    accounts = accounts.where((account) => account.id != id).toList();
+    if (selected?.id == id) {
+      selected = accounts.where((account) => account.personal).firstOrNull;
+    }
+    failure = null;
+    notifyListeners();
+  }
+
   void clear() {
     _generation++;
     accounts = const [];

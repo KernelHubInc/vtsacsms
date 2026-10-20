@@ -54,7 +54,11 @@ No shared-account role exposes a member's personal wallet or private garage. Mem
 
 You can own or join several accounts using one verified login. Use the actual radio control or tap an account row to select it. The current account is shown in Wallet, Activity and vehicle navigation; account selection is also available from those screens. Creating a Business/Fleet account selects the server-confirmed new account. Accepting an invitation loads and selects the joined account. Account choices remain available while supplementary details load.
 
-Switching accounts does not convert one type into another, move wallet funds, copy vehicles or reassign past sessions. A newly created account starts with its own empty garage and wallet. Personal is the default after a fresh sign-in/app initialization; the choice is not persisted as a financial preference. The UI does not support changing an existing account's type or transferring ownership.
+Switching accounts does not convert one type into another, move wallet funds, copy vehicles or reassign past sessions. A newly created account starts with its own empty garage and wallet. Personal is the default after a fresh sign-in/app initialization; the choice is not persisted as a financial preference. Owners can rename a shared account or change its Business/Fleet label. This does not transfer ownership, funds, vehicles or history.
+
+Owners may delete only a newly unused shared account. The server rejects deletion if another member, vehicle, wallet record, invitation or charging record still refers to it. Personal accounts cannot be edited or deleted. The app keeps the current account selected when deletion is rejected and shows the reason. Account detail reads use a separate rate limit from changes so switching between accounts does not consume the change budget.
+
+
 
 1. Sign in with an individual verified account. Account → Charging accounts creates/loads the personal account without moving its existing balance or vehicles.
 2. Choose Create business or fleet, enter an account name and select Business or Fleet. The creator becomes owner and the new account becomes selected. Personal profile settings remain separate.

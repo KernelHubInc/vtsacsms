@@ -121,6 +121,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
+                    "minLength": 2,
                     "maxLength": 160
                   },
                   "type": {
@@ -139,6 +140,76 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "description": "Charging account ULID in the current tenant",
+          "schema": { "type": "string" }
+        }
+      ],
+      "patch": {
+        "operationId": "updateChargingAccount",
+        "summary": "Rename or retype an owned business or fleet account",
+        "tags": ["Charging Accounts"],
+        "security": [{ "sanctumBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "minLength": 2, "maxLength": 160 },
+                  "type": { "type": "string", "enum": ["business", "fleet"] }
+                },
+                "required": ["name", "type"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated account",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": { "data": { "$ref": "#/components/schemas/ChargingAccount" } },
+              "required": ["data"]
+            } } }
+          },
+          "401": { "description": "Authentication required." },
+          "403": { "description": "Only the owner can edit; personal accounts are immutable." },
+          "404": { "description": "Unknown or inaccessible account." },
+          "422": { "description": "Invalid name or account type." },
+          "429": { "description": "Too many requests." }
+        }
+      },
+      "delete": {
+        "operationId": "deleteUnusedChargingAccount",
+        "summary": "Delete an unused owned business or fleet account",
+        "description": "Accounts with members, vehicles, wallet activity, invitations or charging history cannot be deleted.",
+        "tags": ["Charging Accounts"],
+        "security": [{ "sanctumBearer": [] }],
+        "responses": {
+          "200": {
+            "description": "Unused account deleted",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": { "data": { "type": "object", "properties": { "deleted": { "const": true } }, "required": ["deleted"] } },
+              "required": ["data"]
+            } } }
+          },
+          "401": { "description": "Authentication required." },
+          "403": { "description": "Only the owner can delete; personal accounts are immutable." },
+          "404": { "description": "Unknown or inaccessible account." },
+          "409": { "description": "Account has linked members or history and must be retained." },
+          "429": { "description": "Too many requests." }
         }
       }
     },

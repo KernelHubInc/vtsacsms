@@ -75,11 +75,13 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
       await action();
     } on Object catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error is AppFailure
-              ? error.message
-              : 'Could not complete this account request. Refresh and try again.',
-        );
+        final message = error is AppFailure
+            ? error.message
+            : 'Could not complete this account request. Refresh and try again.';
+        setState(() => _error = message);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -305,6 +307,24 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
                       ? account.description
                       : '${account.roleLabel}: ${chargingRoleDescription(account.role)}',
                 ),
+                if (!account.personal && account.role == 'owner') ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _busy ? null : () => _edit(account),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit account'),
+                      ),
+                      TextButton.icon(
+                        onPressed: _busy ? null : () => _delete(account),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Delete unused account'),
+                      ),
+                    ],
+                  ),
+                ],
                 if (!account.personal && account.role != 'revoked') ...[
                   const SizedBox(height: 12),
                   DriverNotice(
@@ -525,15 +545,21 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
         : MaterialLocalizations.of(context).formatShortDate(date.toLocal());
   }
 
-  Future<void> _create() async {
-    var name = '';
-    var type = 'business';
+  Future<({String name, String type})?> _accountForm({
+    ChargingAccount? account,
+  }) async {
+    var name = account?.name ?? '';
+    var type = account?.type ?? 'business';
     final form = GlobalKey<FormState>();
-    final result = await showDialog<bool>(
+    return showDialog<({String name, String type})>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => AlertDialog(
-          title: const Text('Create charging account'),
+          title: Text(
+            account == null
+                ? 'Create charging account'
+                : 'Edit charging account',
+          ),
           scrollable: true,
           content: Form(
             key: form,
@@ -541,10 +567,18 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextFormField(
+                  initialValue: name,
                   onChanged: (value) => name = value,
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Enter an account name.'
-                      : null,
+                  validator: (value) {
+                    final trimmed = value?.trim() ?? '';
+                    if (trimmed.length < 2) {
+                      return 'Use at least two characters.';
+                    }
+                    if (trimmed.length > 160) {
+                      return 'Use no more than 160 characters.';
+                    }
+                    return null;
+                  },
                   maxLength: 160,
                   decoration: const InputDecoration(labelText: 'Account name'),
                 ),
@@ -575,27 +609,35 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                if (form.currentState!.validate()) Navigator.pop(context, true);
+                if (form.currentState!.validate()) {
+                  Navigator.pop(context, (
+                    name: name.trim().replaceAll(RegExp(r'\s+'), ' '),
+                    type: type,
+                  ));
+                }
               },
-              child: const Text('Create'),
+              child: Text(account == null ? 'Create' : 'Save changes'),
             ),
           ],
         ),
       ),
     );
-    final text = name.trim();
-    if (result == true && mounted) {
+  }
+
+  Future<void> _create() async {
+    final result = await _accountForm();
+    if (result != null && mounted) {
       await _run(() async {
         final owner = controller.ownerId();
         final created = await controller.repository.request(
           '',
           method: 'POST',
-          data: {'name': text, 'type': type},
+          data: {'name': result.name, 'type': result.type},
         );
         if (!mounted || controller.ownerId() != owner) return;
         controller.addAndSelect(
@@ -604,6 +646,41 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
         await _details();
       });
     }
+  }
+
+  Future<void> _edit(ChargingAccount account) async {
+    final result = await _accountForm(account: account);
+    if (result == null || !mounted) return;
+    await _run(() async {
+      final saved = await controller.repository.request(
+        '/${account.id}',
+        method: 'PATCH',
+        data: {'name': result.name, 'type': result.type},
+      );
+      if (!mounted || controller.accountId != account.id) return;
+      controller.addAndSelect(
+        ChargingAccount.fromJson(Map<String, dynamic>.from(saved! as Map)),
+      );
+      await _details();
+    });
+  }
+
+  Future<void> _delete(ChargingAccount account) async {
+    final confirmed = await showVtsaConfirmationDialog(
+      context: context,
+      title: 'Delete ${account.name}?',
+      description:
+          'Only an unused account can be deleted. Accounts with members, vehicles, wallet activity, invitations or charging history must be kept. This does not delete your personal account.',
+      confirmLabel: 'Delete unused account',
+      dangerous: true,
+    );
+    if (!confirmed || !mounted) return;
+    await _run(() async {
+      await controller.repository.request('/${account.id}', method: 'DELETE');
+      if (!mounted) return;
+      controller.remove(account.id);
+      await _details();
+    });
   }
 
   Future<void> _invite() async {

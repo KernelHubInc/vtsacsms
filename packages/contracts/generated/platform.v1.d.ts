@@ -28,6 +28,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/charging-accounts/{account}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an unused owned business or fleet account
+         * @description Accounts with members, vehicles, wallet activity, invitations or charging history cannot be deleted.
+         */
+        delete: operations["deleteUnusedChargingAccount"];
+        options?: never;
+        head?: never;
+        /** Rename or retype an owned business or fleet account */
+        patch: operations["updateChargingAccount"];
+        trace?: never;
+    };
     "/api/v1/charging-accounts/invitations": {
         parameters: {
             query?: never;
@@ -2530,6 +2554,137 @@ export interface operations {
                 content?: never;
             };
             /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteUnusedChargingAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unused account deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            deleted: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the owner can delete; personal accounts are immutable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account has linked members or history and must be retained. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateChargingAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @enum {string} */
+                    type: "business" | "fleet";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccount"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the owner can edit; personal accounts are immutable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid name or account type. */
             422: {
                 headers: {
                     [name: string]: unknown;

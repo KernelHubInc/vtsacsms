@@ -33,6 +33,20 @@ final class ChargingAccountController extends Controller
         return $this->respond($this->accounts->present($user, $this->accounts->create($user, $request->validated('name'), $request->validated('type'))));
     }
 
+    public function update(ChargingAccountRequest $request, string $account): JsonResponse
+    {
+        $user = $this->user($request);
+
+        return $this->respond($this->accounts->present($user, $this->accounts->update($user, $account, $request->validated('name'), $request->validated('type'))));
+    }
+
+    public function destroy(Request $request, string $account): JsonResponse
+    {
+        $this->accounts->deleteUnused($this->user($request), $account);
+
+        return $this->respond(['deleted' => true]);
+    }
+
     public function members(Request $request, string $account): JsonResponse
     {
         return $this->respond($this->accounts->members($this->user($request), $account));

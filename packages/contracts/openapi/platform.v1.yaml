@@ -41,6 +41,8 @@ tags:
 paths:
   /api/v1/charging-accounts:
     $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts'
+  /api/v1/charging-accounts/{account}:
+    $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1{account}'
   /api/v1/charging-accounts/invitations:
     $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts~1invitations'
   /api/v1/charging-accounts/invitations/{invitation}/accept:

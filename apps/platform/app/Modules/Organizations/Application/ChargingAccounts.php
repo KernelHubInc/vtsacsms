@@ -17,6 +17,7 @@ use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Organizations\Domain\ScopeType;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -66,6 +67,46 @@ final readonly class ChargingAccounts
 
             return $account;
         });
+    }
+
+    public function update(User $user, string $id, string $name, string $type): Organization
+    {
+        return DB::transaction(function () use ($user, $id, $name, $type): Organization {
+            $account = $this->require($user, $id, lock: true);
+            abort_unless($account->owner_subject_id === $user->public_id && $account->charging_account_type !== 'personal', 403);
+            abort_unless(in_array($type, ['business', 'fleet'], true), 422);
+            $before = ['name' => $account->name, 'type' => $account->charging_account_type];
+            $account->update(['name' => $name, 'type' => $type, 'charging_account_type' => $type]);
+            $this->record('updated', $account, ['before' => $before, 'after' => ['name' => $name, 'type' => $type]]);
+
+            return $account;
+        });
+    }
+
+    public function deleteUnused(User $user, string $id): void
+    {
+        try {
+            DB::transaction(function () use ($user, $id): void {
+                $account = $this->require($user, $id, lock: true);
+                abort_unless($account->owner_subject_id === $user->public_id && $account->charging_account_type !== 'personal', 403);
+                $assignments = RoleAssignment::query()->where('scope_type', ScopeType::Organization)
+                    ->where('scope_id', $id)->with(['membership', 'role'])->lockForUpdate()->get();
+                abort_unless($assignments->count() === 1
+                    && $assignments->first()->membership->user_id === $user->getKey()
+                    && $assignments->first()->role->key === 'charging_account_owner', 409,
+                    'Remove members first. Accounts with past membership must be retained.');
+
+                // Database restrictions preserve accounts referenced by vehicles, funds, invitations or charging history.
+                $assignments->first()->delete();
+                $account->delete();
+                $this->record('deleted', $account, ['name' => $account->name, 'type' => $account->charging_account_type]);
+            });
+        } catch (QueryException $error) {
+            if (in_array($error->getCode(), ['23000', '23503'], true)) {
+                abort(409, 'This account has vehicles, funds, invitations or charging history. It can be edited but cannot be deleted.');
+            }
+            throw $error;
+        }
     }
 
     /** @return list<array<string, mixed>> */

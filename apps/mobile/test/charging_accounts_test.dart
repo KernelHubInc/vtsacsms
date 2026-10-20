@@ -43,6 +43,7 @@ class AccountRepositoryFake implements ChargingAccountRepository {
   Completer<List<ChargingAccount>>? pending;
   AppFailure? failure;
   AppFailure? inviteFailure;
+  AppFailure? deleteFailure;
   final requests = <String>[];
   final posted = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> invitations = [];
@@ -68,6 +69,34 @@ class AccountRepositoryFake implements ChargingAccountRepository {
         method == 'POST' &&
         inviteFailure != null) {
       throw inviteFailure!;
+    }
+    if (method == 'DELETE' && deleteFailure != null) throw deleteFailure!;
+    if (method == 'PATCH' &&
+        data != null &&
+        path.startsWith('/') &&
+        path.split('/').length == 2) {
+      final id = path.substring(1);
+      final current = accounts.where((account) => account.id == id).first;
+      final result = <String, dynamic>{
+        'id': id,
+        'name': data['name'],
+        'type': data['type'],
+        'role': current.role,
+        'permissions': current.permissions.toList(),
+      };
+      accounts = [
+        for (final account in accounts)
+          if (account.id == id) ChargingAccount.fromJson(result) else account,
+      ];
+      return result;
+    }
+    if (method == 'DELETE' &&
+        path.startsWith('/') &&
+        path.split('/').length == 2) {
+      accounts = accounts
+          .where((account) => account.id != path.substring(1))
+          .toList();
+      return {'deleted': true};
     }
     if (responses.containsKey(path)) return responses[path];
     if (path.isEmpty && method == 'POST') {
@@ -293,7 +322,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
-      expect(find.text('Enter an account name.'), findsOneWidget);
+      expect(find.text('Use at least two characters.'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField), 'New team');
       if (type == 'fleet') {
         await tester.tap(find.byType(DropdownButtonFormField<String>));
@@ -311,6 +340,84 @@ void main() {
       setup.dependencies.dispose();
     });
   }
+
+  testWidgets('owner can rename, retype, and delete only an unused account', (
+    tester,
+  ) async {
+    final repo = AccountRepositoryFake()
+      ..accounts = [
+        personal,
+        const ChargingAccount(
+          id: 'owned',
+          name: 'Old team',
+          type: 'business',
+          role: 'owner',
+          permissions: {'organizations.charging_accounts.view'},
+        ),
+      ];
+    final accounts = ChargingAccountsController(repo, ownerId: () => 'owner');
+    final setup = await buildTestDependencies(
+      signedIn: true,
+      accounts: accounts,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: VtsaTheme.light(),
+        home: ChargingAccountsScreen(dependencies: setup.dependencies),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final accountRadio = find.descendant(
+      of: find.byKey(const ValueKey('charging-account-owned')),
+      matching: find.byType(Radio<String>),
+    );
+    await tester.ensureVisible(accountRadio);
+    await tester.tap(accountRadio);
+    await tester.pumpAndSettle();
+    expect(accounts.accountId, 'owned');
+    await tester.scrollUntilVisible(find.text('Edit account'), 180);
+    await tester.tap(find.text('Edit account'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'A');
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least two characters.'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), '  New   fleet  ');
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fleet').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(accounts.selected?.name, 'New fleet');
+    expect(accounts.selected?.type, 'fleet');
+    expect(repo.requests, contains('PATCH /owned'));
+    expect(repo.posted.last, {'name': 'New fleet', 'type': 'fleet'});
+
+    repo.deleteFailure = const AppFailure(
+      kind: FailureKind.server,
+      message: 'This account has charging history.',
+    );
+    await tester.scrollUntilVisible(find.text('Delete unused account'), 180);
+    await tester.tap(find.text('Delete unused account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete unused account').last);
+    await tester.pumpAndSettle();
+    expect(accounts.accountId, 'owned');
+    expect(find.text('This account has charging history.'), findsOneWidget);
+
+    repo.deleteFailure = null;
+    await tester.scrollUntilVisible(find.text('Delete unused account'), 180);
+    await tester.tap(find.text('Delete unused account').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete unused account').last);
+    await tester.pumpAndSettle();
+    expect(accounts.accountId, 'personal');
+    expect(repo.accounts.map((item) => item.id), ['personal']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    setup.dependencies.dispose();
+  });
 
   testWidgets('accepting an invitation opens the joined account', (
     tester,

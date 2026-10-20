@@ -8,6 +8,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 final class ChargingAccountRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('name'))) {
+            $this->merge(['name' => preg_replace('/\s+/u', ' ', trim($this->input('name')))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -17,7 +24,7 @@ final class ChargingAccountRequest extends FormRequest
     public function rules(): array
     {
         return match ($this->route()?->getActionMethod()) {
-            'store' => ['name' => ['required', 'string', 'max:160'], 'type' => ['required', 'in:business,fleet']],
+            'store', 'update' => ['name' => ['required', 'string', 'min:2', 'max:160'], 'type' => ['required', 'in:business,fleet']],
             'invite' => ['email' => ['required', 'email', 'max:255'], 'role' => ['required', 'in:admin,billing_manager,fleet_manager,driver']],
             'member' => ['role' => ['present', 'nullable', 'in:admin,billing_manager,fleet_manager,driver']],
             'assign' => ['subject_id' => ['required', 'ulid'], 'assigned' => ['required', 'boolean']],

@@ -79,6 +79,65 @@ final class SharedChargingAccountsTest extends TenantSecurityTestCase
         self::assertSame(2, DB::table('memberships')->count());
     }
 
+    public function test_account_reads_have_a_separate_budget_from_account_changes_and_wallet(): void
+    {
+        $headers = $this->headers($this->owner);
+        for ($attempt = 0; $attempt < 35; $attempt++) {
+            $this->getJson('/api/v1/charging-accounts', $headers)->assertOk();
+        }
+        $this->getJson('/api/v1/wallet', $headers)->assertOk();
+        $this->postJson('/api/v1/charging-accounts', ['name' => '   ', 'type' => 'business'], $headers)->assertUnprocessable();
+    }
+
+    public function test_only_owner_can_edit_shared_account_name_and_type_with_validation(): void
+    {
+        $owner = $this->headers($this->owner);
+        $this->patchJson('/api/v1/charging-accounts/'.$this->account, ['name' => '  Lumina   Business  ', 'type' => 'business'], $owner)
+            ->assertOk()->assertJsonPath('data.name', 'Lumina Business')->assertJsonPath('data.type', 'business');
+        $this->assertDatabaseHas('organizations', ['id' => $this->account, 'name' => 'Lumina Business', 'type' => 'business', 'charging_account_type' => 'business']);
+        foreach ([['name' => ' ', 'type' => 'fleet'], ['name' => 'A', 'type' => 'fleet'], ['name' => 'Valid', 'type' => 'personal']] as $payload) {
+            $this->patchJson('/api/v1/charging-accounts/'.$this->account, $payload, $owner)->assertUnprocessable();
+        }
+        $personal = $this->withinTenant($this->tenant, $this->owner, fn () => (string) app(ChargingAccounts::class)->personal($this->owner)->getKey());
+        self::assertNotSame($this->account, $personal);
+        $this->patchJson('/api/v1/charging-accounts/'.$personal, ['name' => 'Changed', 'type' => 'business'], $owner)->assertForbidden();
+        $this->join($this->driver);
+        $driver = $this->headers($this->driver);
+        $this->patchJson('/api/v1/charging-accounts/'.$this->account, ['name' => 'Other', 'type' => 'fleet'], $driver)->assertForbidden();
+    }
+
+    public function test_unused_shared_account_can_be_deleted_but_related_history_and_members_block_deletion(): void
+    {
+        $owner = $this->headers($this->owner);
+        $unused = $this->postJson('/api/v1/charging-accounts', ['name' => 'Unused fleet', 'type' => 'fleet'], $owner)->assertOk()->json('data.id');
+        $this->deleteJson('/api/v1/charging-accounts/'.$unused, [], $owner)->assertOk()->assertJsonPath('data.deleted', true);
+        $this->assertDatabaseMissing('organizations', ['id' => $unused]);
+        $this->deleteJson('/api/v1/charging-accounts/'.$unused, [], $owner)->assertNotFound();
+
+        $this->join($this->driver);
+        $this->deleteJson('/api/v1/charging-accounts/'.$this->account, [], $owner)->assertConflict();
+        $this->assertDatabaseHas('organizations', ['id' => $this->account]);
+
+        $funded = $this->postJson('/api/v1/charging-accounts', ['name' => 'Funded business', 'type' => 'business'], $owner)->assertOk()->json('data.id');
+        $this->withinTenant($this->tenant, $this->owner, fn () => app(PrepaidWallet::class)->credit($this->owner->public_id, 'simulated', (string) Str::ulid(), 100, $funded));
+        $this->deleteJson('/api/v1/charging-accounts/'.$funded, [], $owner)->assertConflict();
+        $this->assertDatabaseHas('organizations', ['id' => $funded]);
+        $personal = $this->withinTenant($this->tenant, $this->owner, fn () => (string) app(ChargingAccounts::class)->personal($this->owner)->getKey());
+        $this->deleteJson('/api/v1/charging-accounts/'.$personal, [], $owner)->assertForbidden();
+    }
+
+    public function test_account_edit_and_delete_cannot_cross_tenants(): void
+    {
+        $other = $this->createTenant('other-account-tenant');
+        $this->withinTenant($other, $this->owner, fn () => $this->createMembership($other, $this->owner));
+        $headers = $this->headers($this->owner, tenant: $other);
+
+        $this->patchJson('/api/v1/charging-accounts/'.$this->account, ['name' => 'Wrong tenant', 'type' => 'fleet'], $headers)
+            ->assertNotFound();
+        $this->deleteJson('/api/v1/charging-accounts/'.$this->account, [], $headers)->assertNotFound();
+        $this->assertDatabaseHas('organizations', ['id' => $this->account, 'name' => 'Test fleet']);
+    }
+
     public function test_invitation_requires_verified_recipient_expires_and_cannot_be_reused(): void
     {
         $owner = $this->headers($this->owner);
