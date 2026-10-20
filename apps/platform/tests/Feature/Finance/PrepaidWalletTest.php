@@ -80,6 +80,7 @@ final class PrepaidWalletTest extends TenantSecurityTestCase
 
     public function test_wallet_api_requires_authentication_and_scopes_owner_tenant_and_book(): void
     {
+        $this->get('/api/v1/wallet')->assertUnauthorized()->assertJsonPath('error.code', 'UNAUTHENTICATED');
         $this->getJson('/api/v1/wallet')->assertUnauthorized();
         $tenant = $this->createTenant('api-wallet');
         $otherTenant = $this->createTenant('api-other');

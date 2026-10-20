@@ -22,9 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(AssignRequestContext::class);
         $middleware->trustProxies(at: '*');
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['ocpp_password']);
+        $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $_exception): bool => $request->is('api/*') || $request->expectsJson());
         $exceptions->render(function (InvalidSignatureException $exception, Request $request) {
             if (! $request->routeIs('api.v1.auth.email.verify')) {
                 return null;
