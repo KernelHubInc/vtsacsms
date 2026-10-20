@@ -12,9 +12,12 @@ use App\Modules\Integrations\Domain\MapProvider;
 use App\Modules\Integrations\Domain\MapSurface;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Payments\Application\Qr\TopupLimits;
+use App\Modules\Tenancy\Application\CurrentTenant;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Livewire\Attributes\Locked;
 use UnitEnum;
 
 final class SystemSettings extends Page
@@ -30,8 +33,19 @@ final class SystemSettings extends Page
     /** @var array<string, mixed> */
     public array $mapSettings = [];
 
-    public function mount(MapConfigurationResolver $maps): void
+    public string $topupMinimum = '';
+
+    public string $topupMaximum = '';
+
+    #[Locked]
+    public string $tenantId = '';
+
+    public function mount(MapConfigurationResolver $maps, TopupLimits $limits, CurrentTenant $tenant): void
     {
+        $this->tenantId = $tenant->get()->tenantId;
+        $amounts = $limits->current();
+        $this->topupMinimum = $this->money($amounts['minimum_minor']);
+        $this->topupMaximum = $this->money($amounts['maximum_minor']);
         $default = $maps->forSurface(MapSurface::Default);
         $raw = $maps->rawSettings() ?? [];
 
@@ -90,6 +104,39 @@ final class SystemSettings extends Page
             ->body('The provider cache was refreshed. Missing Google configuration will continue to fall back safely.')
             ->success()
             ->send();
+    }
+
+    public function saveTopupLimits(TopupLimits $limits, CurrentTenant $tenant): void
+    {
+        abort_unless($this->canManage(), 403);
+        abort_unless($this->tenantId === $tenant->get()->tenantId, 409);
+
+        $this->validate([
+            'topupMinimum' => ['required', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'],
+            'topupMaximum' => ['required', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'],
+        ]);
+
+        /** @var User $user */
+        $user = auth()->user();
+        $limits->update($user, $this->minor($this->topupMinimum), $this->minor($this->topupMaximum));
+
+        Notification::make()
+            ->title('Wallet top-up limits saved')
+            ->body('The mobile app will show the new range the next time Wallet refreshes. Existing requests keep their original amount.')
+            ->success()
+            ->send();
+    }
+
+    private function minor(string $amount): int
+    {
+        $parts = explode('.', $amount);
+
+        return (int) $parts[0] * 100 + (int) str_pad($parts[1] ?? '', 2, '0');
+    }
+
+    private function money(int $minor): string
+    {
+        return sprintf('%d.%02d', intdiv($minor, 100), $minor % 100);
     }
 
     public function canManage(): bool

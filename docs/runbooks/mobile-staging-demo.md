@@ -9,6 +9,22 @@ Every requested mobile release must return both links after verification:
 
 The demo URL points to the latest verified versioned APK and requires cache revalidation. Both downloads use the same staging build and backend; the demo link is not a separate simulated app.
 
+## Wallet cleanup — 1.0.25 / Android build 26
+
+Published on 2026-10-20. The [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.25.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200 with an 80,093,014-byte content length. The uploaded SHA256 matches the local signed build: `66f344bcaf9a5f6c451d5e881067f85b698af34436a09e88fbff74c14fcdc820`. It uses the same package and signing certificate as 1.0.24.
+
+Staging and production builds now hide simulated top-up actions. The Add money range still comes from the wallet API; the Android app does not encode a PHP 1 minimum. The backend change in [wallet top-up limits](wallet-topup-limits.md) adds an admin setting for the real-payment range. Until that backend change is deployed and an administrator saves an override, staging still uses its existing PHP 1 minimum and maximum. Historical PHP 1 orders keep their actual amounts. The QR save and GCash/Maya shortcuts from 1.0.24 remain included.
+
+All 211 Flutter tests, full Flutter analysis, the Android release build, signing check, uploaded checksum and public download responses passed. Gallery saving, external payment app launches and a real paid top-up still require physical-phone verification.
+
+## QR Ph one-phone payment flow — 1.0.24 / Android build 25
+
+Published on 2026-10-20. The [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.24.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) both returned HTTP 200 and the expected 80,093,014-byte content length. The uploaded file's SHA256 matched the local build: `1e59e25511a6de2d7e97820a48fea7faa1c6e57a165f7bcb62144425d137c8fb`. Package `com.vtsa.vtsa_mobile` uses versionCode 25 and the same staging signing certificate as 1.0.23.
+
+A live pending top-up now lets the driver save the AUB QR Ph code to Photos. After saving, Android offers shortcuts to open GCash or Maya if installed. The driver selects Scan/Upload QR in the payment app, reviews the merchant and amount, and authorizes there. The shortcut launches the app only; it cannot prefill or approve a QR Ph payment. On returning to Power Solutions, the existing status refresh checks AUB confirmation. The app never marks a top-up paid merely because an image was saved or a wallet app opened. Expired and non-live codes cannot be saved. This release adds the pinned `gal` 2.3.3 photo-saving dependency and Android app-visibility entries; it does not change backend APIs or payment verification.
+
+Verification: all 209 mobile tests and full Flutter analysis passed, and the Android release build and APK signature verified. The older `mobile_scanner` Kotlin Gradle migration warning remains. No Android device was attached to the build host, so gallery saving and both external-app launches still require a physical-phone acceptance check before relying on them for a paid top-up. iOS integration cannot be built on this Windows host.
+
 ## Station details layout — 1.0.21 / Android build 22
 
 Published on 2026-10-17. Both the [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.21.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200; complete downloaded bytes matched the SHA256 below. The demo alias was advanced only after the versioned download passed verification.

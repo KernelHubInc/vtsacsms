@@ -492,7 +492,6 @@ buildTestDependencies({
       inventory: true,
       maintenance: true,
       procurement: true,
-      demoMode: true,
       simulatedCharging: true,
       simulatedPayments: true,
     ),

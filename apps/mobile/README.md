@@ -85,3 +85,5 @@ Build 1.0.6 (7) uses `/api/v2/auth/register` and authenticated `/api/v1/vehicles
 ## Prepaid wallet testing build
 
 Build 1.0.7 (8) adds a Wallet screen backed by `/api/v1/wallet`: balances, activity, top-up requests and server-confirmed status. Its staging build enables simulated payments and keeps real payments disabled. Deploy the matching backend and wallet migration before testing. Simulated funds cannot pay for live charging; no payable QR is generated in simulation. See [prepaid wallet staging](../../docs/runbooks/prepaid-wallet-staging.md) for configuration and confirmation commands.
+
+Current staging builds use live QR Ph top-ups. The minimum and maximum amounts come from the backend wallet response and are enforced by the backend, so change the deployment's `WALLET_MINIMUM_MINOR` and `WALLET_MAXIMUM_MINOR` together rather than hard-coding a limit in Flutter. Simulated top-ups are exposed only in local builds with `FEATURE_SIMULATED_PAYMENTS=true`.

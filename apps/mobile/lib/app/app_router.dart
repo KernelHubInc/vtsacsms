@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/app/consumer_shell.dart';
+import 'package:vtsa_mobile/core/config/app_environment.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
@@ -180,6 +181,10 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
                     ),
                     repository: dependencies.walletRepository,
                     allowRealPayments: dependencies.featureFlags.realPayments,
+                    allowSimulatedPayments:
+                        dependencies.environment.name ==
+                            AppEnvironmentName.local &&
+                        dependencies.featureFlags.simulatedPayments,
                   ),
           ),
         ),

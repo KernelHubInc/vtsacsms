@@ -1,0 +1,9 @@
+# Wallet top-up limits
+
+The minimum and maximum for new QR Ph top-ups are tenant-scoped Payments settings. Administrators with **View system settings** and **Manage system settings** permissions can change them at **Admin → Platform governance → System settings → Wallet top-up limits**. Enter PHP amounts with at most two decimal places, then save. The minimum must be positive and no greater than the maximum; the maximum cannot exceed PHP 1,000,000.00.
+
+The mobile wallet reads the range from `GET /api/v1/wallet`, shows it in Add money, and checks the entered amount before submitting. The backend checks the same range again before creating an AUB order. Refresh Wallet after a policy change. Existing top-ups, credits, and payment records retain their original amounts. No mobile rebuild is needed to change a limit.
+
+The additive `wallet_topup_settings` migration creates no rows and leaves the current `WALLET_MINIMUM_MINOR` and `WALLET_MAXIMUM_MINOR` deployment values in effect until an authorized administrator saves a tenant override. Staging currently uses 100 minor units for both values, or PHP 1.00; choose the operational range in the portal before inviting drivers to make non-test top-ups. Every change writes a tenant audit event. To reverse a policy change, save the previous values in the portal; do not drop the settings table or rewrite payment history.
+
+Deployment order: back up the staging database, deploy the backend code, run the additive migration, verify the wallet summary and settings page, then configure the new range. The migration does not lock or backfill existing top-up rows. If the new code must be rolled back, the settings table can remain; the earlier code will use the deployment values, so align those values before rolling back. This policy is separate from charger tariffs and charging-session prices.

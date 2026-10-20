@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gal/gal.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/ids/ulid_generator.dart';
@@ -12,12 +15,14 @@ class WalletScreen extends StatefulWidget {
   const WalletScreen({
     required this.repository,
     this.allowRealPayments = false,
+    this.allowSimulatedPayments = false,
     this.accountName,
     this.accountSelector,
     super.key,
   });
   final WalletRepository? repository;
   final bool allowRealPayments;
+  final bool allowSimulatedPayments;
   final String? accountName;
   final Widget? accountSelector;
   @override
@@ -58,7 +63,9 @@ class _WalletScreenState extends State<WalletScreen> {
       if (!mounted) return;
       setState(() {
         _wallet = results[0];
-        if (_wallet!['book'] == 'live' && !widget.allowRealPayments) {
+        if ((_wallet!['book'] == 'live' && !widget.allowRealPayments) ||
+            (_wallet!['book'] == 'simulated' &&
+                !widget.allowSimulatedPayments)) {
           _wallet!['topups_enabled'] = false;
         }
         _orders = _items(results[1]);
@@ -186,22 +193,26 @@ class _WalletScreenState extends State<WalletScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                wallet['mode'] == 'simulated'
+                wallet['mode'] == 'simulated' && !widget.allowSimulatedPayments
+                    ? 'Top-ups are unavailable while this wallet is in test mode.'
+                    : wallet['mode'] == 'simulated'
                     ? 'Practice top-ups use simulated funds. They cannot pay for charging.'
                     : wallet['topups_enabled'] == true
                     ? 'Add prepaid credit with QR Ph. Your balance updates after payment confirmation.'
                     : 'Top-ups are not available yet. Your existing balance and history remain available.',
               ),
               const SizedBox(height: 16),
-              VtsaButton(
-                label: wallet['mode'] == 'simulated'
-                    ? 'Create test top-up'
-                    : 'Add money',
-                onPressed: wallet['topups_enabled'] == true && !_loading
-                    ? _add
-                    : null,
-                icon: Icons.add,
-              ),
+              if (wallet['mode'] != 'simulated' ||
+                  widget.allowSimulatedPayments)
+                VtsaButton(
+                  label: wallet['mode'] == 'simulated'
+                      ? 'Create test top-up'
+                      : 'Add money',
+                  onPressed: wallet['topups_enabled'] == true && !_loading
+                      ? _add
+                      : null,
+                  icon: Icons.add,
+                ),
               const SizedBox(height: 28),
               Wrap(
                 spacing: 8,
@@ -383,10 +394,19 @@ class WalletTopupScreen extends StatefulWidget {
   const WalletTopupScreen({
     required this.repository,
     required this.initial,
+    this.saveQrImage,
+    this.renderQrImage,
     super.key,
   });
   final WalletRepository repository;
   final Map<String, dynamic> initial;
+  final Future<void> Function(Uint8List bytes, String name)? saveQrImage;
+  final Future<Uint8List> Function(
+    String content,
+    int amountMinor,
+    String expiresAt,
+  )?
+  renderQrImage;
   @override
   State<WalletTopupScreen> createState() => _WalletTopupScreenState();
 }
@@ -396,7 +416,12 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
   late Map<String, dynamic> _row;
   Timer? _timer;
   bool _busy = false;
+  bool _savingQr = false;
+  bool _qrSaved = false;
   String? _error;
+  static const _paymentApps = MethodChannel(
+    'com.vtsa.vtsa_mobile/payment_apps',
+  );
   @override
   void initState() {
     super.initState();
@@ -445,6 +470,84 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
       if (mounted) setState(() => _error = _message(error));
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveQr() async {
+    final expiry = DateTime.tryParse(_row['expires_at'] as String? ?? '');
+    if (_savingQr ||
+        _row['status'] != 'pending' ||
+        _row['mode'] != 'live' ||
+        expiry == null ||
+        !expiry.isAfter(DateTime.now())) {
+      return;
+    }
+
+    setState(() => _savingQr = true);
+    try {
+      final bytes = await (widget.renderQrImage ?? _paymentQrImage)(
+        _row['qr_content'] as String,
+        _row['amount_minor'] as int,
+        _row['expires_at'] as String,
+      );
+      final name = 'Power-Solutions-QRPh-${_row['id']}';
+      if (widget.saveQrImage case final save?) {
+        await save(bytes, name);
+      } else {
+        if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
+          throw const _QrSaveDenied();
+        }
+        await Gal.putImageBytes(bytes, name: name);
+      }
+      if (mounted) {
+        setState(() => _qrSaved = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('QR saved to Photos. Import it in your payment app.'),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        final message =
+            error is _QrSaveDenied ||
+                (error is GalException &&
+                    error.type == GalExceptionType.accessDenied)
+            ? 'Allow photo access to save the QR, or scan it with another device.'
+            : 'Could not save the QR. Please try again or scan it with another device.';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } finally {
+      if (mounted) setState(() => _savingQr = false);
+    }
+  }
+
+  Future<void> _openPaymentApp(String packageName, String appName) async {
+    try {
+      final opened = await _paymentApps.invokeMethod<bool>('open', {
+        'package': packageName,
+      });
+      if (mounted && opened != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$appName is not installed. Open another wallet and import the saved QR.',
+            ),
+          ),
+        );
+      }
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open the payment app. Open your wallet and import the saved QR.',
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -549,6 +652,15 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
                       ],
                     ),
                     const SizedBox(height: 12),
+                    Text(
+                      walletMoney(_row['amount_minor'] as int),
+                      style: const TextStyle(
+                        color: Color(0xFF15386A),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     QrImageView(
                       data: qr,
                       size: 260,
@@ -560,20 +672,60 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
                       'Pay through your bank or e-wallet',
                       style: TextStyle(color: Color(0xFF435665), fontSize: 12),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Expires ${_date(_row['expires_at'] as String?)} · Use once',
+                      style: const TextStyle(
+                        color: Color(0xFF435665),
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '1. Scan this QR using a supported bank or wallet app.\n2. Check the merchant and amount before paying.\n3. Return here and wait for confirmation.',
+            OutlinedButton.icon(
+              onPressed: _savingQr ? null : _saveQr,
+              icon: _savingQr
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined),
+              label: const Text('Save QR to Photos'),
             ),
+            if (_qrSaved &&
+                defaultTargetPlatform == TargetPlatform.android) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        _openPaymentApp('com.globe.gcash.android', 'GCash'),
+                    child: const Text('Open GCash'),
+                  ),
+                  TextButton(
+                    onPressed: () => _openPaymentApp('com.paymaya', 'Maya'),
+                    child: const Text('Open Maya'),
+                  ),
+                ],
+              ),
+              const Text(
+                'Opening a wallet does not load or pay the QR. Use its Scan or Upload QR option to select the saved image.',
+              ),
+            ],
             const SizedBox(height: 12),
             const Text(
-              'Using one phone? Take a screenshot and import it in your payment app if supported. A screenshot does not confirm payment.',
+              'Using this phone? Save the QR, open your bank or e-wallet, then choose Scan or Upload QR and select the saved image. Check the merchant and amount before approving payment. Return here for confirmation.',
             ),
             const SizedBox(height: 8),
-            Text('Expires ${_date(_row['expires_at'] as String?)}'),
+            const Text(
+              'If your payment app cannot import an image, scan this code with another phone. Saving a QR does not pay it.',
+            ),
           ] else if (status != 'paid')
             const Text(
               'Do not pay an expired code. If money has already been deducted, keep this reference and wait for confirmation before trying again.',
@@ -602,6 +754,62 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
       ),
     );
   }
+}
+
+class _QrSaveDenied implements Exception {
+  const _QrSaveDenied();
+}
+
+Future<Uint8List> _paymentQrImage(
+  String content,
+  int amountMinor,
+  String expiresAt,
+) async {
+  const width = 1080.0;
+  const height = 1280.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.drawRect(
+    const Rect.fromLTWH(0, 0, width, height),
+    Paint()..color = Colors.white,
+  );
+
+  void label(String text, double y, double fontSize, FontWeight weight) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: const Color(0xFF15386A),
+          fontSize: fontSize,
+          fontWeight: weight,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: 900);
+    painter.paint(canvas, Offset((width - painter.width) / 2, y));
+    painter.dispose();
+  }
+
+  label('Power Solutions · QR Ph', 45, 42, FontWeight.w700);
+  label(walletMoney(amountMinor), 105, 36, FontWeight.w600);
+  canvas.save();
+  canvas.translate(90, 190);
+  QrPainter(
+    data: content,
+    version: QrVersions.auto,
+    gapless: true,
+  ).paint(canvas, const Size(900, 900));
+  canvas.restore();
+  label('Expires ${_date(expiresAt)} · Use once', 1140, 28, FontWeight.w500);
+
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width.toInt(), height.toInt());
+  picture.dispose();
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  if (data == null) throw StateError('Payment QR could not be saved.');
+  return data.buffer.asUint8List();
 }
 
 List<Map<String, dynamic>> _items(Map<String, dynamic> value) =>

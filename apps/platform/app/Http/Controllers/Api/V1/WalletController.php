@@ -12,13 +12,14 @@ use App\Modules\Organizations\Application\ChargingAccounts;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Payments\Application\Qr\QrAvailability;
 use App\Modules\Payments\Application\Qr\QrTopups;
+use App\Modules\Payments\Application\Qr\TopupLimits;
 use App\Modules\Payments\Domain\Models\QrTopup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class WalletController extends Controller
 {
-    public function __construct(private readonly PrepaidWallet $wallet, private readonly QrAvailability $availability, private readonly QrTopups $topups) {}
+    public function __construct(private readonly PrepaidWallet $wallet, private readonly QrAvailability $availability, private readonly QrTopups $topups, private readonly TopupLimits $limits) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -26,8 +27,7 @@ final class WalletController extends Controller
         $account = $this->account($request, PermissionKey::ChargingWalletView);
         $book = $mode === 'simulated' ? 'simulated' : 'live';
         $data = $this->wallet->summary($this->subject($request), $book, $account);
-        $data += ['mode' => $mode, 'book' => $book, 'topups_enabled' => $mode !== 'disabled',
-            'minimum_minor' => (int) config('wallet.minimum_minor'), 'maximum_minor' => (int) config('wallet.maximum_minor')];
+        $data += ['mode' => $mode, 'book' => $book, 'topups_enabled' => $mode !== 'disabled', ...$this->limits->current()];
         $data['history'] = $this->wallet->history($this->subject($request), $book, $account);
         if ($account !== null) {
             $data['topups_enabled'] = $data['topups_enabled'] && app(ChargingAccounts::class)->can($request->user(), $account, PermissionKey::ChargingWalletFund);

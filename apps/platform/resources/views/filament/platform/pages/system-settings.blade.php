@@ -1,4 +1,30 @@
 <x-filament-panels::page>
+    <form wire:submit="saveTopupLimits" class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
+        <div class="border-b border-gray-200 p-5 dark:border-white/10">
+            <h2 class="font-semibold">Wallet top-up limits</h2>
+            <p class="mt-1 max-w-3xl text-sm text-gray-500">Set the amount customers can add using QR Ph. These limits apply to new requests in this tenant. The mobile app reads them from the backend, and existing payments keep their original amounts.</p>
+        </div>
+        <div class="grid gap-4 p-5 sm:grid-cols-2">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Minimum top-up (PHP)
+                <input wire:model.blur="topupMinimum" type="text" inputmode="decimal" autocomplete="off" @disabled(!$this->canManage()) class="mt-1 block w-full rounded-xl border-gray-300 dark:border-white/10 dark:bg-gray-950">
+                @error('topupMinimum')<span role="alert" class="mt-1 block text-xs text-danger-600">{{ $message }}</span>@enderror
+            </label>
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                Maximum top-up (PHP)
+                <input wire:model.blur="topupMaximum" type="text" inputmode="decimal" autocomplete="off" @disabled(!$this->canManage()) class="mt-1 block w-full rounded-xl border-gray-300 dark:border-white/10 dark:bg-gray-950">
+                @error('topupMaximum')<span role="alert" class="mt-1 block text-xs text-danger-600">{{ $message }}</span>@enderror
+            </label>
+        </div>
+        @if ($this->canManage())
+            <div class="flex justify-end border-t border-gray-200 px-5 py-4 dark:border-white/10">
+                <button type="submit" wire:loading.attr="disabled" class="rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50">Save top-up limits</button>
+            </div>
+        @else
+            <div class="border-t border-gray-200 px-5 py-4 text-sm text-gray-500 dark:border-white/10">You can view these limits but do not have permission to change them.</div>
+        @endif
+    </form>
+
     <form wire:submit="saveMapSettings" class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
         <div class="border-b border-gray-200 p-5 dark:border-white/10">
             <div class="flex flex-wrap items-start justify-between gap-4">

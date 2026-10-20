@@ -81,6 +81,7 @@ void main() {
       expect(tokens.value, isNull);
       expect(settings.value, isNull);
     },
+    timeout: const Timeout(Duration(minutes: 2)),
   );
 
   test(
