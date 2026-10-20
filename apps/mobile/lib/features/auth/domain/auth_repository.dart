@@ -6,13 +6,25 @@ abstract interface class AuthRepository {
     required String email,
     required String password,
   });
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
   });
   Future<void> requestPasswordReset(String email);
   Future<void> resendEmailVerification();
   Future<UserProfile> currentUser();
   Future<void> logout();
+}
+
+final class RegistrationResult {
+  const RegistrationResult({required this.verificationEmailSent});
+
+  final bool verificationEmailSent;
 }

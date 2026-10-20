@@ -32,6 +32,7 @@ use LogicException;
  * @property string|null $site_id
  * @property string|null $connector_id
  * @property string $timezone
+ * @property string $time_basis
  * @property CarbonImmutable|null $published_at
  * @property string|null $published_by
  * @property Tariff $tariff

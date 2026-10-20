@@ -3,6 +3,8 @@
 **Status:** Normative architecture baseline  
 **Rule:** A durable concept has exactly one context authorized to change it.
 
+The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composition of authorized Locations/Assets, Charging connection and session facts, posted Billing prepaid credits, session Payments and Maintenance work orders. It never writes these sources. Location lists intersect resource-specific permission scopes through `AccessibleSitesQuery`; wallet funding is tenant-wide and requires tenant-wide Reporting and Payment permissions. Metric semantics and operational limits are defined in `docs/runbooks/monitoring-dashboard.md`.
+
 ## 1. Ownership Rules
 
 1. The owning context defines the concept's invariants, schema, lifecycle, write API, and emitted facts.
@@ -35,10 +37,10 @@
 | **Tenancy** | Tenant lifecycle, entitlements, tenant policy defaults, locale/default settings | Identity actor for audit, commercial subscription reference if later adopted | Organization hierarchy, users' credentials, tenant business records |
 | **Organizations** | Organization hierarchy, memberships, role assignments, teams, delegated scopes | Identity subject, tenant lifecycle/entitlements | Login credentials, locations, business transaction data |
 | **Locations** | Site/address, geometry, timezone, access/hours, amenities, publication state | Owning organization, asset/public availability projections | Charger identity/configuration, live connector state, tariffs |
-| **Assets** | Charger/EVSE/connector/component identity and hierarchy, capabilities, serial/model, commissioning, location/custody history, lifecycle/operational state | Location, organization, Inventory serial handoff, Maintenance recommendations | Live connections, sessions, work orders, stock balances |
+| **Assets** | Tenant/subject-scoped driver garages and vehicle compatibility, charger/EVSE/connector/component identity and hierarchy, capabilities, serial/model, commissioning, location/custody history, lifecycle/operational state | Location, organization, Inventory serial handoff, Maintenance recommendations | Live connections, sessions, work orders, stock balances |
 | **Charging** | Connection/status projection, charging authorization, protocol-normalized readings, connector reservations, commands, sessions, anomaly review, immutable CDR evidence | Identity/organization access, Assets capabilities/state, tariff eligibility/version/snapshot, payment authorization outcome | Asset lifecycle, tariff definitions, provider payments, invoices |
 | **Tariffs** | Tariff, immutable published versions/components/discounts, applicability, schedules, effective periods, deterministic rating semantics and breakdown | Location/asset/org applicability | Sessions, CDRs, invoices, payments, tax registration facts |
-| **Payments** | Provider/customer/token references, payment intent/attempt, authorization/capture/refund/dispute state, webhook receipt evidence | Payer identity, billable reference, currency/amount request | Raw PAN/CVV, invoice numbering, payout allocation |
+| **Payments** | Provider/customer/token references, payment intent/attempt, authorization/capture/refund/dispute state, webhook receipt evidence, tenant wallet top-up amount limits | Payer identity, billable reference, currency/amount request | Raw PAN/CVV, invoice numbering, payout allocation |
 | **Billing** | Rated charge, account balance entries, invoice/receipt/credit note, document numbering after market rules | Session final facts, tariff version/calculation, payment allocation/reference, organization seller/buyer snapshot | Payment execution, tariff definitions, tax registration source until defined |
 | **Settlements** | Provider report/import, reconciliation match/exception, fee/payout evidence, beneficiary allocation and statement | Payments/refunds/disputes, Billing records, organization/commercial rule snapshot | Provider payment execution, bank credentials, source invoice/session edits |
 | **Procurement** | Supplier, requisition, approval, purchase order/revision, expected receipt/return | Organization, requester/approver identity, item references, warehouse destination | On-hand stock, stock ledger, supplier banking credentials unless separately designed |
@@ -75,7 +77,10 @@
 
 ### Identity, Organizations, and Tenancy
 
+- Identity owns `identity_charger_credentials`; Assets owns station identity/version/lifecycle. `GatewayStationQuery`, `GatewayTenantQuery` and `ChargerCredentials` compose the versioned OCPP authentication query without cross-context writes (ADR 0023). Admin provisioning is an explicit transaction; secrets are excluded from events and asset audit snapshots.
+
 - Identity proves who/what authenticated.
+- Identity also owns tenant-scoped KYC lifecycle, consent, review and eligibility through `KycService` / `KycEligibility`. The isolated Python processor owns encrypted evidence and processing/outbox records, never core status tables (ADR 0017). Charging and Payments use the eligibility contract; the future wallet workflow must do the same.
 - Organizations determines what a tenant member may do and where, using Identity subject IDs.
 - Tenancy determines whether the tenant/capability is active. Neither Organizations nor Tenancy stores passwords/authenticators.
 
@@ -168,3 +173,38 @@ Cross-context references use tenant-owned ULIDs and are revalidated inside the t
 - Maintenance dashboard queries combine owned evidence and read-only Inventory movements. They do not become an authoritative stock, asset, or Charging projection.
 
 ADR 0013 makes these directions durable. Cross-context calls stay narrow and local in the modular monolith; no external network call occurs inside their database transaction.
+
+## KYC review policy
+
+Identity owns tenant-scoped `kyc_settings` and the immutable-per-attempt `kyc_verifications.review_mode` and `assurance_profile` snapshots. The processor owns evidence, encrypted expiring live-challenge state and computed checks; it cannot change administrative review policy or core identity eligibility. Only the reference selfie is retained; other camera frames and face features are transient processing data, not a biometric-template database. See [ADR 0019](decisions/0019-optical-kyc-and-live-capture.md).
+
+### Prepaid balances (ADR-0022)
+
+Payments owns `qr_topups`, provider confirmation and QR Ph protocols. Billing owns `prepaid_accounts`, immutable `prepaid_entries`, reservations and financial postings through `PrepaidWallet`. Simulated funds never post to accounting exports. Identity retains KYC eligibility. No cross-context model writes.
+
+
+### URL-only registered chargers (ADR 0024)
+
+The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).
+
+## Prepaid mobile charging (ADR 0026)
+
+Charging owns customer quotes, session ownership, idempotency guards and their payment projection. It requests wallet reservation and settlement only through Billing's `PrepaidWallet` application contract; Charging does not write wallet or ledger tables. Tariffs owns append-only version applicability endings and immutable price snapshots. Assets supplies public connector and pricing-scope queries; Locations supplies site-scope options. These contracts are tenant-scoped. Payments continues to own verified AUB credits independently of charging settlement.
+
+## Shared customer accounts (ADR 0027)
+
+Organizations owns charging-account metadata and exact organization-scoped roles through `ChargingAccounts`; Identity owns verified recipient invitations through `ChargingAccountInvitations`. Assets extends its existing garages/vehicles and owns driver assignments through `DriverVehicles`. Billing owns shared prepaid balances and per-session caps. Payments freezes the top-up destination; Charging freezes driver/account/vehicle/payer attribution and asks Billing to settle that original wallet. Personal subject ownership is retained without moving balances or historical rows. Account selection does not change tenant, operator or OCPP identity. See [ADR 0027](decisions/0027-shared-charging-accounts.md) and the [role/release runbook](../runbooks/shared-charging-accounts.md).
+
+### Network deletion preflight
+
+`Reporting\Application\NetworkReferencesQuery` is a read-only cross-context deletion preflight for tenant-owned network identifiers. It checks current schema columns for location, equipment, generic asset, delegated scope, and target references, including references without foreign keys. Audit records are retained and do not themselves prevent deleting an unused draft. Assets and Locations remain the only writers through `DeleteDraftAsset` and `DeleteUnusedLocation`; no dependent context records are cascaded or rewritten. This preflight runs only on an authorized deletion, never in a list-render loop. Operational and financial records remain protected.
+
+### Station setup and publication (October 2026)
+
+`ProvisionChargingEquipment` owns audited, authorized EVSE/connector creation in
+Assets; `ConfigureSiteAccess` owns operating schedules and site publication in
+Locations. `StationSetupQuery` is an authorized, read-only Reporting composition
+of the asset/location hierarchy, existing Charging presence queries and Tariffs
+selection. It never writes observations or financial records. Filament actions
+use these owning-context workflows; configuration does not synthesize device
+connectivity, availability or a completed session.

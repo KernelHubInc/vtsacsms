@@ -1,0 +1,62 @@
+name: ${DATABASE_COMPOSE_PROJECT_NAME:-vtsa-csms-database}
+
+x-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: vtsa_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      VTSA_APP_USER: ${POSTGRES_APP_USER:-vtsa_app}
+      VTSA_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}
+      VTSA_PRODUCTION_DATABASE: ${POSTGRES_PRODUCTION_DATABASE:-vtsa_production}
+      VTSA_STAGING_DATABASE: ${POSTGRES_STAGING_DATABASE:-vtsa_staging}
+      TZ: UTC
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/provision-vtsa-databases.sh:/docker-entrypoint-initdb.d/10-provision-vtsa-databases.sh:ro
+      - ./postgres/provision-vtsa-databases.sh:/opt/vtsa/provision-vtsa-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vtsa_admin -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+    networks: [database]
+    logging: *json-logging
+
+  adminer:
+    image: adminer:6.0.1-standalone
+    profiles: [local-tools]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8080) ? 0 : 1);"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks: [database]
+    logging: *json-logging
+
+volumes:
+  postgres-data:
+
+networks:
+  database:
+    name: ${POSTGRES_DOCKER_NETWORK:-vtsa-database}

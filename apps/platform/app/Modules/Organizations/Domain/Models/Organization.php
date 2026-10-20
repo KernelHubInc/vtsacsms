@@ -34,6 +34,9 @@ final class Organization extends Model
         'name',
         'code',
         'is_active',
+        'charging_account_type',
+        'owner_subject_id',
+        'personal_subject_id',
     ];
 
     protected function casts(): array

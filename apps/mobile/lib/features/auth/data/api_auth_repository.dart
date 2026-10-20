@@ -59,22 +59,39 @@ final class ApiAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
   }) async {
     try {
-      await _client.dio.post<void>(
-        '/api/v1/auth/register',
+      final response = await _client.dio.post<Map<String, dynamic>>(
+        '/api/v2/auth/register',
         data: {
           'name': name.trim(),
           'email': email.trim().toLowerCase(),
           'password': password,
           'password_confirmation': password,
+          if (firstName != null) 'first_name': firstName.trim(),
+          if (middleName != null) 'middle_name': middleName.trim(),
+          if (lastName != null) 'last_name': lastName.trim(),
+          'birth_date': ?birthDate,
+          'plate_pending': platePending,
+          if (!platePending && plateNumber != null)
+            'plate_number': plateNumber.trim().toUpperCase(),
           if (_environment.hasTenant) 'tenant_id': _environment.defaultTenantId,
         },
         options: Options(extra: {'anonymous': true}),
+      );
+      final data = response.data?['data'] as Map<String, dynamic>?;
+      return RegistrationResult(
+        verificationEmailSent: data?['verification_email_sent'] != false,
       );
     } on Object catch (error) {
       ApiClient.throwFailure(error);

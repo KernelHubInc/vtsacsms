@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,8 +12,11 @@ import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/platform/platform_services.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/data/api_auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/data/device_authenticator.dart';
+import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
 import 'package:vtsa_mobile/features/charging/application/charging_controller.dart';
 import 'package:vtsa_mobile/features/charging/data/active_session_store.dart';
@@ -23,9 +28,13 @@ import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/application/favorites_controller.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
 import 'package:vtsa_mobile/features/favorites/domain/favorites_repository.dart';
+import 'package:vtsa_mobile/features/kyc/data/api_kyc_repository.dart';
+import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/application/vehicles_controller.dart';
+import 'package:vtsa_mobile/features/vehicles/data/api_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle_repository.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 final class AppDependencies {
   AppDependencies({
@@ -44,6 +53,9 @@ final class AppDependencies {
     required this.crashReporting,
     required this.pushRegistration,
     required this.featureFlags,
+    this.kycRepository,
+    this.walletRepository,
+    this.accounts,
   });
 
   factory AppDependencies.fromParts({
@@ -60,6 +72,9 @@ final class AppDependencies {
     DirectionsService directions = const _UnavailableDirectionsService(),
     DeviceLocationService location = const UnavailableDeviceLocationService(),
     FeatureFlags featureFlags = const FeatureFlags.fromDefines(),
+    KycRepository? kycRepository,
+    WalletRepository? walletRepository,
+    ChargingAccountsController? accounts,
   }) {
     late final AuthController auth;
     String ownerId() =>
@@ -74,10 +89,38 @@ final class AppDependencies {
       network: network,
       push: push,
       ownerId: ownerId,
-      isAuthenticated: () => auth.status == AuthStatus.authenticated,
+      isAuthenticated: () =>
+          auth.status == AuthStatus.authenticated &&
+          !auth.needsEmailVerification,
     );
+    String? lastOwner;
+    var lastVerified = false;
+    auth.addListener(() {
+      if (auth.status == AuthStatus.guest) {
+        accounts?.clear();
+        final previous = lastOwner;
+        lastOwner = null;
+        lastVerified = false;
+        if (previous != null) {
+          unawaited(charging.onSignedOut(ownerId: previous));
+        }
+      } else if (auth.status == AuthStatus.authenticated && auth.user != null) {
+        final current = ownerId();
+        if (lastOwner != null && lastOwner != current) {
+          unawaited(charging.onSignedOut(ownerId: lastOwner));
+        }
+        final changed = lastOwner != current;
+        if (changed) accounts?.clear();
+        lastOwner = current;
+        final verified = !auth.needsEmailVerification;
+        if ((changed || !lastVerified) && verified && accounts != null) {
+          unawaited(accounts.load());
+        }
+        lastVerified = verified;
+      }
+    });
 
-    return AppDependencies(
+    final dependencies = AppDependencies(
       environment: environment,
       bootstrap: BootstrapController(preferences),
       auth: auth,
@@ -89,7 +132,9 @@ final class AppDependencies {
       ),
       vehicles: VehiclesController(
         repository: vehicleRepository,
-        ownerId: ownerId,
+        ownerId: () => accounts?.shared == true
+            ? '${ownerId()}:${accounts!.accountId}'
+            : ownerId(),
       ),
       network: network,
       directions: directions,
@@ -99,7 +144,31 @@ final class AppDependencies {
       crashReporting: const NoopCrashReportingService(),
       pushRegistration: push,
       featureFlags: featureFlags,
+      kycRepository: kycRepository,
+      walletRepository: walletRepository,
+      accounts: accounts,
     );
+    String? selectedAccount;
+    String? selectedPermissions;
+    accounts?.addListener(() {
+      final permissions =
+          (accounts.selected?.permissions.toList() ?? <String>[])..sort();
+      final scope = permissions.join(',');
+      if (accounts.accountId == selectedAccount &&
+          scope == selectedPermissions) {
+        return;
+      }
+      final hadSelection = selectedAccount != null;
+      selectedAccount = accounts.accountId;
+      selectedPermissions = scope;
+      // Initial personal selection must not invalidate active-session restoration.
+      if (hadSelection) charging.onChargingAccountChanged();
+      if (auth.status == AuthStatus.authenticated &&
+          !auth.needsEmailVerification) {
+        unawaited(dependencies.vehicles.load());
+      }
+    });
+    return dependencies;
   }
 
   static Future<AppDependencies> create() async {
@@ -107,8 +176,15 @@ final class AppDependencies {
     final preferences = await SharedPreferences.getInstance();
     const secureStorage = FlutterSecureStorage(
       aOptions: AndroidOptions(storageNamespace: 'vtsa_auth'),
+      iOptions: IOSOptions(
+        accessibility: KeychainAccessibility.unlocked_this_device,
+      ),
     );
-    final tokens = SecureTokenStore(secureStorage);
+    final tokens = QuickUnlockStore(
+      tokens: SecureTokenStore(secureStorage),
+      settings: SecureUnlockSettingsStore(secureStorage),
+      device: NativeDeviceAuthenticator(),
+    );
     final client = ApiClient(
       baseUrl: localEnvironment.apiBaseUrl,
       tokenStore: tokens,
@@ -117,7 +193,12 @@ final class AppDependencies {
       await MapConfigurationRepository(client).resolve(localEnvironment.maps),
     );
 
-    return AppDependencies.fromParts(
+    late final AppDependencies dependencies;
+    final accounts = ChargingAccountsController(
+      ApiChargingAccountRepository(client),
+      ownerId: () => dependencies.auth.user?.id ?? 'guest',
+    );
+    dependencies = AppDependencies.fromParts(
       environment: environment,
       preferences: preferences,
       tokenStore: tokens,
@@ -128,12 +209,28 @@ final class AppDependencies {
         environment: environment,
       ),
       stationRepository: ApiStationRepository(client),
-      vehicleRepository: LocalVehicleRepository(preferences),
+      vehicleRepository: ApiVehicleRepository(
+        client,
+        legacy: LocalVehicleRepository(preferences),
+        accountId: () => accounts.accountId,
+        shared: () => accounts.shared,
+      ),
       favoritesRepository: LocalFavoritesRepository(preferences),
-      chargingRepository: ApiChargingRepository(client),
+      chargingRepository: ApiChargingRepository(
+        client,
+        accountId: () => accounts.accountId,
+      ),
+      kycRepository: ApiKycRepository(client),
+      walletRepository: ApiWalletRepository(
+        client,
+        accountId: () => accounts.accountId,
+      ),
+      accounts: accounts,
       directions: ExternalDirectionsService(),
       location: GeolocatorDeviceLocationService(),
     );
+    client.onSessionExpired = dependencies.auth.sessionExpired;
+    return dependencies;
   }
 
   final AppEnvironment environment;
@@ -151,6 +248,9 @@ final class AppDependencies {
   final CrashReportingService crashReporting;
   final PushRegistrationService pushRegistration;
   final FeatureFlags featureFlags;
+  final KycRepository? kycRepository;
+  final WalletRepository? walletRepository;
+  final ChargingAccountsController? accounts;
 
   Future<void> initialize() async {
     await Future.wait([
@@ -160,16 +260,19 @@ final class AppDependencies {
     ]);
     await auth.restore();
     await favorites.load();
-    if (auth.status == AuthStatus.authenticated) {
+    if (auth.status == AuthStatus.authenticated &&
+        !auth.needsEmailVerification) {
       await Future.wait([
         vehicles.load(),
         pushRegistration.register(),
-        charging.restoreAuthoritativeSession(),
+        if (featureFlags.remoteCharging || featureFlags.simulatedCharging)
+          charging.restoreAuthoritativeSession(),
       ]);
     }
   }
 
   void dispose() {
+    accounts?.dispose();
     bootstrap.dispose();
     auth.dispose();
     charging.dispose();

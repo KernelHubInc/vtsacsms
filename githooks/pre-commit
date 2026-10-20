@@ -1,18 +1,59 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env node
 
-repo_root=$(git rev-parse --show-toplevel)
+const { execFileSync, spawnSync } = require('node:child_process');
+const { existsSync } = require('node:fs');
+const path = require('node:path');
 
-if [ -f "$repo_root/apps/platform/vendor/bin/pint" ]; then
-    (cd "$repo_root/apps/platform" && php vendor/bin/pint --test)
-fi
+const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).trim();
 
-if [ -x "$repo_root/services/ocpp-gateway/.venv/Scripts/python.exe" ]; then
-    (cd "$repo_root/services/ocpp-gateway" && .venv/Scripts/python.exe -m ruff check . && .venv/Scripts/python.exe -m ruff format --check .)
-elif [ -x "$repo_root/services/ocpp-gateway/.venv/bin/python" ]; then
-    (cd "$repo_root/services/ocpp-gateway" && .venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check .)
-fi
+function run(command, args, cwd) {
+  const result = spawnSync(command, args, {
+    cwd,
+    env: process.env,
+    stdio: 'inherit',
+    windowsHide: true,
+  });
 
-if [ -d "$repo_root/packages/contracts/node_modules" ]; then
-    (cd "$repo_root/packages/contracts" && npm run lint)
-fi
+  if (result.error) {
+    console.error(`Unable to run ${command}: ${result.error.message}`);
+    process.exit(1);
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
+function runNpm(args, cwd) {
+  if (process.platform === 'win32') {
+    run('cmd.exe', ['/d', '/s', '/c', 'npm.cmd', ...args], cwd);
+    return;
+  }
+
+  run('npm', args, cwd);
+}
+
+const platformRoot = path.join(repoRoot, 'apps', 'platform');
+const pint = path.join(platformRoot, 'vendor', 'bin', 'pint');
+
+if (existsSync(pint)) {
+  run('php', ['vendor/bin/pint', '--test'], platformRoot);
+}
+
+const gatewayRoot = path.join(repoRoot, 'services', 'ocpp-gateway');
+const python = process.platform === 'win32'
+  ? path.join(gatewayRoot, '.venv', 'Scripts', 'python.exe')
+  : path.join(gatewayRoot, '.venv', 'bin', 'python');
+
+if (existsSync(python)) {
+  run(python, ['-m', 'ruff', 'check', '.'], gatewayRoot);
+  run(python, ['-m', 'ruff', 'format', '--check', '.'], gatewayRoot);
+}
+
+const contractsRoot = path.join(repoRoot, 'packages', 'contracts');
+
+if (existsSync(path.join(contractsRoot, 'node_modules'))) {
+  runNpm(['run', 'lint'], contractsRoot);
+}

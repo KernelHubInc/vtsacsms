@@ -16,6 +16,18 @@ powershell -ExecutionPolicy Bypass -File scripts/demo-up.ps1
 
 Then open <http://localhost:8000/charging-map>, <http://localhost:8000/admin>, <http://localhost:8000/operator>, or <http://localhost:3000>. All local demo accounts use `VstaDemo!2026`; see [docs/local/DEMO-CREDENTIALS.md](docs/local/DEMO-CREDENTIALS.md).
 
+To run isolated local production and staging databases plus separate Laravel and
+Flutter Web surfaces, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/local-environments-up.ps1 -Seed
+```
+
+Production uses web/mobile ports `8000`/`3000`; staging uses `8001`/`3001`.
+The shared local Adminer database UI is available at <http://localhost:8081>.
+Dedicated database-server deployment is documented in
+[docs/runbooks/postgresql-environments.md](docs/runbooks/postgresql-environments.md).
+
 ```bash
 make demo-status
 make demo-verify
@@ -59,6 +71,10 @@ cd /opt/vtsa-csms && sudo git pull --ff-only origin main && sudo bash scripts/de
 Do not use the local `infra/compose.yaml` on a public host. Exact first-deployment, TLS, private GitHub deploy-key, secret generation, OCPP enrollment, backup, verification, and rollback instructions are in [docs/runbooks/hostinger-vps-deployment.md](docs/runbooks/hostinger-vps-deployment.md).
 
 For isolated staging and production stacks across the same two application servers, use [docs/runbooks/staging-production-deployment.md](docs/runbooks/staging-production-deployment.md). The production-only reference remains in [docs/runbooks/two-app-server-deployment.md](docs/runbooks/two-app-server-deployment.md).
+
+## Identity verification (KYC)
+
+The optional Identity KYC module adds Flutter document capture and live camera challenges, tenant-scoped Laravel APIs and Filament review backed by the isolated [Python KYC service](services/kyc-service/README.md). The selected self-hosted assurance uses optical ID checks, face matching and PAD; it does not verify government issuance. Existing features remain available with enforcement disabled. Follow the [Hostinger deployment runbook](docs/runbooks/kyc-hostinger.md) and [ADR 0019](docs/architecture/decisions/0019-optical-kyc-and-live-capture.md); production requires reviewed privacy policy, device/spoof evaluation, thresholds and operational acceptance.
 
 ## Supported toolchain
 

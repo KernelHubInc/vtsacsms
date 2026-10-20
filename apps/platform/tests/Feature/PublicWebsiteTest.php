@@ -25,7 +25,8 @@ final class PublicWebsiteTest extends TestCase
     public function test_every_required_public_page_is_published_from_cms(): void
     {
         foreach (['/', '/network', '/charging-map', '/drivers', '/operators-and-site-hosts', '/installation-and-maintenance', '/mobile-app', '/news-and-resources', '/partner-program', '/frequently-asked-questions', '/contact', '/support', '/privacy-policy', '/terms-of-service', '/charging-terms', '/refund-policy'] as $path) {
-            $this->get($path)->assertOk()->assertSee('<main id="main-content"', false);
+            $this->get($path)->assertOk()->assertSee('<main id="main-content"', false)
+                ->assertDontSee('class="eyebrow"', false);
         }
     }
 

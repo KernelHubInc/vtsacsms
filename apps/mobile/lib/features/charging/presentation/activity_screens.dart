@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
 
@@ -18,12 +22,13 @@ class ActivityScreen extends StatefulWidget {
 }
 
 class _ActivityScreenState extends State<ActivityScreen> {
+  String _filter = 'All';
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => widget.dependencies.charging.loadHistory(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.dependencies.charging.loadHistory();
+    });
   }
 
   @override
@@ -33,10 +38,22 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final charging = widget.dependencies.charging;
       final active = charging.session;
       final history = charging.history
-          .where((session) => session.id != active?.id)
+          .where(
+            (session) =>
+                active == null || active.isTerminal || session.id != active.id,
+          )
+          .where(
+            (session) => switch (_filter) {
+              'Completed' => session.state == ChargingSessionState.completed,
+              'Pending' => !session.isTerminal,
+              _ => true,
+            },
+          )
           .toList(growable: false);
-      return VtsaPageShell(
-        eyebrow: 'YOUR CHARGING',
+      return DriverTabPage(
+        subtitle: widget.dependencies.accounts?.selected == null
+            ? 'Charging activity and receipts'
+            : 'History for ${widget.dependencies.accounts!.selected!.name}',
         title: 'Activity',
         body: RefreshIndicator(
           onRefresh: () async {
@@ -45,7 +62,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
+              ChargingAccountSelector(dependencies: widget.dependencies),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final label in ['All', 'Completed', 'Pending'])
+                    DriverFilterChip(
+                      label: label,
+                      selected: _filter == label,
+                      onSelected: (_) => setState(() => _filter = label),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (charging.failure != null)
+                VtsaErrorState(
+                  title: 'Activity could not be refreshed',
+                  description: charging.failure!.message,
+                  correlationId: charging.failure!.correlationId,
+                ),
               if (active != null && !active.isTerminal) ...[
+                if (active.attribution['payer'] case final String payer)
+                  Text('Current session payer: $payer'),
                 Text(
                   'CURRENT SESSION',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -70,12 +109,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
               const SizedBox(height: VtsaSpacing.sm),
               if (charging.historyLoading && history.isEmpty)
                 const VtsaSkeleton(lines: 6)
-              else if (history.isEmpty)
+              else if (history.isEmpty && charging.failure == null)
                 const VtsaEmptyState(
                   icon: Icons.receipt_long_outlined,
-                  title: 'No completed sessions yet',
+                  title: 'No sessions in this view',
                   description:
-                      'Finalized charging sessions will appear here after the server confirms them.',
+                      'Session records appear after server confirmation. Filters apply to loaded history; load more to see earlier records.',
                 )
               else
                 for (var index = 0; index < history.length; index++) ...[
@@ -177,10 +216,51 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     label: 'Final cost',
                     value: formatMoney(session.finalCost),
                   ),
-                  _Fact(label: 'Payment', value: session.paymentState.name),
+                  _Fact(
+                    label: 'Payment',
+                    value: session.paymentState.name.replaceAllMapped(
+                      RegExp(r'[A-Z]'),
+                      (match) => ' ${match[0]!.toLowerCase()}',
+                    ),
+                  ),
                 ],
               ),
             ),
+            if (session.attribution.isNotEmpty) ...[
+              const SizedBox(height: VtsaSpacing.md),
+              VtsaCard(
+                title: 'Charged to',
+                child: Column(
+                  children: [
+                    _Fact(
+                      label: 'Account',
+                      value:
+                          session.attribution['account_name'] as String? ??
+                          'Personal',
+                    ),
+                    _Fact(
+                      label: 'Driver',
+                      value:
+                          session.attribution['driver_name'] as String? ??
+                          session.attribution['driver_id'] as String? ??
+                          'Recorded driver',
+                    ),
+                    if (session.attribution['vehicle']
+                        case final Map<String, dynamic> vehicle)
+                      _Fact(
+                        label: 'Vehicle',
+                        value: vehicle['nickname'] as String,
+                      ),
+                    _Fact(
+                      label: 'Payer',
+                      value:
+                          session.attribution['payer'] as String? ??
+                          'Personal prepaid wallet',
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: VtsaSpacing.md),
             VtsaCard(
               title: 'Evidence',
@@ -274,6 +354,8 @@ class RefundRequestScreen extends StatefulWidget {
 class _RefundRequestScreenState extends State<RefundRequestScreen> {
   final _reason = TextEditingController();
   bool _submitted = false;
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -311,26 +393,40 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
                 required: true,
               ),
               const SizedBox(height: VtsaSpacing.lg),
+              if (_error != null) Text(_error!),
               VtsaButton(
                 label: 'Submit review request',
-                loading: widget.dependencies.charging.mutationInFlight,
-                onPressed: _submit,
+                loading: _busy,
+                onPressed: _busy ? null : _submit,
               ),
             ],
           ),
   );
 
   Future<void> _submit() async {
+    if (_busy) return;
     if (_reason.text.trim().length < 10) {
       showVtsaToast(context, message: 'Add at least 10 characters.');
       return;
     }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final sent = await widget.dependencies.charging.requestRefund(
       _reason.text.trim(),
       sessionId: widget.sessionId,
     );
-    if (mounted && sent) {
-      setState(() => _submitted = true);
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _submitted = sent;
+        if (!sent) {
+          _error =
+              widget.dependencies.charging.failure?.message ??
+              'Request was not sent. Check your connection and try again.';
+        }
+      });
     }
   }
 }
@@ -353,6 +449,8 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   final _description = TextEditingController();
   String _category = 'charger';
   bool _submitted = false;
+  bool _busy = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -397,10 +495,18 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                 required: true,
               ),
               const SizedBox(height: VtsaSpacing.lg),
+              SelectableText('Session reference: ${widget.sessionId}'),
+              TextButton.icon(
+                onPressed: () =>
+                    Clipboard.setData(ClipboardData(text: widget.sessionId)),
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy session reference'),
+              ),
+              if (_error != null) Text(_error!),
               VtsaButton(
                 label: 'Submit issue',
-                loading: widget.dependencies.charging.mutationInFlight,
-                onPressed: _submit,
+                loading: _busy,
+                onPressed: _busy ? null : _submit,
               ),
               const SizedBox(height: VtsaSpacing.sm),
               VtsaButton(
@@ -418,17 +524,32 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   );
 
   Future<void> _submit() async {
+    if (_busy) return;
     if (_description.text.trim().length < 10) {
       showVtsaToast(context, message: 'Add at least 10 characters.');
       return;
     }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final sent = await widget.dependencies.charging.reportIssue(
       sessionId: widget.sessionId,
       category: _category,
       description: _description.text.trim(),
     );
-    if (mounted && sent) {
-      setState(() => _submitted = true);
+    if (mounted) {
+      final failure = widget.dependencies.charging.failure;
+      setState(() {
+        _busy = false;
+        _submitted = sent;
+        if (!sent) {
+          _error = failure?.kind == FailureKind.notFound
+              ? 'In-app support submission is not available. Copy your session reference and open customer support below. Your issue has not been submitted.'
+              : failure?.message ??
+                    'Issue was not sent. Check your connection and try again.';
+        }
+      });
     }
   }
 }
@@ -447,33 +568,60 @@ class _SessionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => VtsaCard(
     padding: EdgeInsets.zero,
-    child: ListTile(
+    child: InkWell(
       onTap: onTap,
-      leading: CircleAvatar(
-        backgroundColor: active
-            ? context.vtsaColors.brandSoft
-            : context.vtsaColors.surfaceSubtle,
-        child: Icon(active ? Icons.bolt : Icons.ev_station_outlined),
-      ),
-      title: Text(session.stationName),
-      subtitle: Text(
-        '${DateFormat.yMMMd().format(session.requestedAt.toLocal())} · ${formatEnergy(session.energyWh)}',
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            formatMoney(session.finalCost ?? session.estimatedCost),
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          Text(
-            session.state.name,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: context.vtsaColors.textMuted,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              DateFormat.yMMMd().add_jm().format(session.requestedAt.toLocal()),
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    session.stationName,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Icon(active ? Icons.bolt : Icons.chevron_right, size: 20),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${formatEnergy(session.energyWh)} · ${formatDuration(session.durationSeconds)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '${formatMoney(session.finalCost ?? session.estimatedCost)}${session.finalCost == null ? ' estimated' : ''}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                VtsaStatusChip(
+                  label: session.state.name.replaceAllMapped(
+                    RegExp(r'[A-Z]'),
+                    (m) => ' ${m[0]!.toLowerCase()}',
+                  ),
+                  state: session.state == ChargingSessionState.completed
+                      ? VtsaOperationalState.available
+                      : session.state == ChargingSessionState.charging
+                      ? VtsaOperationalState.charging
+                      : VtsaOperationalState.unknown,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );

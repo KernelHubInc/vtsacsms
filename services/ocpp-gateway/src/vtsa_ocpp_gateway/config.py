@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -58,6 +59,8 @@ class Settings:
     command_timeout_seconds: float = 30.0
     authorization_timeout_seconds: float = 5.0
     heartbeat_interval_seconds: int = 30
+    websocket_ping_timeout_seconds: float = 30.0
+    message_idle_timeout_seconds: float = 180.0
     maximum_clock_skew_seconds: int = 300
     maximum_message_bytes: int = 262_144
     charger_registry_json: str = "{}"
@@ -69,6 +72,8 @@ class Settings:
     require_client_certificate: bool = False
     trusted_client_certificate_fingerprint_header: str | None = None
     internal_api_token: str | None = None
+    core_auth_url: str | None = None
+    core_registration_url: str | None = None
     raw_message_logging: bool = True
     redacted_fields: tuple[str, ...] = MANDATORY_REDACTED_FIELDS
     data_transfer_allowlist: tuple[str, ...] = ()
@@ -89,12 +94,46 @@ class Settings:
             raise ValueError("Only OCPP 1.6J and OCPP 2.0.1 subprotocols are supported")
         if self.connection_lease_seconds < 9:
             raise ValueError("Connection lease must be at least 9 seconds")
+        if (
+            self.heartbeat_interval_seconds < 1
+            or not math.isfinite(self.websocket_ping_timeout_seconds)
+            or self.websocket_ping_timeout_seconds < 0
+        ):
+            raise ValueError("Heartbeat must be positive and WebSocket ping timeout nonnegative")
+        if (
+            not math.isfinite(self.message_idle_timeout_seconds)
+            or self.message_idle_timeout_seconds < 3 * self.heartbeat_interval_seconds
+        ):
+            raise ValueError("Message idle timeout must allow at least three heartbeat intervals")
         if self.maximum_message_bytes < 1024:
             raise ValueError("Maximum OCPP message size must be at least 1024 bytes")
         if bool(self.tls_certificate_file) != bool(self.tls_private_key_file):
             raise ValueError("TLS certificate and private key must be configured together")
         if self.require_client_certificate and not self.tls_client_ca_file:
             raise ValueError("A client CA file is required when client certificates are mandatory")
+        if self.core_auth_url and self.core_registration_url:
+            raise ValueError("Choose either core authentication or URL-only registration")
+        if self.core_registration_url and self.require_client_certificate:
+            raise ValueError("URL-only registration must not require client certificates")
+        if self.core_auth_url or self.core_registration_url:
+            from urllib.parse import urlparse
+
+            url = urlparse(self.core_auth_url or self.core_registration_url or "")
+            if (
+                url.scheme not in {"http", "https"}
+                or not url.hostname
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+            ):
+                raise ValueError("Core authentication URL must be a trusted HTTP(S) endpoint")
+            if not self.internal_api_token or self.allow_unauthenticated_development:
+                raise ValueError(
+                    "Core authentication requires a service token and authenticated mode"
+                )
+            if self.environment not in {"local", "testing"} and url.scheme != "https":
+                raise ValueError("Deployed core authentication must use HTTPS")
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -131,6 +170,12 @@ class Settings:
                 os.getenv("GATEWAY_AUTHORIZATION_TIMEOUT_SECONDS", "5")
             ),
             heartbeat_interval_seconds=int(os.getenv("GATEWAY_HEARTBEAT_INTERVAL_SECONDS", "30")),
+            websocket_ping_timeout_seconds=float(
+                os.getenv("GATEWAY_WS_PING_TIMEOUT_SECONDS", "30")
+            ),
+            message_idle_timeout_seconds=float(
+                os.getenv("GATEWAY_MESSAGE_IDLE_TIMEOUT_SECONDS", "180")
+            ),
             maximum_clock_skew_seconds=int(os.getenv("GATEWAY_MAXIMUM_CLOCK_SKEW_SECONDS", "300")),
             maximum_message_bytes=int(os.getenv("GATEWAY_MAXIMUM_MESSAGE_BYTES", "262144")),
             charger_registry_json=os.getenv("OCPP_CHARGER_REGISTRY_JSON", "{}"),
@@ -147,6 +192,8 @@ class Settings:
             )
             or None,
             internal_api_token=os.getenv("GATEWAY_INTERNAL_API_TOKEN") or None,
+            core_auth_url=os.getenv("OCPP_CORE_AUTH_URL") or None,
+            core_registration_url=os.getenv("OCPP_CORE_REGISTRATION_URL") or None,
             raw_message_logging=_as_bool(os.getenv("GATEWAY_RAW_MESSAGE_LOGGING"), default=True),
             redacted_fields=_csv(
                 os.getenv("GATEWAY_REDACTED_FIELDS"),

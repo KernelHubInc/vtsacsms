@@ -48,7 +48,15 @@ final readonly class ChargeDetailRecordGenerator
                 $this->cdrs->transition($cdr, ChargeDetailRecordState::Generating, 'cdr_generation_started');
             }
             $anomalies = array_values(array_filter($locked->anomaly_flags, 'is_string'));
+            $flow = app(EnergyFlowDuration::class)->measure($locked);
+            $components = $locked->tariff_snapshot['components'] ?? [];
+            $flowPriced = ($locked->tariff_snapshot['time_basis'] ?? 'elapsed') === 'energy_flow'
+                && is_array($components) && in_array('time', array_column($components, 'dimension'), true);
+            if ($flowPriced && ! $flow['complete']) {
+                $anomalies[] = 'missing_energy_flow_evidence';
+            }
             $blocking = array_intersect($anomalies, [
+                'missing_energy_flow_evidence',
                 SessionAnomaly::TariffMissing->value,
                 SessionAnomaly::MissingStartMeter->value,
                 SessionAnomaly::MissingStopMeter->value,
@@ -72,6 +80,7 @@ final readonly class ChargeDetailRecordGenerator
                 parkingSeconds: (int) $locked->parking_seconds,
                 idleSeconds: (int) $locked->idle_seconds,
                 startedAt: $startedAt,
+                energyFlowSeconds: $flow['seconds'],
             ));
             $snapshot = [
                 'session_id' => (string) $locked->getKey(),
@@ -85,6 +94,8 @@ final readonly class ChargeDetailRecordGenerator
                 'stopped_at' => $locked->stopped_at?->utc()->toISOString(),
                 'energy_wh' => (int) $locked->energy_wh,
                 'duration_seconds' => (int) $locked->duration_seconds,
+                'energy_flow_seconds' => $flow['seconds'],
+                'energy_flow_evidence_complete' => $flow['complete'],
                 'parking_seconds' => (int) $locked->parking_seconds,
                 'idle_seconds' => (int) $locked->idle_seconds,
                 'tariff_snapshot' => $locked->tariff_snapshot,

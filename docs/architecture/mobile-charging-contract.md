@@ -2,9 +2,11 @@
 
 ## Status
 
-The Phase 10 Flutter application defines and tests the customer charging ports in this document. The Laravel platform does not yet expose the corresponding customer-owned endpoints. Existing `/api/v1/charging-sessions` routes are workforce operations protected by tenant and site permissions; they must not be reused by the consumer app or made public.
+2026-10-12: customer-owned prepare/start/active/detail/history/stop/cancel routes are now implemented for the prepaid staging pilot. See [ADR 0026](decisions/0026-prepaid-mobile-charging-and-metered-time.md) and the generated OpenAPI contract. Refund requests and customer support issue endpoints below remain proposed. Live physical acceptance remains required. The following original proposal describes the broader target, not the current release's payment method.
 
-This document is a contract proposal and release gate, not evidence that the server endpoints exist.
+The Phase 10 Flutter application defines and tests the customer charging ports in this document. The prepaid pilot now provides the customer-owned charging endpoints. Existing `/api/v1/charging-sessions` routes remain workforce operations protected by tenant and site permissions; they must not be reused by the consumer app or made public.
+
+The broader payment, document, refund and support flow below remains a contract proposal and release gate. Use ADR 0026 for the implemented prepaid pilot boundaries.
 
 The proposed QR-to-payment orchestration, simulator interaction, recovery behavior, implementation order, and UAT criteria are documented in [mobile-qr-charging-transaction-flow.md](mobile-qr-charging-transaction-flow.md).
 

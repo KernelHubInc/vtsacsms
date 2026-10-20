@@ -20,6 +20,10 @@ final class TariffSelector
         $query = TariffVersion::query()
             ->with(['tariff', 'components', 'discounts'])
             ->where('status', TariffStatus::Published->value)
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('tariff_version_endings')
+                ->whereColumn('tariff_version_endings.tenant_id', 'tariff_versions.tenant_id')
+                ->whereColumn('tariff_version_endings.tariff_version_id', 'tariff_versions.id')
+                ->where('ended_at', '<=', $at))
             ->where('effective_from', '<=', $at)
             ->where(fn (Builder $query): Builder => $query
                 ->whereNull('effective_to')

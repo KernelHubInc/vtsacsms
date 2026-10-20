@@ -68,9 +68,1880 @@
     {
       "name": "Payment Webhooks",
       "description": "Signature-verified provider callbacks with tenant-bound destination identifiers and replay protection."
+    },
+    {
+      "name": "Wallet",
+      "description": "Verified driver prepaid balances and idempotent QR Ph top-ups."
+    },
+    {
+      "name": "Charging Accounts",
+      "description": "Personal, business and fleet charging accounts with explicit organization-scoped roles."
     }
   ],
   "paths": {
+    "/api/v1/charging-accounts": {
+      "get": {
+        "operationId": "listChargingAccounts",
+        "summary": "List personal and explicitly joined charging accounts",
+        "description": "List personal and explicitly joined charging accounts",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChargingAccount"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      },
+      "post": {
+        "operationId": "createChargingAccount",
+        "summary": "Create a business or fleet account as its owner",
+        "description": "Create a business or fleet account as its owner",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChargingAccount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "business",
+                      "fleet"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "description": "Charging account ULID in the current tenant",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateChargingAccount",
+        "summary": "Rename or retype an owned business or fleet account",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 160
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "business",
+                      "fleet"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChargingAccount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Only the owner can edit; personal accounts are immutable."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account."
+          },
+          "422": {
+            "description": "Invalid name or account type."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteUnusedChargingAccount",
+        "summary": "Delete an unused owned business or fleet account",
+        "description": "Accounts with members, vehicles, wallet activity, invitations or charging history cannot be deleted.",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unused account deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Only the owner can delete; personal accounts are immutable."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account."
+          },
+          "409": {
+            "description": "Account has linked members or history and must be retained."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/invitations": {
+      "get": {
+        "operationId": "listMyChargingInvitations",
+        "summary": "List unexpired invitations for the verified login email",
+        "description": "List unexpired invitations for the verified login email",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChargingAccountInvitation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/invitations/{invitation}/accept": {
+      "parameters": [
+        {
+          "name": "invitation",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "acceptChargingInvitation",
+        "summary": "Accept an invitation once using the verified recipient login",
+        "description": "Accept an invitation once using the verified recipient login",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "accepted": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "accepted"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/members": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listChargingAccountMembers",
+        "summary": "List minimal member identity for authorized account managers",
+        "description": "List minimal member identity for authorized account managers",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChargingAccountMember"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/members/{subject}": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        },
+        {
+          "name": "subject",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "changeChargingAccountMember",
+        "summary": "Owner changes a member role or revokes access",
+        "description": "Null revokes immediately. The owner cannot be replaced or revoked through this endpoint. Historical session/payment attribution remains unchanged.",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "saved"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "admin",
+                      "billing_manager",
+                      "fleet_manager",
+                      "driver",
+                      null
+                    ]
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/invitations": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listChargingAccountInvitations",
+        "summary": "List pending invitations issued for an account",
+        "description": "List pending invitations issued for an account",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChargingAccountInvitation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      },
+      "post": {
+        "operationId": "inviteChargingAccountMember",
+        "summary": "Invite an individual by email",
+        "description": "Owner may invite any non-owner role; admin may invite drivers and fleet managers. Expires after seven days. Delivery failure leaves the invitation discoverable in the verified recipient app.",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChargingAccountInvitation"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "billing_manager",
+                      "fleet_manager",
+                      "driver"
+                    ]
+                  }
+                },
+                "required": [
+                  "email",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/invitations/{invitation}": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        },
+        {
+          "name": "invitation",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "revokeChargingAccountInvitation",
+        "summary": "Revoke an unaccepted invitation",
+        "description": "Revoke an unaccepted invitation",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revoked": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "revoked"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/vehicles/{vehicle}/assignments": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        },
+        {
+          "name": "vehicle",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listChargingVehicleAssignments",
+        "summary": "List assigned driver subject IDs",
+        "description": "List assigned driver subject IDs",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      },
+      "put": {
+        "operationId": "assignChargingVehicle",
+        "summary": "Allow or remove a vehicle driver assignment",
+        "description": "Allow or remove a vehicle driver assignment",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "saved"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject_id": {
+                    "type": "string",
+                    "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "assigned": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "subject_id",
+                  "assigned"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging-accounts/{account}/limits": {
+      "parameters": [
+        {
+          "name": "account",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listChargingAccountLimits",
+        "summary": "Owner reads per-session reservation caps",
+        "description": "Owner reads per-session reservation caps",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChargingAccountLimit"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        }
+      },
+      "put": {
+        "operationId": "setChargingAccountLimit",
+        "summary": "Owner sets or removes a per-session reservation cap",
+        "description": "Null removes the cap; zero blocks new starts. Lower driver/vehicle cap wins. Does not retroactively alter a running session or provide an offline hardware cutoff.",
+        "tags": [
+          "Charging Accounts"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized response. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "saved": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "saved"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Verified identity and action permission required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible account/resource."
+          },
+          "409": {
+            "description": "Conflicting membership or pending invitation."
+          },
+          "422": {
+            "description": "Invalid request or expired/consumed invitation."
+          },
+          "429": {
+            "description": "Too many requests."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target_type": {
+                    "type": "string",
+                    "enum": [
+                      "driver",
+                      "vehicle"
+                    ]
+                  },
+                  "target_id": {
+                    "type": "string",
+                    "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "amount_minor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 100000000
+                  }
+                },
+                "required": [
+                  "target_type",
+                  "target_id",
+                  "amount_minor"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mobile/charging/prepare": {
+      "post": {
+        "summary": "Review connector pricing and a live prepaid spending limit",
+        "operationId": "prepareCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerChargePreparation"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "charger_code": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{6,120}$"
+                  },
+                  "vehicle_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "charger_code"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
+    },
+    "/api/v1/mobile/charging-sessions/remote-start": {
+      "post": {
+        "summary": "Reserve prepaid funds and request physical start",
+        "operationId": "startCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerChargingSession"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quote_id": {
+                    "type": "string"
+                  },
+                  "connector_id": {
+                    "type": "string"
+                  },
+                  "payment_method_id": {
+                    "type": "string",
+                    "enum": [
+                      "prepaid_wallet"
+                    ]
+                  }
+                },
+                "required": [
+                  "quote_id",
+                  "connector_id",
+                  "payment_method_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
+    },
+    "/api/v1/mobile/charging-sessions/active": {
+      "get": {
+        "summary": "Recover only the caller's active or unsettled session",
+        "operationId": "activeCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/CustomerChargingSession"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        }
+      }
+    },
+    "/api/v1/mobile/charging-sessions": {
+      "get": {
+        "summary": "Read the caller's charging history",
+        "operationId": "listCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CustomerChargingSession"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "next_cursor"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "name": "X-Charging-Account-ID",
+          "in": "header",
+          "required": false,
+          "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        }
+      ]
+    },
+    "/api/v1/mobile/charging-sessions/{session}": {
+      "get": {
+        "summary": "Read one customer-owned session",
+        "operationId": "getCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerChargingSession"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "parameters": [
+          {
+            "name": "session",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/mobile/charging-sessions/{session}/remote-stop": {
+      "post": {
+        "summary": "Request physical stop without asserting completion",
+        "operationId": "stopCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerChargingSession"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "parameters": [
+          {
+            "name": "session",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 160
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/mobile/charging-sessions/{session}/cancel": {
+      "post": {
+        "summary": "Cancel an unsent start or record cancellation pending charger confirmation",
+        "operationId": "cancelCustomerCharging",
+        "tags": [
+          "Charging"
+        ],
+        "security": [
+          {
+            "sanctumBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer-owned response. Never cache.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CustomerChargingSession"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "404": {
+            "description": "Unknown or inaccessible resource."
+          },
+          "422": {
+            "description": "Validation or charging precondition failed."
+          }
+        },
+        "parameters": [
+          {
+            "name": "session",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "description": "Idempotent. Unsent requests cancel and release reserved funds. A dispatched request persists cancellation_requested and retains its hold; the monitor requests Stop once a transaction ID is known. A successful response is not proof of physical cancellation. Authoritative rejection or final transaction evidence resolves payment."
+      }
+    },
+    "/api/internal/v1/ocpp/resolve": {
+      "post": {
+        "summary": "Resolve a URL-only charger against active station and tenant state",
+        "operationId": "resolveOcppCharger",
+        "tags": [
+          "Identity"
+        ],
+        "description": "Gateway-only HTTPS registration query. No device credential is required or verified. Unknown or inactive stations and mismatched protocols fail closed.",
+        "security": [
+          {
+            "ocppServiceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "identity",
+                  "protocol"
+                ],
+                "properties": {
+                  "identity": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "enum": [
+                      "ocpp1.6",
+                      "ocpp2.0.1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered station binding; response must not be cached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "tenant_id",
+                        "charger_id",
+                        "charge_point_identity",
+                        "authentication"
+                      ],
+                      "properties": {
+                        "tenant_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charger_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charge_point_identity": {
+                          "type": "string"
+                        },
+                        "authentication": {
+                          "type": "string",
+                          "const": "registered"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid service credential or station registration denied."
+          },
+          "422": {
+            "description": "Invalid request; credentials are never echoed."
+          },
+          "429": {
+            "description": "Authentication rate limit reached."
+          },
+          "503": {
+            "description": "Core unavailable; gateway must fail closed."
+          }
+        }
+      }
+    },
+    "/api/internal/v1/ocpp/authenticate": {
+      "post": {
+        "summary": "Authenticate a charger against current station and tenant state",
+        "operationId": "authenticateOcppCharger",
+        "tags": [
+          "Identity"
+        ],
+        "description": "Gateway-only HTTPS query. No device passwords or hashes are returned. Unknown or inactive stations and incorrect credentials fail closed.",
+        "security": [
+          {
+            "ocppServiceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "identity",
+                  "password",
+                  "protocol"
+                ],
+                "properties": {
+                  "identity": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                  },
+                  "password": {
+                    "type": "string",
+                    "writeOnly": true,
+                    "maxLength": 1024
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "enum": [
+                      "ocpp1.6",
+                      "ocpp2.0.1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified station binding; response must not be cached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "tenant_id",
+                        "charger_id",
+                        "charge_point_identity"
+                      ],
+                      "properties": {
+                        "tenant_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charger_id": {
+                          "$ref": "#/components/schemas/Ulid"
+                        },
+                        "charge_point_identity": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid service credential or charger authentication denied."
+          },
+          "422": {
+            "description": "Invalid request; credentials are never echoed."
+          },
+          "429": {
+            "description": "Authentication rate limit reached."
+          },
+          "503": {
+            "description": "Core unavailable; gateway must fail closed."
+          }
+        }
+      }
+    },
     "/api/v1/app/config": {
       "get": {
         "operationId": "getAppConfiguration",
@@ -1051,6 +2922,220 @@
         }
       }
     },
+    "/api/v2/auth/register": {
+      "post": {
+        "operationId": "registerAdultDriver",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Create a staging consumer account with an adult birth date and default vehicle",
+        "description": "Available only in demo-enabled development and staging. Replaces v1 registration, which returns 426 app_update_required. Existing sign-in endpoints are unchanged.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "first_name",
+                  "last_name",
+                  "birth_date",
+                  "email",
+                  "password",
+                  "password_confirmation",
+                  "tenant_id",
+                  "plate_pending"
+                ],
+                "properties": {
+                  "first_name": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "middle_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 80
+                  },
+                  "last_name": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "birth_date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "At least 18 years old on the current UTC date; earliest 1900-01-01."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 12,
+                    "writeOnly": true
+                  },
+                  "password_confirmation": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "tenant_id": {
+                    "$ref": "#/components/schemas/Ulid"
+                  },
+                  "plate_pending": {
+                    "type": "boolean"
+                  },
+                  "plate_number": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 20,
+                    "description": "Required when plate_pending is false; omit when true."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account and default vehicle committed; verification_email_sent indicates mail delivery initiation."
+          },
+          "404": {
+            "description": "Registration is disabled for this environment or tenant."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ChargingAccountSelector"
+        }
+      ],
+      "get": {
+        "operationId": "listDriverVehicles",
+        "tags": [
+          "Assets"
+        ],
+        "summary": "List personal vehicles or shared vehicles authorized for the selected account role",
+        "responses": {
+          "200": {
+            "description": "Account garage; no-store response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DriverVehicle"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ChargingAccountSelector"
+        },
+        {
+          "name": "vehicle",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Ulid"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "saveDriverVehicle",
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Create or update an owned vehicle with a client-generated idempotent ULID",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverVehicle"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved; first vehicle automatically becomes default."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Vehicle is not owned by this driver."
+          },
+          "409": {
+            "description": "Identifier conflict; refresh and retry with a new vehicle identifier."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeDriverVehicle",
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Remove an owned vehicle and promote the next saved vehicle if needed",
+        "responses": {
+          "200": {
+            "description": "Vehicle removed."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Vehicle not found for this driver."
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
     "/api/v1/public/stations": {
       "get": {
         "operationId": "searchPublicStations",
@@ -1122,6 +3207,28 @@
               "type": "number",
               "minimum": -90,
               "maximum": 90
+            }
+          },
+          {
+            "name": "connectors[]",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "maxItems": 5,
+              "items": {
+                "type": "string",
+                "maxLength": 40
+              }
+            }
+          },
+          {
+            "name": "amenity",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 60
             }
           },
           {
@@ -2750,10 +4857,290 @@
           }
         }
       }
+    },
+    "/api/v1/wallet": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ChargingAccountSelector"
+        }
+      ],
+      "get": {
+        "operationId": "getPrepaidWallet",
+        "summary": "Read the current account wallet and paginated balance activity",
+        "tags": [
+          "Wallet"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No-store wallet summary. Simulated and live books are separate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrepaidWallet"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/wallet/topups": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ChargingAccountSelector"
+        }
+      ],
+      "get": {
+        "operationId": "listWalletTopups",
+        "summary": "List owned top-ups for the current wallet book",
+        "tags": [
+          "Wallet"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated top-ups, newest first; no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "items",
+                        "next_cursor"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WalletTopup"
+                          }
+                        },
+                        "next_cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWalletTopup",
+        "summary": "Create a QR top-up with a stable retry key and server-enforced KYC policy",
+        "tags": [
+          "Wallet"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount_minor",
+                  "idempotency_key"
+                ],
+                "properties": {
+                  "amount_minor": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000,
+                    "description": "PHP centavos; deployment limits also apply."
+                  },
+                  "idempotency_key": {
+                    "$ref": "#/components/schemas/Ulid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted order, including pending or unknown outcome; not proof of payment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WalletTopup"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Idempotency key already used for another amount."
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "description": "Collection is disabled or configuration is not approved."
+          }
+        }
+      }
+    },
+    "/api/v1/wallet/topups/{topup}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ChargingAccountSelector"
+        },
+        {
+          "name": "topup",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Ulid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getWalletTopup",
+        "summary": "Read an owned payment request without initiating provider collection",
+        "tags": [
+          "Wallet"
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative stored status; late verified payments can resolve expired requests.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WalletTopup"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request not owned by the current tenant and subject."
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/aub/qrph": {
+      "post": {
+        "operationId": "confirmAubQrphPayment",
+        "summary": "Verify signed AUB XML and atomically confirm a matching prepaid top-up",
+        "tags": [
+          "Payment Webhooks"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/xml": {
+              "schema": {
+                "type": "string",
+                "maxLength": 65536,
+                "description": "Flat XML signed according to AUB canonical SHA256 rules."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable confirmation or identical already-processed confirmation.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "const": "success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid signature, schema or financial binding."
+          },
+          "404": {
+            "description": "Callback not enabled or order not found for the configured merchant tenant."
+          },
+          "409": {
+            "description": "Conflicting payment evidence requires review."
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
     }
   },
   "components": {
     "securitySchemes": {
+      "ocppServiceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Opaque gateway/core service credential"
+      },
       "sanctumBearer": {
         "type": "http",
         "scheme": "bearer",
@@ -2761,6 +5148,16 @@
       }
     },
     "parameters": {
+      "ChargingAccountSelector": {
+        "name": "X-Charging-Account-ID",
+        "in": "header",
+        "required": false,
+        "description": "Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        }
+      },
       "TenantSelector": {
         "name": "X-Tenant-ID",
         "in": "header",
@@ -2858,9 +5255,190 @@
       }
     },
     "schemas": {
+      "WalletTopup": {
+        "type": "object",
+        "required": [
+          "id",
+          "amount_minor",
+          "currency",
+          "mode",
+          "status",
+          "qr_content",
+          "expires_at",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Ulid"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string",
+            "const": "PHP"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "simulated",
+              "live"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "creating",
+              "pending",
+              "unknown",
+              "review_required",
+              "paid",
+              "expired"
+            ]
+          },
+          "qr_content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "EMV QR content only for a pending unexpired live order; never a payment URL."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "PrepaidWallet": {
+        "type": "object",
+        "required": [
+          "currency",
+          "balance_minor",
+          "reserved_minor",
+          "available_minor",
+          "mode",
+          "book",
+          "topups_enabled",
+          "minimum_minor",
+          "maximum_minor",
+          "history"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Selected prepaid account ULID; null before its first funding."
+          },
+          "currency": {
+            "type": "string",
+            "const": "PHP"
+          },
+          "balance_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reserved_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "simulated",
+              "live"
+            ]
+          },
+          "book": {
+            "type": "string",
+            "enum": [
+              "simulated",
+              "live"
+            ]
+          },
+          "topups_enabled": {
+            "type": "boolean"
+          },
+          "minimum_minor": {
+            "type": "integer"
+          },
+          "maximum_minor": {
+            "type": "integer"
+          },
+          "history": {
+            "type": "object",
+            "required": [
+              "items",
+              "next_cursor"
+            ],
+            "properties": {
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "kind",
+                    "amount_minor",
+                    "created_at"
+                  ],
+                  "properties": {
+                    "id": {
+                      "$ref": "#/components/schemas/Ulid"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "topup",
+                        "reserved",
+                        "released",
+                        "spent"
+                      ]
+                    },
+                    "amount_minor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "created_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "Ulid": {
         "type": "string",
-        "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+        "pattern": "^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$",
         "example": "01K0M0JJ5X0M0JJ5X0M0JJ5X0M"
       },
       "MaintenanceWorkOrderInput": {
@@ -4560,6 +7138,13 @@
             "type": "string",
             "description": "IANA timezone used for day/time rules"
           },
+          "time_basis": {
+            "type": "string",
+            "enum": [
+              "energy_flow"
+            ],
+            "description": "New time tariffs count only metered energy-flow seconds."
+          },
           "components": {
             "type": "array",
             "minItems": 1,
@@ -4685,6 +7270,67 @@
           "retired"
         ]
       },
+      "DriverVehicle": {
+        "type": "object",
+        "required": [
+          "nickname",
+          "plate_pending",
+          "connector_standards",
+          "is_default"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Ulid"
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "plate_pending": {
+            "type": "boolean"
+          },
+          "plate_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 20
+          },
+          "manufacturer": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "variant": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "connector_standards": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "Type 2",
+                "CCS2",
+                "CHAdeMO",
+                "GB/T",
+                "NACS"
+              ]
+            }
+          },
+          "is_default": {
+            "type": "boolean"
+          }
+        }
+      },
       "PublicStation": {
         "type": "object",
         "additionalProperties": false,
@@ -4767,6 +7413,36 @@
               "unknown"
             ]
           },
+          "operational_status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "busy",
+              "faulted",
+              "unavailable",
+              "offline",
+              "stale",
+              "unknown"
+            ],
+            "description": "Preferred display status. Unlike legacy availability, unavailable does not imply loss of connectivity."
+          },
+          "connection_status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline",
+              "unknown"
+            ],
+            "description": "Recent authenticated station communication, independent of connector availability"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Last observed station communication in UTC"
+          },
           "is_stale": {
             "type": "boolean"
           },
@@ -4804,6 +7480,52 @@
                 "maximum_power_w": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "id": {
+                  "$ref": "#/components/schemas/Ulid"
+                },
+                "current_type": {
+                  "type": "string"
+                },
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "available",
+                    "occupied",
+                    "reserved",
+                    "unavailable",
+                    "faulted",
+                    "offline",
+                    "stale",
+                    "unknown"
+                  ]
+                },
+                "status_observed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "reported_status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "available",
+                    "preparing",
+                    "charging",
+                    "suspendedev",
+                    "suspendedevse",
+                    "finishing",
+                    "occupied",
+                    "reserved",
+                    "unavailable",
+                    "faulted",
+                    null
+                  ],
+                  "description": "Detailed device status; null when disconnected, stale, replaced or superseded by orchestration."
                 }
               }
             }
@@ -4825,6 +7547,13 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "ocpp_password": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 16,
+            "maxLength": 72,
+            "description": "Set or rotate the station's OCPP Basic credential; never returned. Used only by legacy Basic-auth mode; not needed for URL-only registration."
+          },
           "name": {
             "type": "string",
             "maxLength": 160
@@ -4948,6 +7677,552 @@
             }
           }
         }
+      },
+      "ChargingAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "business",
+              "fleet"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "billing_manager",
+              "fleet_manager",
+              "driver"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "role",
+          "permissions"
+        ],
+        "additionalProperties": false
+      },
+      "ChargingAccountInvitation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "account_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "billing_manager",
+              "fleet_manager",
+              "driver"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "account_name",
+          "email",
+          "role",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "ChargingAccountMember": {
+        "type": "object",
+        "properties": {
+          "subject_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "billing_manager",
+              "fleet_manager",
+              "driver"
+            ]
+          }
+        },
+        "required": [
+          "subject_id",
+          "name",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "ChargingAccountLimit": {
+        "type": "object",
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "vehicle"
+            ]
+          },
+          "target_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "PHP minor units per session reservation; zero blocks starts, not a monthly allowance."
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "amount_minor"
+        ],
+        "additionalProperties": false
+      },
+      "ChargingAttribution": {
+        "type": "object",
+        "properties": {
+          "driver_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "driver_name": {
+            "type": "string"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "account_name": {
+            "type": "string"
+          },
+          "payer": {
+            "type": "string"
+          },
+          "wallet_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vehicle": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+                  },
+                  "nickname": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "nickname"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit_period": {
+            "type": "string",
+            "const": "per_session"
+          }
+        },
+        "required": [
+          "driver_id",
+          "payer"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerChargePreparation": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "object",
+            "properties": {
+              "connector_id": {
+                "type": "string"
+              },
+              "connector_name": {
+                "type": "string"
+              },
+              "connector_standard": {
+                "type": "string"
+              },
+              "maximum_power_w": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "station_id": {
+                "type": "string"
+              },
+              "station_name": {
+                "type": "string"
+              },
+              "station_address": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "readiness": {
+                "type": "string"
+              },
+              "status_observed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "connector_id",
+              "connector_name",
+              "connector_standard",
+              "maximum_power_w",
+              "station_id",
+              "station_name",
+              "station_address",
+              "readiness",
+              "status_observed_at"
+            ],
+            "additionalProperties": false
+          },
+          "quote": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "tariff_version_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "tax_inclusive": {
+                "type": "boolean"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "dimension": {
+                      "type": "string"
+                    },
+                    "price_minor": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unit_quantity": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "price_minor",
+                    "unit_quantity",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "estimated_preauthorization": {
+                "type": "object",
+                "properties": {
+                  "amount_minor": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "enum": [
+                      "PHP"
+                    ]
+                  }
+                },
+                "required": [
+                  "amount_minor",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "tax_rate_basis_points": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "required": [
+              "id",
+              "tariff_version_id",
+              "name",
+              "currency",
+              "tax_inclusive",
+              "lines",
+              "estimated_preauthorization",
+              "expires_at",
+              "tax_rate_basis_points"
+            ],
+            "additionalProperties": false
+          },
+          "payment_methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "prepaid_wallet"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "is_default": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "is_default"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/ChargingAttribution"
+          }
+        },
+        "required": [
+          "target",
+          "quote",
+          "payment_methods"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerChargingSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          },
+          "station_name": {
+            "type": "string"
+          },
+          "connector_id": {
+            "type": "string"
+          },
+          "connector_name": {
+            "type": "string"
+          },
+          "energy_wh": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "energy_flow_seconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "current_power_w": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimated_cost_minor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "final_cost_minor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stopped_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_deadline_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "aggregate_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "anomaly_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "payment_state": {
+            "type": "string",
+            "enum": [
+              "authorized",
+              "captured",
+              "not_required",
+              "requires_action"
+            ]
+          },
+          "reserved_budget_minor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "refundable": {
+            "type": "boolean"
+          },
+          "receipt": {
+            "type": "null"
+          },
+          "invoice": {
+            "type": "null"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/ChargingAttribution"
+          },
+          "cancellation_requested": {
+            "type": "boolean",
+            "description": "A durable customer cancellation awaits charger confirmation; it does not mean stopped or funds released.",
+            "default": false
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "station_id",
+          "station_name",
+          "connector_id",
+          "connector_name",
+          "energy_wh",
+          "duration_seconds",
+          "energy_flow_seconds",
+          "current_power_w",
+          "currency",
+          "estimated_cost_minor",
+          "final_cost_minor",
+          "requested_at",
+          "started_at",
+          "stopped_at",
+          "start_deadline_at",
+          "updated_at",
+          "aggregate_version",
+          "failure_reason",
+          "anomaly_flags",
+          "payment_state",
+          "reserved_budget_minor",
+          "refundable",
+          "receipt",
+          "invoice"
+        ],
+        "additionalProperties": false
       }
     }
   }

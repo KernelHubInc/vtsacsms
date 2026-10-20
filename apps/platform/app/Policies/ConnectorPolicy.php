@@ -21,6 +21,11 @@ final readonly class ConnectorPolicy
         return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::AssetView);
     }
 
+    public function create(User $user): bool
+    {
+        return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::AssetManage);
+    }
+
     public function view(User $user, Connector $connector): bool
     {
         return $this->allows($user, $connector, PermissionKey::AssetView);
@@ -29,6 +34,11 @@ final readonly class ConnectorPolicy
     public function update(User $user, Connector $connector): bool
     {
         return $this->allows($user, $connector, PermissionKey::AssetManage);
+    }
+
+    public function delete(User $user, Connector $connector): bool
+    {
+        return $this->update($user, $connector);
     }
 
     private function allows(User $user, Connector $connector, PermissionKey $permission): bool

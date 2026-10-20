@@ -35,7 +35,7 @@ abstract class PortalStatsOverview extends StatsOverviewWidget
             Stat::make('Network availability', $metrics['network_availability_percent'].'%')
                 ->description($metrics['available_connectors'].' currently available')
                 ->color('success'),
-            Stat::make('Online / offline chargers', $metrics['online_chargers'].' / '.$metrics['offline_chargers'])
+            Stat::make('Online / not online chargers', $metrics['online_chargers'].' / '.$metrics['offline_chargers'])
                 ->description($metrics['stale_connectors'].' stale connector signals')
                 ->color($metrics['offline_connectors'] > 0 ? 'warning' : 'success'),
             Stat::make('Active sessions', (string) $metrics['active_sessions'])

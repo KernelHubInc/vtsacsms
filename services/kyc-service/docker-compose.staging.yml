@@ -1,0 +1,19 @@
+# Use with docker-compose.yml and a separately provisioned staging .env.
+# Private network attachment, certificates and S3 IAM are deployment-specific.
+services:
+  kyc-api:
+    ports: !reset []
+  kyc-api-ingress:
+    image: caddy:2-alpine
+    environment:
+      KYC_INTERNAL_HOST: ${KYC_INTERNAL_HOST:?Set the private DNS name covered by your certificate}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${KYC_TLS_CERT:?Supply the provisioned certificate}:/run/tls/cert.pem:ro
+      - ${KYC_TLS_KEY:?Supply the provisioned private key}:/run/tls/key.pem:ro
+    ports: ['${KYC_PRIVATE_BIND:?Set private network bind address}:8443:8443']
+    networks: [private]
+    restart: unless-stopped
+    depends_on:
+      kyc-api:
+        condition: service_healthy

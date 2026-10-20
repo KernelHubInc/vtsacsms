@@ -14,5 +14,6 @@ final readonly class RatingInput
         public int $parkingSeconds,
         public int $idleSeconds,
         public CarbonImmutable $startedAt,
+        public int $energyFlowSeconds = 0,
     ) {}
 }

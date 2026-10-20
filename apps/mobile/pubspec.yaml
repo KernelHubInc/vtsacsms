@@ -25,8 +25,15 @@ dependencies:
   mobile_scanner: ^7.4.0
   shared_preferences: ^2.5.4
   url_launcher: ^6.3.2
+  image_picker: ^1.2.3
+  camera: ^0.12.1
+  local_auth: 3.0.2
+  cryptography: 2.9.0
+  qr_flutter: 4.1.0
+  gal: 2.3.3
 
 dev_dependencies:
+  camera_platform_interface: 2.14.0
   flutter_test:
     sdk: flutter
   integration_test:

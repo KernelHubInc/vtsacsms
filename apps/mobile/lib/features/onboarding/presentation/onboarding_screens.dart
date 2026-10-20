@@ -109,37 +109,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         alignment: Alignment.centerLeft,
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 560),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              PowerSolutionsFeatureArt(icon: item.icon),
-                              const SizedBox(height: VtsaSpacing.xl),
-                              Text(
-                                item.eyebrow,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      letterSpacing: 1.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              const SizedBox(height: VtsaSpacing.sm),
-                              Text(
-                                item.title,
-                                style: Theme.of(context).textTheme.displayLarge,
-                              ),
-                              const SizedBox(height: VtsaSpacing.lg),
-                              Text(
-                                item.body,
-                                style: Theme.of(context).textTheme.bodyLarge
-                                    ?.copyWith(
-                                      color: context.vtsaColors.textMuted,
-                                    ),
-                              ),
-                            ],
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                PowerSolutionsFeatureArt(icon: item.icon),
+                                const SizedBox(height: VtsaSpacing.xl),
+                                Text(
+                                  item.eyebrow,
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        letterSpacing: 1.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: VtsaSpacing.sm),
+                                Text(
+                                  item.title,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.displayLarge,
+                                ),
+                                const SizedBox(height: VtsaSpacing.lg),
+                                Text(
+                                  item.body,
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        color: context.vtsaColors.textMuted,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

@@ -40,6 +40,10 @@ final readonly class MeterValueService
 
                     continue;
                 }
+                // Auxiliary telemetry remains in the inbound event; it is not a billing measurement.
+                if ($this->isAuxiliaryTelemetry($sample)) {
+                    continue;
+                }
                 $reading = $this->normalize($sample, $receivedAt);
                 if ($reading === null) {
                     $anomalies[] = SessionAnomaly::InvalidMeterValue->value;
@@ -71,9 +75,12 @@ final readonly class MeterValueService
             if ($reset) {
                 $anomalies[] = SessionAnomaly::MeterReset->value;
             }
+            $flow = app(EnergyFlowDuration::class)->measure($locked);
             $locked->forceFill([
+                'energy_flow_seconds' => $flow['seconds'],
+                'energy_flow_evidence_complete' => $flow['complete'],
                 'energy_wh' => $energyWh,
-                'duration_seconds' => $locked->started_at === null ? 0 : max(0, $locked->started_at->diffInSeconds($receivedAt)),
+                'duration_seconds' => $locked->started_at === null ? 0 : max(0, (int) $locked->started_at->diffInSeconds($receivedAt)),
                 'anomaly_flags' => array_values(array_unique($anomalies)),
                 'last_protocol_event_at' => $receivedAt,
             ]);
@@ -84,6 +91,7 @@ final readonly class MeterValueService
                     parkingSeconds: (int) $locked->parking_seconds,
                     idleSeconds: (int) $locked->idle_seconds,
                     startedAt: $locked->started_at,
+                    energyFlowSeconds: $flow['seconds'],
                 ));
                 $locked->estimated_cost_minor = $rating->totalMinor;
             }
@@ -134,6 +142,7 @@ final readonly class MeterValueService
             ->where('session_id', $session->getKey())
             ->where('unit', 'Wh')
             ->where('measurand', 'Energy.Active.Import.Register')
+            ->whereNull('phase')
             ->orderBy('sampled_at')
             ->orderBy('id')
             ->get();
@@ -172,6 +181,25 @@ final readonly class MeterValueService
         }
 
         return [$energy, $reset];
+    }
+
+    /** @param array<string, mixed> $sample */
+    private function isAuxiliaryTelemetry(array $sample): bool
+    {
+        $units = match ($sample['measurand'] ?? null) {
+            'Voltage' => ['V'],
+            'Current.Import', 'Current.Export', 'Current.Offered' => ['A'],
+            'Temperature' => ['Celsius', 'Fahrenheit', 'K'],
+            default => [],
+        };
+        $value = $sample['value'] ?? null;
+        if (! in_array($sample['unit'] ?? null, $units, true)
+            || ! is_numeric($value) || ! is_finite((float) $value)
+            || ($sample['measurand'] !== 'Temperature' && (float) $value < 0)) {
+            return false;
+        }
+
+        return true;
     }
 
     private function integer(mixed $value): ?int

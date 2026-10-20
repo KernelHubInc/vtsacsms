@@ -6,10 +6,15 @@ namespace App\Filament\Operator\Resources\Connectors;
 
 use App\Filament\Operator\Resources\Connectors\Pages\ListConnectors;
 use App\Filament\Shared\Actions\AuditedEditAction;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
+use App\Modules\Assets\Application\AccessibleStationsQuery;
 use App\Modules\Assets\Domain\AssetLifecycleStatus;
+use App\Modules\Assets\Domain\Models\ChargingCurrentType;
 use App\Modules\Assets\Domain\Models\Connector;
+use App\Modules\Assets\Domain\Models\ConnectorStandard;
+use App\Modules\Assets\Domain\Models\Evse;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -39,11 +44,18 @@ final class ConnectorResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('connector_number')->integer()->minValue(1)->required(),
-            TextInput::make('maximum_power_w')->label('Maximum power (W)')->integer()->minValue(0)->required(),
+            Select::make('evse_id')->label('Station / EVSE')->searchable()->required()->visibleOn('create')
+                ->options(fn (): array => Evse::query()->with('station')->whereIn('charging_station_id', app(AccessibleStationsQuery::class)->for(auth()->user(), PermissionKey::AssetManage)->select('charging_stations.id'))->get()->mapWithKeys(fn (Evse $evse): array => [$evse->getKey() => $evse->station->name.' · '.$evse->station->charge_point_identity.' / EVSE '.$evse->evse_number])->all()),
+            TextInput::make('connector_number')->integer()->minValue(1)->maxValue(65535)->required()->disabledOn('edit')
+                ->helperText('Match the device-reported OCPP number. OCPP 1.6 numbers must be unique across the station. Numbering is locked after creation.'),
+            Select::make('connector_standard_id')->label('Plug standard')->required()->searchable()->disabledOn('edit')
+                ->options(fn (): array => ConnectorStandard::query()->whereNull('archived_at')->pluck('name', 'id')->all()),
+            Select::make('charging_current_type_id')->label('Current type')->required()->disabledOn('edit')
+                ->options(fn (): array => ChargingCurrentType::query()->whereNull('archived_at')->pluck('name', 'id')->all()),
+            TextInput::make('maximum_power_w')->label('Maximum power (W)')->helperText('Enter watts: 7 kW = 7000 W.')->integer()->minValue(1)->maxValue(2000000)->required(),
             Select::make('lifecycle_status')
-                ->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()]))
-                ->required(),
+                ->options(fn (string $operation): array => collect(AssetLifecycleStatus::cases())->filter(fn ($status): bool => $operation !== 'create' || in_array($status->value, ['draft', 'active'], true))->mapWithKeys(fn ($status) => [$status->value => str($status->value)->headline()])->all())
+                ->default('draft')->required(),
         ]);
     }
 
@@ -58,6 +70,9 @@ final class ConnectorResource extends Resource
             TextColumn::make('lifecycle_status')->badge(),
         ])
             ->filters([
+                SelectFilter::make('station')->label('Charging station')
+                    ->options(fn (): array => app(AccessibleStationsQuery::class)->for(auth()->user())->pluck('name', 'id')->all())->searchable()
+                    ->query(fn (Builder $query, array $data): Builder => $query->when($data['value'] ?? null, fn (Builder $query, string $id): Builder => $query->whereHas('evse', fn (Builder $query): Builder => $query->where('charging_station_id', $id)))),
                 SelectFilter::make('lifecycle_status')
                     ->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(
                         fn (AssetLifecycleStatus $status): array => [
@@ -77,6 +92,7 @@ final class ConnectorResource extends Resource
                     'qr_identifier' => 'QR identifier',
                 ]),
                 AuditedEditAction::make('assets.connector.updated', 'connector'),
+                DeleteNetworkRecordAction::make(),
             ]);
     }
 
@@ -107,7 +123,7 @@ final class ConnectorResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return parent::canCreate();
     }
 
     public static function canEdit(Model $record): bool
@@ -125,6 +141,6 @@ final class ConnectorResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        return parent::canDelete($record);
     }
 }

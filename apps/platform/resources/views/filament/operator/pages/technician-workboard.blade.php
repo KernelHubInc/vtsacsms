@@ -1,7 +1,6 @@
 <x-filament-panels::page>
     <section class="mx-auto max-w-3xl space-y-5">
         <header class="rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 p-6 text-white shadow-lg shadow-violet-900/15">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-violet-100">Technician workboard</p>
             <h1 class="mt-2 text-2xl font-semibold">Today’s assigned work</h1>
             <p class="mt-2 max-w-xl text-sm leading-6 text-violet-100">
                 Evidence, safety steps, parts, and elapsed time remain attached to the server-side work order.

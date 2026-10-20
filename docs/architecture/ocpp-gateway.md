@@ -7,6 +7,8 @@
 
 The Python gateway is an independently deployable asynchronous service. Laravel never hosts charger sockets, and the gateway never imports Laravel code or connects to Laravel-owned PostgreSQL tables.
 
+Staging supports Docker or an isolated native systemd process under [ADR 0025](decisions/0025-native-staging-ocpp-runtime.md). The [runtime switcher](../runbooks/ocpp-native-staging.md) moves both public WebSockets and private core commands to the selected process; the existing Redis consumers and registration contracts remain shared.
+
 ```mermaid
 flowchart LR
     charger["Enrolled EV charger"] <-->|"OCPP 1.6J or 2.0.1 over WSS"| gateway["Async OCPP gateway"]
@@ -21,6 +23,8 @@ flowchart LR
 Redis Streams is the approved phase-six event transport, not canonical business storage. A production durability/replay decision remains open. The core must deduplicate normalized events by `event_id`, validate tenant/charger enrollment, and use its own inbox/state guards before changing canonical Charging state.
 
 ## Connection flow
+
+Dynamic enrollment (ADR 0023) replaces the injected registry when `OCPP_CORE_AUTH_URL` is configured. Each new handshake authenticates over HTTPS against the platform's versioned machine endpoint, deriving the tenant and station from current Assets records and Identity-owned credentials. Admin creation/credential rotation needs no gateway restart. Core rejection or outage fails closed, with no static fallback. Active sockets retain their existing binding until disconnected. Static certificate/Basic enrollment below remains available only when dynamic mode is unset.
 
 1. Negotiate exactly `ocpp2.0.1` or `ocpp1.6`; otherwise close with protocol error.
 2. Require TLS outside the explicit local-development mode.
@@ -66,6 +70,8 @@ The internal command endpoint requires a bearer service credential. The core sup
 
 ## Health and observability
 
+The single-VPS OCPP 1.6J staging deployment is described in [the staging runbook](../runbooks/ocpp-staging-quickstart.md). Its overlay aligns the gateway and both core consumers on staging Redis DB 0 and the `vtsa:staging:ocpp` namespace, binds the gateway to host loopback behind the existing HTTPS Nginx route, and disables outbound commands during connectivity acceptance. The Assets registry is supplied through a private, generated dotenv file containing per-device Argon2id hashes. No ownership or event-schema change is introduced.
+
 - `/health/live` proves the process can answer HTTP.
 - `/health/ready` proves Redis is reachable and reports TLS mode and active local connections.
 - `/internal/metrics` exposes connection gauges, message/duplicate/event/clock-skew/command counters, and command latency.
@@ -93,3 +99,90 @@ Readiness fails when Redis is unavailable because identity-wide ownership, dedup
 Assumptions: each production charger is enrolled to one Assets charger ULID/tenant; TLS terminates either in this process or at a trusted edge that preserves the security boundary; Redis Streams is acceptable for the phase-six transport; the core implements idempotent event consumption and authorization response handling.
 
 Open decisions: production broker/durable inbox-outbox and replay retention; service-to-service credential technology; certificate authority/enrollment protocol and required OCPP security profiles by charger capability; edge versus in-process TLS termination; per-device rate limits and capacity SLOs; deployment draining; multi-region/fencing topology; OCPP conformance/certification targets; vendor DataTransfer adapters; signed meter/firmware support; protocol evidence retention and privacy classification.
+
+## Live station projection (2026-10-04)
+
+Charging owns `charging_station_connections` and the nullable connection ID / precise
+event-time fields added to connector status snapshots. Authenticated connected, boot,
+heartbeat, disconnected and other normalized events update this durable projection
+through the existing idempotent inbox. Station events validate the active Assets
+station, tenant, identity and protocol without requiring a unique connector.
+Connector 0 is station-level evidence and never means connector 1 is available.
+
+Connection IDs fence replaced sockets; gateway event times prevent stale updates.
+Gateway hosts must keep synchronized UTC clocks because connection IDs are time
+ordered ULIDs. A disconnect from a replaced connection cannot take its successor
+offline. An explicit disconnect cannot be reversed by a delayed heartbeat from
+that same socket. Replayed transaction evidence still goes to the session state
+machine; connection fencing only suppresses obsolete status snapshots.
+
+The default silence deadline is 180 seconds (`OCPP_CONNECTION_STALE_AFTER_SECONDS`),
+which must exceed the configured gateway heartbeat interval plus delivery jitter.
+The deadline is evaluated on reads, including after gateway crash or lost disconnect.
+No scheduler is required. Connected/online means authenticated recent communication,
+not proof of charging readiness or a successful charging transaction.
+
+StatusNotification stores gateway observation time for freshness; original device
+clock/timestamp remains in inbox evidence. A current connection's heartbeats keep its
+reported connector state usable, without rewriting the connector observation timestamp.
+After reconnect, a fresh connector report is required; boot/heartbeat alone never
+manufactures Available. Legacy seeded connector records retain their existing freshness
+rules until live connection evidence arrives, and have connection status Unknown.
+
+Admin station/status tables poll at five seconds. Dashboard counts use actual station
+connections; never-seen stations are included in Not online, rather than inferred online
+from absence of an offline connector. Public discovery and dashboard cache lifetimes
+are five seconds. The public API requires HTTP revalidation instead of serving stale
+availability. Mobile discovery refreshes every five seconds while foregrounded and
+network-connected, using the latest bounds or nearby search; it cancels timers on disposal.
+Normal display latency is up to approximately ten seconds plus event processing/network
+latency. This is bounded polling, not a browser push subscription or a hard real-time guarantee.
+
+### Rollout
+
+Admin connection-status fields are added only to the station list query. Edit-page
+record binding uses the ordinary tenant-scoped asset query, so the connection
+projection's `id` cannot make the station lookup ambiguous or enter edit-form data.
+
+The staging database may be reached through its private network address rather than
+the local Compose `postgres` service. Back up the database identified by the running
+platform's `DB_HOST` and `DB_DATABASE`; backing up an unused local database is not
+sufficient. Confirm the migration is marked `Ran` before replacing the web services.
+The dashboard requires both `charging_station_connections` and the new connector
+status columns; deploying code without the migration causes an HTTP 500.
+
+On Docker's containerd image store, a container image ID may not be directly
+taggable. The staging helper resolves its original image reference and checks a
+stopped, network-disabled probe against the running container's image or manifest
+digest before sharing the image with consumers. A changed tag is rejected. The
+probe is removed and is never started.
+
+1. Install the committed Composer lockfile (Laravel 13.34.0, CommonMark 2.10.3,
+   Flysystem 3.36.0 include fixes for four advisories found during this change).
+   Apply additive migration `2026_10_04_000001_create_charging_station_connections`
+   before restarting web and OCPP consumers with the new code. Preserve all existing
+   staging Compose overrides and private environment files.
+2. Build/deploy the updated platform image; `ocpp-staging.py up` alone reuses the
+   running platform image and does not apply this migration. Restart the event
+   consumer so it uses the updated handler; rebuild/deploy the mobile
+   app for automatic refresh and the new connection badge. An unchanged mobile build
+   can read updated availability but does not gain the new timer.
+3. Keep simulator clients disconnected while testing the physical charge-point identity.
+4. Observe an authenticated connection, accepted boot, heartbeats and a real connector
+   StatusNotification. Confirm admin last-message time, then public/mobile availability.
+5. Disconnect the test charger and verify Offline; reconnect and verify it stays Unknown
+   for availability until a new connector report. Simulate silence to test the deadline.
+
+Older code ignores the additive table, so application rollback need not remove it.
+There is no historical inbox replay/backfill: the next live message initializes presence.
+The gateway still requires enrollment, TLS and device authentication. Configuring a URL
+alone does not bypass these requirements. No automatic asset creation or remote command
+allowlist change is part of this update.
+
+
+### URL-only registered chargers (ADR 0024)
+
+The operator-authorized URL-only mode supersedes mandatory device credentials in ADR 0023 for deployments using `OCPP_CORE_REGISTRATION_URL`. The gateway's service-protected registration query derives tenant/station bindings from active Assets and Tenancy records on every connection, without requiring or verifying a device password. Admin no longer asks for a password. Existing credentials remain unused in this mode. Unknown/inactive IDs and protocol mismatches fail closed. The ID is not proof of device identity: impersonation is possible; network restrictions are recommended. Service bearer authentication and WSS remain enforced. See [ADR 0024](decisions/0024-url-only-registered-chargers.md).
+
+
+Core tenant/station ULIDs may contain uppercase or lowercase Crockford Base32 characters. Gateway validation accepts both and preserves the exact identifier returned by core in leases and events; it must not uppercase database keys. The public charge-point identity remains an exact match. Regression coverage includes lowercase bindings returned by newly created platform stations.

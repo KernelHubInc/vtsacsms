@@ -59,7 +59,7 @@ This phase defines the product and architecture only. It does not authorize impl
 ### 5.1 Experience surfaces
 
 - **Public web:** marketing content, public location/EVSE/connector discovery, availability display, tariff summaries, accessibility details, and deep links to the app.
-- **Consumer mobile:** identity, discovery, charging initiation/control where permitted, live session status, receipts/invoices, payment methods through provider tokenization, support, and notifications.
+- **Consumer mobile:** identity, discovery, charging initiation/control where permitted, live session status, receipts/invoices, payment methods through provider tokenization, support, and notifications. MOB-AUTH-001 requires sign-in and email verification before browsing; only account creation, recovery, and verification are accessible to guests. MOB-KYC-002 requires document/face outlines, step-by-step capture guidance, an explicit readiness action before the live challenge, and photo review before upload. See [mobile user flows](../design/mobile-user-flows.md).
 - **Admin/operator:** tenant configuration, role-scoped operations, locations/assets, charger monitoring, sessions, tariffs, financial operations, procurement, inventory, maintenance, CMS, support, reporting, and integration management.
 - **OCPP gateway:** authenticated charger connections, protocol validation, heartbeats/status, transaction messages, meter values, remote command routing, correlation, and safe store-and-forward behavior.
 - **External API/webhooks:** versioned integration surfaces for approved partners and tenant systems.
@@ -113,6 +113,8 @@ Target values are deliberately deferred until expected scale, markets, and SLAs 
 - maintenance mean time to acknowledge/repair and repeat-fault rate;
 - notification delivery rate, support response/resolution time, and customer satisfaction;
 - tenant-isolation incidents, privileged-access reviews, and audit completeness.
+
+MOB-AUTH-002: Android/iOS drivers may opt into a separate six-digit app PIN and optional OS-enrolled biometrics after password sign-in and email verification. Unlock is device-local, locks on restart/background, enforces a persistent five-attempt PIN limit and cannot bypass server session expiry, revocation, tenant scope or verification. Password recovery remains available. See [mobile user flows](../design/mobile-user-flows.md) and [ADR-0020](../architecture/decisions/0020-mobile-pin-and-biometric-unlock.md).
 
 ## 8. Canonical Data Conventions
 
@@ -263,3 +265,20 @@ The layout is a proposal, not an instruction to scaffold applications during Pha
 - [x] Root engineering standards cover coding, testing, security, documentation, and migrations.
 - [ ] Product, security, operations, finance, and engineering stakeholders approve the baseline.
 - [ ] Open implementation gates receive owners and target dates before Phase 1 starts.
+
+## Mobile feature review acceptance (FR-01–FR-11)
+
+The 2026-10-06 feature review is tracked in [mobile staging acceptance](../runbooks/mobile-feature-review-testing.md). The product owner confirmed minimum signup age 18 and a Plate pending option. Wallet payments, pre-submit OCR autofill and booking/queue workflows are explicitly deferred; no production AUB transaction is part of this release.
+
+### Prepaid wallet increment (2026-10-08)
+
+REQ-WALLET-001 through REQ-WALLET-005 in ADR-0022 specify PHP prepaid balances, QR Ph top-ups, account/tenant isolation, idempotent confirmation and default-off live collection. Initial acceptance is simulated staging only. Mobile includes history, expiry and payment status. Physical charging consumption, cards, hosted wallet checkout, cash-out, refund operations and live reconciliation approval remain separately gated.
+
+## Dynamic OCPP enrollment (FR-OCPP-ENROLL-01)
+
+This original credential-based requirement is superseded for URL-only deployments by FR-OCPP-ENROLL-02 and ADR 0024. The legacy Basic-auth endpoint and optional station API credential provisioning remain available for compatibility. The current admin form does not request device passwords.
+
+
+### FR-OCPP-ENROLL-02 - URL-only registered chargers
+
+An active station with an active tenant and matching OCPP version can connect to `/ocpp/{charge-point-id}` without a device password or client certificate in explicitly activated URL-only mode. Admin creation and editing require no OCPP password; existing stations need no re-save or credential record. Unknown/inactive IDs fail closed. Gateway-to-core service authentication remains required. This operator-approved mode provides registration checks, not proof of physical device identity (ADR 0024); it does not authorize charging or guarantee online status until communication occurs.

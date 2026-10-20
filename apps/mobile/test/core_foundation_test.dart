@@ -28,6 +28,40 @@ void main() {
     },
   );
 
+  test(
+    'staging and production permit HTTP only for local loopback testing',
+    () {
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.staging,
+          Uri.parse('http://localhost:8001'),
+        ),
+        isTrue,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('http://127.0.0.1:8000'),
+        ),
+        isTrue,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('http://api.example.test'),
+        ),
+        isFalse,
+      );
+      expect(
+        AppEnvironment.allowsApiUri(
+          AppEnvironmentName.production,
+          Uri.parse('https://api.example.test'),
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('ULID generator produces sortable public identifier shape', () {
     final ids = UlidGenerator(now: () => DateTime.utc(2026, 7, 23));
     final value = ids.next();
@@ -73,6 +107,56 @@ void main() {
     expect(failure.code, 'validation_failed');
     expect(failure.fieldErrors['email'], ['Email is required.']);
     expect(failure.correlationId, '01K0M0JJ5X0M0JJ5X0M0JJ5X0M');
+  });
+
+  test('account field errors stay attached to the invitation email', () {
+    final request = RequestOptions(
+      path: '/api/v1/charging-accounts/account/invitations',
+    );
+    final failure = AppFailure.fromDio(
+      DioException.badResponse(
+        statusCode: 422,
+        requestOptions: request,
+        response: Response<Map<String, dynamic>>(
+          requestOptions: request,
+          statusCode: 422,
+          data: {
+            'error': {
+              'code': 'invalid_request',
+              'message': 'Register first.',
+              'fields': {
+                'email': ['Use a registered email address.'],
+              },
+            },
+          },
+        ),
+      ),
+    );
+    expect(failure.fieldErrors['email'], ['Use a registered email address.']);
+  });
+
+  test('server errors do not display private diagnostics', () {
+    final request = RequestOptions(path: '/example');
+    final failure = AppFailure.fromDio(
+      DioException.badResponse(
+        statusCode: 500,
+        requestOptions: request,
+        response: Response<Map<String, Object?>>(
+          requestOptions: request,
+          statusCode: 500,
+          data: {
+            'error': {
+              'code': 'internal_error',
+              'message': 'Private database diagnostic',
+              'correlation_id': 'synthetic-request',
+            },
+          },
+        ),
+      ),
+    );
+    expect(failure.kind, FailureKind.server);
+    expect(failure.message, 'The service is temporarily unavailable.');
+    expect(failure.correlationId, 'synthetic-request');
   });
 
   test('memory token store supports revocation', () async {

@@ -4,7 +4,14 @@ import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
 
 final class ApiChargingRepository implements ChargingRepository {
-  ApiChargingRepository(this._client);
+  ApiChargingRepository(this._client, {this.accountId});
+  final String? Function()? accountId;
+  Options _options([String? key]) => Options(
+    headers: {
+      'X-Charging-Account-ID': ?accountId?.call(),
+      'Idempotency-Key': ?key,
+    },
+  );
 
   final ApiClient _client;
 
@@ -17,6 +24,7 @@ final class ApiChargingRepository implements ChargingRepository {
       final response = await _client.dio.post<Map<String, dynamic>>(
         '/api/v1/mobile/charging/prepare',
         data: {'charger_code': code.value, 'vehicle_id': ?vehicleId},
+        options: _options(),
       );
       return ChargePreparation.fromJson(
         response.data!['data']! as Map<String, dynamic>,
@@ -36,7 +44,7 @@ final class ApiChargingRepository implements ChargingRepository {
           'quote_id': request.quoteId,
           'payment_method_id': request.paymentMethodId,
         },
-        options: Options(headers: {'Idempotency-Key': request.idempotencyKey}),
+        options: _options(request.idempotencyKey),
       );
       final data = response.data!['data']! as Map<String, dynamic>;
       return ChargingSession.fromJson(
@@ -120,6 +128,7 @@ final class ApiChargingRepository implements ChargingRepository {
       final response = await _client.dio.get<Map<String, dynamic>>(
         '/api/v1/mobile/charging-sessions',
         queryParameters: {'cursor': ?cursor},
+        options: _options(),
       );
       final body = response.data!;
       final meta = body['meta'] as Map<String, dynamic>?;

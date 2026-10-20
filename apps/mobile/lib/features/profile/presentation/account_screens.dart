@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/platform/platform_services.dart';
+import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -16,8 +18,8 @@ class AccountScreen extends StatelessWidget {
     animation: dependencies.auth,
     builder: (context, _) {
       final user = dependencies.auth.user;
-      return VtsaPageShell(
-        eyebrow: 'Driver',
+      return DriverTabPage(
+        subtitle: 'Manage your driver profile',
         title: 'Account',
         body: ListView(
           children: [
@@ -40,15 +42,59 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
             ] else ...[
-              VtsaCard(
-                eyebrow: user?.emailVerified == true
-                    ? 'VERIFIED DRIVER'
-                    : 'VERIFICATION NEEDED',
-                title: user?.name ?? 'Power Solutions driver',
+              ChargingAccountSelector(dependencies: dependencies),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.vtsaColors.brandSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user?.email ?? 'Profile temporarily unavailable'),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          child: const Icon(Icons.person_outline),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user?.name ?? 'Power Solutions driver',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user?.email ??
+                                    'Profile temporarily unavailable',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                user?.emailVerified == true
+                                    ? 'Email verified'
+                                    : 'Email verification needed',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: user?.emailVerified == true
+                                          ? context.vtsaColors.success
+                                          : null,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     if (user?.mobileNumber != null) Text(user!.mobileNumber!),
                     const SizedBox(height: VtsaSpacing.md),
                     Wrap(
@@ -71,11 +117,30 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: VtsaSpacing.md),
+              if (dependencies.auth.quickUnlock?.device.supported == true)
+                _AccountTile(
+                  icon: Icons.fingerprint,
+                  title: 'PIN & fingerprint',
+                  subtitle: 'Set up quick unlock on this phone',
+                  onTap: () => context.push('/account/security'),
+                ),
+              _AccountTile(
+                icon: Icons.verified_user_outlined,
+                title: 'Identity verification',
+                subtitle: 'Check your status or complete verification',
+                onTap: () => context.push('/kyc'),
+              ),
               _AccountTile(
                 icon: Icons.directions_car_outlined,
                 title: 'My vehicles',
                 subtitle: 'Connector standards and compatibility',
                 onTap: () => context.push('/vehicles'),
+              ),
+              _AccountTile(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Wallet & payments',
+                subtitle: 'QR Ph top-ups and charging balance',
+                onTap: () => context.go('/wallet'),
               ),
             ],
             const SizedBox(height: VtsaSpacing.md),
@@ -108,7 +173,7 @@ class AccountScreen extends StatelessWidget {
                     dependencies.vehicles.load(),
                   ]);
                   if (context.mounted) {
-                    context.go('/explore');
+                    context.go('/login');
                   }
                 },
               ),
@@ -133,6 +198,12 @@ class ProfileScreen extends StatelessWidget {
       body: ListView(
         children: [
           _ReadOnlyField(label: 'Name', value: user?.name ?? 'Unavailable'),
+          const SizedBox(height: VtsaSpacing.md),
+          VtsaButton(
+            label: 'Identity verification',
+            onPressed: () => context.push('/kyc'),
+            variant: VtsaButtonVariant.secondary,
+          ),
           const SizedBox(height: VtsaSpacing.md),
           _ReadOnlyField(label: 'Email', value: user?.email ?? 'Unavailable'),
           const SizedBox(height: VtsaSpacing.md),
@@ -233,14 +304,17 @@ class _AccountTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => VtsaCard(
-    padding: EdgeInsets.zero,
-    child: ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: VtsaCard(
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
     ),
   );
 }

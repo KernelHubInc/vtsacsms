@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Locations\Application;
 
+use App\Modules\Charging\Application\StationConnectionQuery;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
@@ -37,7 +38,6 @@ final class PublicStationSearch
                 'city.name as city_name',
                 'operator.id as operator_id', 'operator.name as operator_name',
             ]);
-
         if (isset($filters['operator_id'])) {
             $query->where('site.operator_organization_id', $filters['operator_id']);
         }
@@ -53,7 +53,6 @@ final class PublicStationSearch
         if (isset($filters['city'])) {
             $query->where('city.name', 'ilike', '%'.$filters['city'].'%');
         }
-
         $candidateLimit = min(max((int) $filters['limit'] * 5, 250), 1000);
         $stations = DB::getDriverName() === 'pgsql'
             ? array_values($this->postgis($query, $filters)->limit($candidateLimit)->get()->map(fn (object $row): array => $this->rowToArray($row))->all())
@@ -119,6 +118,8 @@ final class PublicStationSearch
             return $stations;
         }
         $stationCollection = collect($stations);
+        $connectionQuery = app(StationConnectionQuery::class);
+        $connections = $connectionQuery->forStations(array_values($stationCollection->pluck('id')->all()));
         $connectors = DB::table('connectors as connector')
             ->join('evses as evse', function ($join): void {
                 $join->on('evse.id', '=', 'connector.evse_id')->on('evse.tenant_id', '=', 'connector.tenant_id');
@@ -130,10 +131,10 @@ final class PublicStationSearch
             })
             ->whereIn('evse.charging_station_id', $stationCollection->pluck('id'))
             ->where('connector.lifecycle_status', 'active')
-            ->select(['evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.status', 'signal.observed_at', 'signal.stale_after_seconds'])
+            ->select(['connector.id', 'evse.charging_station_id', 'standard.code', 'standard.name', 'current.code as current_type', 'connector.maximum_power_w', 'signal.ocpp_connection_id', 'signal.status', 'signal.reported_status', 'signal.observed_at', 'signal.stale_after_seconds'])
             ->get()->groupBy('charging_station_id');
 
-        return array_values($stationCollection->map(function (array $station) use ($connectors): array {
+        return array_values($stationCollection->map(function (array $station) use ($connectors, $connections, $connectionQuery): array {
             $items = $connectors->get($station['id'], collect());
             $fresh = $items->filter(function (object $item): bool {
                 if ($item->observed_at === null) {
@@ -144,15 +145,41 @@ final class PublicStationSearch
             });
             $statuses = array_values($fresh->pluck('status')->filter()->all());
             $station['availability'] = $this->summarizeAvailability($statuses, $items->isNotEmpty() && $fresh->isEmpty());
+            $connection = $connections[(string) $station['id']] ?? null;
+            $station['connection_status'] = $connection['status'] ?? 'unknown';
+            $station['last_seen_at'] = $connection['last_seen_at'] ?? null;
+            if ($connection !== null) {
+                $liveStatuses = $items->map(fn (object $item): string => $item->observed_at === null
+                    ? 'unknown'
+                    : $connectionQuery->availability($connection, (string) $item->status, (string) $item->observed_at, (int) $item->stale_after_seconds, $item->ocpp_connection_id))->all();
+                $station['availability'] = $connection['status'] === 'offline'
+                    ? 'offline' : $this->summarizeAvailability(array_values($liveStatuses), false);
+            }
             $station['is_stale'] = $station['availability'] === 'stale';
             $station['status_observed_at'] = $items->pluck('observed_at')->filter()->sortDesc()->first();
             $station['maximum_power_w'] = (int) ($items->max('maximum_power_w') ?? 0);
-            $station['connectors'] = $items->map(fn (object $item): array => [
-                'standard' => $item->code,
-                'name' => $item->name,
-                'current_type' => $item->current_type,
-                'maximum_power_w' => (int) $item->maximum_power_w,
-            ])->unique(fn (array $item): string => $item['standard'].'-'.$item['maximum_power_w'])->values()->all();
+            $station['connectors'] = $items->map(function (object $item) use ($connection, $connectionQuery): array {
+                $availability = $item->observed_at === null ? 'unknown'
+                    : ($connection !== null
+                        ? $connectionQuery->availability($connection, (string) $item->status, (string) $item->observed_at, (int) $item->stale_after_seconds, $item->ocpp_connection_id)
+                        : (CarbonImmutable::parse((string) $item->observed_at, 'UTC')->addSeconds((int) $item->stale_after_seconds)->isFuture() ? (string) $item->status : 'stale'));
+                if (($connection['status'] ?? null) === 'offline') {
+                    $availability = 'offline';
+                }
+
+                return [
+                    'id' => $item->id, 'standard' => $item->code, 'name' => $item->name,
+                    'current_type' => $item->current_type, 'maximum_power_w' => (int) $item->maximum_power_w,
+                    'availability' => $availability, 'status_observed_at' => $item->observed_at,
+                    'reported_status' => $connectionQuery->reportedStatus($availability, $item->reported_status),
+                ];
+            })->values()->all();
+            // Keep the original v1 availability enum for older clients.
+            $station['operational_status'] = $connection !== null && $connection['status'] === 'offline'
+                ? 'offline'
+                : $this->summarizeAvailability(array_column($station['connectors'], 'availability'), $station['is_stale'], true);
+            $station['available_connector_count'] = count(array_filter($station['connectors'], fn (array $item): bool => $item['availability'] === 'available'));
+            $station['connector_count'] = count($station['connectors']);
 
             return $station;
         })->values()->all());
@@ -172,16 +199,28 @@ final class PublicStationSearch
 
         return array_values($stationCollection->map(function (array $station) use ($hours): array {
             $now = CarbonImmutable::now((string) $station['timezone']);
-            $today = $hours->get($station['site_id'], collect())->firstWhere('day_of_week', $now->dayOfWeek);
-            $station['open_now'] = $today !== null && ! (bool) $today->is_closed && $today->opens_at !== null && $today->closes_at !== null
-                && $now->format('H:i:s') >= $today->opens_at && $now->format('H:i:s') < $today->closes_at;
+            $week = $hours->get($station['site_id'], collect());
+            $today = $week->firstWhere('day_of_week', $now->dayOfWeek);
+            $yesterday = $week->firstWhere('day_of_week', $now->subDay()->dayOfWeek);
+            $clock = $now->format('H:i:s');
+            $station['hours_known'] = $today !== null && ((bool) $today->is_closed || ($today->opens_at !== null && $today->closes_at !== null && $today->opens_at !== $today->closes_at));
+            $station['open_now'] = ($today !== null && ! (bool) $today->is_closed && $today->opens_at !== null && $today->closes_at !== null
+                && ($today->opens_at < $today->closes_at ? $clock >= $today->opens_at && $clock < $today->closes_at : ($today->opens_at > $today->closes_at && $clock >= $today->opens_at)))
+                || ($yesterday !== null && ! (bool) $yesterday->is_closed && $yesterday->opens_at !== null && $yesterday->closes_at !== null
+                    && $yesterday->opens_at > $yesterday->closes_at && $clock < $yesterday->closes_at);
+            if ($station['open_now']) {
+                $station['hours_known'] = true;
+            }
+            $days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            $station['operating_hours'] = $week->sortBy('day_of_week')->map(fn (object $day): string => $days[(int) $day->day_of_week].': '.
+                ((bool) $day->is_closed ? 'Closed' : ($day->opens_at === null || $day->closes_at === null ? 'Not provided' : substr((string) $day->opens_at, 0, 5).'–'.substr((string) $day->closes_at, 0, 5).($day->opens_at > $day->closes_at ? ' (next day)' : ''))))->values()->all();
 
             return $station;
         })->values()->all());
     }
 
     /** @param list<mixed> $statuses */
-    private function summarizeAvailability(array $statuses, bool $stale): string
+    private function summarizeAvailability(array $statuses, bool $stale, bool $distinguishUnavailable = false): string
     {
         if (in_array('available', $statuses, true)) {
             return 'available';
@@ -191,6 +230,9 @@ final class PublicStationSearch
         }
         if (in_array('faulted', $statuses, true)) {
             return 'faulted';
+        }
+        if ($distinguishUnavailable && in_array('unavailable', $statuses, true)) {
+            return 'unavailable';
         }
         if (array_intersect(['offline', 'unavailable'], $statuses) !== []) {
             return 'offline';
@@ -207,7 +249,6 @@ final class PublicStationSearch
         if ($stations === []) {
             return $stations;
         }
-
         $stationCollection = collect($stations);
         $amenities = DB::table('site_amenity as assigned')
             ->join('site_amenities as amenity', 'amenity.id', '=', 'assigned.site_amenity_id')
@@ -229,23 +270,20 @@ final class PublicStationSearch
      */
     private function matchesFilters(array $station, array $filters): bool
     {
-        if (isset($filters['availability']) && $station['availability'] !== $filters['availability']) {
-            return false;
-        }
-        if (isset($filters['min_power_w']) && $station['maximum_power_w'] < $filters['min_power_w']) {
-            return false;
-        }
-        if (isset($filters['connector'])) {
-            $connectors = is_array($station['connectors']) ? $station['connectors'] : [];
-            if (! collect($connectors)->contains(fn (mixed $item): bool => is_array($item)
-                && str_replace('_', '', strtolower((string) ($item['standard'] ?? ''))) === str_replace('_', '', strtolower((string) $filters['connector'])))) {
-                return false;
-            }
-        }
-        if (isset($filters['current'])) {
-            $connectors = is_array($station['connectors']) ? $station['connectors'] : [];
-            if (! collect($connectors)->contains(fn (mixed $item): bool => is_array($item)
-                && strtoupper((string) ($item['current_type'] ?? '')) === strtoupper((string) $filters['current']))) {
+        $normalize = static fn (string $code): string => strtolower((string) preg_replace('/[^a-zA-Z0-9]/', '', $code));
+        if (isset($filters['connector']) || isset($filters['connectors']) || isset($filters['availability']) || isset($filters['min_power_w']) || isset($filters['current'])) {
+            $matches = collect(is_array($station['connectors']) ? $station['connectors'] : [])->contains(function (array $item) use ($filters, $normalize): bool {
+                $wanted = $filters['connectors'] ?? [];
+
+                return (! isset($filters['connector']) || $normalize($item['standard']) === $normalize($filters['connector']))
+                    && ($wanted === [] || in_array($normalize($item['standard']), array_map($normalize, $wanted), true))
+                    && (! isset($filters['min_power_w']) || $item['maximum_power_w'] >= $filters['min_power_w'])
+                    && (! isset($filters['current']) || strtoupper($item['current_type']) === strtoupper($filters['current']))
+                    && (! isset($filters['availability']) || ($filters['availability'] === 'busy'
+                        ? in_array($item['availability'], ['occupied', 'reserved'], true)
+                        : ($filters['availability'] === 'offline' ? in_array($item['availability'], ['offline', 'unavailable'], true) : $item['availability'] === $filters['availability'])));
+            });
+            if (! $matches) {
                 return false;
             }
         }

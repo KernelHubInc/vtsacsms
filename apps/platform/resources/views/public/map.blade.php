@@ -3,7 +3,7 @@
 @section('body-class', 'public-site public-site--map')
 
 @section('content')
-<section class="map-intro"><div class="public-shell"><p class="eyebrow">{{ $page->eyebrow }}</p><h1>{{ $page->hero_heading }}</h1><p>{{ $page->hero_copy }}</p></div></section>
+<section class="map-intro"><div class="public-shell"><h1>{{ $page->hero_heading }}</h1><p>{{ $page->hero_copy }}</p></div></section>
 <section class="station-finder" data-station-map data-endpoint="{{ route('api.v1.public.stations.index') }}" data-map-config='@json($mapConfig)'>
     <div class="demo-data-ribbon">Demo environment · Fictional test locations · Not real chargers</div>
     <div data-provider-warning hidden class="map-provider-warning" role="status">Google Maps is not ready, so OpenStreetMap is active.</div>
@@ -27,7 +27,7 @@
     </div>
     <div class="station-finder__workspace">
         <aside class="station-list-panel" aria-label="Charging station results">
-            <div class="result-summary"><div><p class="eyebrow">Network view</p><h2><span data-result-count>0</span> stations</h2></div><button type="button" class="text-button" data-use-location>Near me</button></div>
+            <div class="result-summary"><div><h2><span data-result-count>0</span> stations</h2></div><button type="button" class="text-button" data-use-location>Near me</button></div>
             <div class="map-state" data-map-state role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>Loading stations…</div>
             <ol class="station-list" data-station-list></ol>
         </aside>

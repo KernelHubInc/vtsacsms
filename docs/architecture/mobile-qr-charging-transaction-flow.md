@@ -6,6 +6,52 @@
 
 ## 1. Purpose
 
+### Staging readiness review — 2026-10-12
+
+This review updates the current-readiness assumptions below; the historical fake
+payment flow is not the payment design for the first physical-device pilot.
+AUB QR Ph top-up and a single matching live wallet credit of 100 centavos were
+verified on staging. The test tariff remains PHP 1 per session for charger
+`202607010021` (one Type 2 AC connector, 7 kW). Payment QR and station/connector
+QR serve different purposes: the former funds the wallet; the latter selects
+the charging outlet. Mobile labels the payment code without modifying its payload.
+
+The customer `/api/v1/mobile/charging*` endpoints remain absent in the inspected
+Laravel routes. Charging does not yet call Billing's `PrepaidWallet` reservation
+or settlement contract. The mobile staging build keeps remote charging disabled.
+The staging queue worker and scheduler were stopped at this review; OCPP event
+consumption is a separate process. Restoring these workers requires checking
+queued commands and expired deadlines before allowing dispatch.
+
+Recommended next implementation, initially limited to this charger:
+
+1. Add customer-owned prepare/start/active/detail/stop/history routes with tenant,
+   ownership, KYC, idempotency and concurrency checks. Resolve the connector QR,
+   fresh connection/status and immutable PHP 1 session tariff on the server.
+   Account for a plugged-in `Preparing` connector without treating an occupied
+   or already-transacting outlet as available.
+2. Reserve 100 live-wallet centavos against the session before dispatch. Release
+   a hold only for a proven failed/cancelled non-start; ambiguous delivery or a
+   possible late physical start requires reconciliation. AUB is used for top-up,
+   not card-style authorization/capture on each charging session.
+3. Send OCPP remote start. Keep Starting until matched charger-originated start
+   evidence arrives. Project live energy, duration, power when reported, estimated
+   fee and freshness to the owning app session. Recover the same session after
+   app restart. Display stale/offline separately from physical transaction state.
+4. Send remote stop and wait for stop/final-meter evidence. Finalize the rated
+   charging record, settle the wallet hold once, and expose the authorized session
+   receipt/history and remaining balance. Missing or conflicting terminal evidence
+   stays in review; command acceptance alone cannot complete or bill a session.
+5. Test with the simulator, then perform a supervised physical EV session. Cover
+   rejected start, timeout/late start, duplicate messages, insufficient balance,
+   another customer's access, disconnect/reconnect, app restart and repeated stop.
+   Confirm the approved billability rule for a started session delivering no energy
+   before automatic settlement in that edge case.
+
+This review does not enable remote charging or issue device commands. The wallet
+credit proves payment notification handling for the observed transaction; it is
+not evidence of settlement reconciliation or completed charging integration.
+
 This document defines the proposed local end-to-end experience for a driver who scans a QR code, starts a simulated charger through VTSA CSMS, monitors energy delivery, stops charging, completes payment, and receives charging and financial records.
 
 It is the design and acceptance baseline for a later implementation phase. It does not add routes, migrations, credentials, QR labels, payment rules, or charger-specific behavior.

@@ -13,6 +13,7 @@ use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingSession;
+use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Application\TenantContext;
@@ -84,6 +85,12 @@ final class ExpireChargingOperations extends Command
                     DB::transaction(function () use ($sessionId, $sessionStates, $reservations, &$count): void {
                         $session = ChargingSession::query()->whereKey($sessionId)->lockForUpdate()->first();
                         if ($session === null || $session->state->isTerminal() || $session->started_at !== null || $session->start_deadline_at?->isFuture()) {
+                            return;
+                        }
+                        if (CustomerChargingSession::query()->where('session_id', $sessionId)->exists()
+                            && ChargerCommand::query()->where('session_id', $sessionId)->where('type', 'remote_start')->whereNotNull('dispatched_at')->where('state', '!=', 'rejected')->exists()) {
+                            $session->forceFill(['failure_reason' => 'prepaid_start_unconfirmed'])->save();
+
                             return;
                         }
                         $sessionStates->transition($session, ChargingSessionState::Expired, 'start_deadline_elapsed');

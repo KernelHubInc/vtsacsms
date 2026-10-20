@@ -10,7 +10,6 @@
 <body class="public-site">
     <main class="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-20">
         <section class="w-full rounded-[2rem] border border-amber-300/40 bg-amber-50 p-8 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/20 sm:p-12">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">Milestone 2</p>
             <h1 class="mt-3 text-3xl font-semibold text-slate-950 dark:text-white">{{ $feature->label() }}</h1>
             <p class="mt-4 text-lg text-slate-700 dark:text-slate-200">{{ \App\Foundation\Features\FeatureFlags::MILESTONE_TWO_MESSAGE }}</p>
             <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">No charger, payment, or external-provider request was made.</p>

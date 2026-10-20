@@ -20,7 +20,7 @@ def main() -> None:
         proxy_headers=True,
         forwarded_allow_ips=settings.forwarded_allow_ips,
         ws_ping_interval=settings.heartbeat_interval_seconds,
-        ws_ping_timeout=settings.heartbeat_interval_seconds,
+        ws_ping_timeout=settings.websocket_ping_timeout_seconds or None,
         ssl_certfile=settings.tls_certificate_file,
         ssl_keyfile=settings.tls_private_key_file,
         ssl_ca_certs=settings.tls_client_ca_file,

@@ -12,7 +12,8 @@ final class AuthorizationTokenService
 {
     public function issue(CarbonImmutable $expiresAt): GeneratedAuthorizationToken
     {
-        $plainText = 'vtsa_'.Str::random(40);
+        // OCPP 1.6 idTag is limited to 20 characters; retain randomness, not a prefix.
+        $plainText = Str::random(20);
         $token = AuthorizationToken::query()->create([
             'token_hash' => hash('sha256', $plainText),
             'token_hint' => substr($plainText, -8),

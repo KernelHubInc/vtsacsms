@@ -5,26 +5,33 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\OperatingHours;
 
 use App\Filament\Operator\Resources\OperatingHours\Pages\ListOperatingHours;
-use App\Filament\Shared\Actions\AuditedEditAction;
+use App\Filament\Shared\Actions\ActionValidation;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
+use App\Modules\Locations\Application\ConfigureSiteAccess;
 use App\Modules\Locations\Domain\Models\SiteOperatingHour;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Organizations\Domain\ResourceScope;
 use App\Modules\Organizations\Domain\ScopeType;
 use BackedEnum;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use UnitEnum;
 
 final class OperatingHourResource extends Resource
@@ -40,9 +47,16 @@ final class OperatingHourResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Checkbox::make('is_closed'),
-            TimePicker::make('opens_at')->seconds(false),
-            TimePicker::make('closes_at')->seconds(false),
+            Select::make('site_id')->label('Site')->required()->searchable()->visibleOn('create')
+                ->default(fn ($livewire) => $livewire->tableFilters['site']['value'] ?? null)
+                ->options(fn (): array => app(AccessibleSitesQuery::class)->for(auth()->user())->get()->filter(fn ($site): bool => Gate::allows('update', $site))->pluck('name', 'id')->all()),
+            Select::make('day_of_week')->label('Day')->options(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])->required()->disabledOn('edit'),
+            Checkbox::make('is_closed')->label('Closed all day')->default(false),
+            Checkbox::make('is_open_all_day')->label('Open 24 hours')->live()
+                ->default(false)
+                ->helperText('Closed all day takes priority. Otherwise this replaces the opening and closing times.'),
+            TimePicker::make('opens_at')->seconds(false)->format('H:i')->disabled(fn (Get $get): bool => (bool) $get('is_open_all_day'))->helperText('Local site time. Leave times empty only for a closed day.'),
+            TimePicker::make('closes_at')->seconds(false)->format('H:i')->disabled(fn (Get $get): bool => (bool) $get('is_open_all_day'))->helperText('Earlier than opening means closing the following day. Equal times are not valid.'),
         ]);
     }
 
@@ -52,8 +66,11 @@ final class OperatingHourResource extends Resource
             TextColumn::make('site.name')->label('Site')->searchable()->sortable(),
             TextColumn::make('day_of_week')->formatStateUsing(fn (int $state): string => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][$state] ?? 'Unknown'),
             TextColumn::make('opens_at')->time('H:i')->placeholder('—'),
-            TextColumn::make('closes_at')->time('H:i')->placeholder('—'),
+            TextColumn::make('closes_at')->formatStateUsing(fn (?string $state): string => $state === null ? '—' : (str_starts_with($state, '24:00') ? '24:00 (end of day)' : substr($state, 0, 5)))->placeholder('—'),
             IconColumn::make('is_closed')->boolean(),
+        ])->filters([
+            SelectFilter::make('site')->attribute('site_id')->label('Site')->searchable()
+                ->options(fn (): array => app(AccessibleSitesQuery::class)->for(auth()->user())->pluck('name', 'id')->all()),
         ])->recordActions([
             RecordViewAction::make([
                 'site.name' => 'Site',
@@ -62,7 +79,14 @@ final class OperatingHourResource extends Resource
                 'closes_at' => 'Closes',
                 'is_closed' => 'Closed all day',
             ]),
-            AuditedEditAction::make('locations.operating_hour.updated', 'site_operating_hour'),
+            EditAction::make()
+                ->mutateRecordDataUsing(function (array $data): array {
+                    $data['is_open_all_day'] = str_starts_with($data['closes_at'] ?? '', '24:00');
+
+                    return $data;
+                })
+                ->using(fn (SiteOperatingHour $record, array $data, $livewire) => ActionValidation::run($livewire, fn () => app(ConfigureSiteAccess::class)->hours(auth()->user(), $data, $record))),
+            DeleteNetworkRecordAction::make(),
         ]);
     }
 
@@ -90,7 +114,7 @@ final class OperatingHourResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return parent::canCreate();
     }
 
     public static function canEdit(Model $record): bool
@@ -108,6 +132,6 @@ final class OperatingHourResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        return parent::canDelete($record);
     }
 }

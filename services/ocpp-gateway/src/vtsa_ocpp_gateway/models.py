@@ -22,7 +22,7 @@ class ChargerIdentity:
     charge_point_identity: str
     tenant_id: str | None
     charger_id: str | None
-    authentication: Literal["basic", "mtls", "development"]
+    authentication: Literal["basic", "mtls", "development", "registered"]
 
     @property
     def is_bound(self) -> bool:

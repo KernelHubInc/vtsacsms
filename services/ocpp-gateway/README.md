@@ -4,6 +4,10 @@ The gateway is VTSA CSMS's separately deployable asynchronous protocol edge. It 
 
 ## Local setup
 
+For the existing Hostinger staging site and a real OCPP 1.6J device, use the [staging deployment runbook](../../docs/runbooks/ocpp-staging-quickstart.md). It supplies a secured Compose overlay, private enrollment helper, and an Nginx WebSocket route on the existing HTTPS hostname.
+
+The shared `/ocpp/{identity}` route supports multiple independently enrolled devices. The staging helper's `enroll` action preserves existing registrations; `gateway-up` applies additions with a brief gateway restart. `verify` checks private readiness and public rejection of an unknown device. Admin record creation alone does not provision gateway credentials.
+
 From `services/ocpp-gateway` in PowerShell:
 
 ```powershell
@@ -28,7 +32,14 @@ With the Compose gateway running:
 
 Available scenarios are `standard`, `duplicate`, `fault`, and `reboot-during-charging`. The simulator can also be imported to drive boot, heartbeat loops, status changes, authorization/start/stop flows, meter values, DataTransfer, diagnostics, firmware/security statuses, abrupt disconnects, reconnects, duplicate replay, faults, and reboot-during-charge cases.
 
-For enrolled Basic authentication, put the password in `SIMULATOR_BASIC_PASSWORD`; do not pass it on the command line or commit it. For mTLS, use `--ca-file`, `--certificate-file`, and `--private-key-file` with local certificate paths.
+For enrolled Basic authentication, use `--password-prompt` or put the password in `SIMULATOR_BASIC_PASSWORD`; do not pass it on the command line or commit it. For mTLS, use `--ca-file`, `--certificate-file`, and `--private-key-file` with local certificate paths.
+
+Use `--scenario connectivity --heartbeats 6` for initial staging verification. It
+requires enrollment credentials, checks BootNotification is Accepted, and sends
+heartbeats at the server-provided interval. It never sends Authorize,
+StartTransaction, meter values, or connector status changes. HTTP 404/502/403
+failures produce a diagnostic and nonzero exit status. The simulator verifies TLS
+certificates for WSS and requires the requested OCPP subprotocol.
 
 ## Internal interfaces
 
@@ -66,6 +77,8 @@ Authorization requests contain the authenticated tenant/charger binding, protoco
 | `GATEWAY_COMMAND_TIMEOUT_SECONDS` | `30` | Hard upper bound for command correlation |
 | `GATEWAY_AUTHORIZATION_TIMEOUT_SECONDS` | `5` | Fail-closed core authorization timeout |
 | `GATEWAY_HEARTBEAT_INTERVAL_SECONDS` | `30` | Boot response and WebSocket ping interval |
+| `GATEWAY_WS_PING_TIMEOUT_SECONDS` | `30` | Pong deadline; `0` disables only this deadline for tested firmware compatibility |
+| `GATEWAY_MESSAGE_IDLE_TIMEOUT_SECONDS` | `180` | Close a socket with no OCPP messages; at least three heartbeat intervals, finite and positive |
 | `GATEWAY_MAXIMUM_CLOCK_SKEW_SECONDS` | `300` | Adds anomaly evidence; does not rewrite charger time |
 | `GATEWAY_MAXIMUM_MESSAGE_BYTES` | `262144` | Applied before protocol routing |
 | `GATEWAY_RAW_MESSAGE_LOGGING` | `true` | Structured frames; disable when evidence is unnecessary |
@@ -91,3 +104,12 @@ Registry entries contain ULID `tenant_id` and `charger_id`, `enabled`, and eithe
 ```
 
 See [the external simulator testing runbook](../../docs/local/OCPP-SIMULATOR-TESTING.md), [SUPPORTED_MESSAGES.md](SUPPORTED_MESSAGES.md), [the gateway architecture](../../docs/architecture/ocpp-gateway.md), and [the certificate rotation runbook](../../docs/runbooks/ocpp-certificate-rotation.md).
+
+Dynamic enrollment: set `OCPP_CORE_AUTH_URL` to the platform HTTPS `/api/internal/v1/ocpp/authenticate` endpoint after following ADR 0023 and the staging activation runbook. In this mode each new Basic-authenticated connection is checked against current platform station and tenant state; no gateway restart is needed per station. The service token must match the core's `OCPP_GATEWAY_INTERNAL_TOKEN`. No static fallback is used during an authentication outage. Existing sockets are not reauthenticated by this change.
+
+
+## URL-only registered chargers
+
+Set `OCPP_CORE_REGISTRATION_URL` to the platform HTTPS `/api/internal/v1/ocpp/resolve` endpoint and leave `OCPP_CORE_AUTH_URL` empty. Keep the matching gateway/core service token and WSS enabled. Devices use Authorisation = 0 and their registered ID; no Basic password or client certificate is needed. The core must find an active station, active tenant and matching protocol. Supplied device credentials are ignored. An ID alone is not proof of identity; use network restrictions where practical (ADR 0024). Do not enable development-mode anonymous enrollment.
+
+The CLI connectivity scenario works without `SIMULATOR_BASIC_PASSWORD`; clear that variable for a true URL-only test. It sends BootNotification and Heartbeat only. The static registry and Basic-auth endpoint remain available for legacy deployments, but are not used or consulted as a fallback in URL-only mode.

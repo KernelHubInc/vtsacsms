@@ -6,8 +6,10 @@ namespace Tests\Feature\Portal;
 
 use App\Filament\Operator\Resources\PaymentIntents\PaymentIntentResource;
 use App\Modules\Assets\Domain\Models\ChargingCurrentType;
+use App\Modules\Assets\Domain\Models\ChargingStation;
 use App\Modules\Assets\Domain\Models\ConnectorStandard;
 use App\Modules\Charging\Domain\Models\ChargingSession;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Locations\Domain\SiteLifecycleStatus;
 use App\Modules\Organizations\Application\AuthorizationService;
@@ -25,12 +27,41 @@ use App\Modules\Reporting\Domain\Models\PortalExport;
 use App\Modules\Reporting\Jobs\GeneratePortalExport;
 use App\Modules\Tenancy\Application\Queue\UseTenantContext;
 use App\Modules\Tenancy\Domain\Models\Tenant;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\TenantSecurityTestCase;
 
 final class PortalManagementTest extends TenantSecurityTestCase
 {
+    public function test_dashboard_does_not_infer_online_from_missing_connector_signals(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-04T10:00:00Z'));
+        $user = $this->createUser();
+        $tenant = $this->createTenant('connection-dashboard');
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $site = $this->site($tenant, $this->operator($tenant), 'LIVE', 14.55, 121.02);
+            $membership = $this->createMembership($tenant, $user);
+            $role = $this->createRole($tenant, 'connection-report', [PermissionKey::LocationView, PermissionKey::ReportingView, PermissionKey::ChargingSessionView]);
+            $this->assignDirectly($tenant, $membership, $role);
+            $station = ChargingStation::query()->create([
+                'site_id' => $site->getKey(), 'name' => 'Connection test', 'charge_point_identity' => 'CONNECTION-TEST',
+                'serial_number' => 'CONNECTION-SN', 'qr_identifier' => 'CONNECTION-QR', 'lifecycle_status' => 'active', 'is_public' => false,
+            ]);
+            $query = app(PortalDashboardQuery::class);
+            self::assertSame(0, $query->summary($user)['online_chargers']);
+            self::assertSame(1, $query->summary($user)['offline_chargers']);
+            StationConnection::query()->create([
+                'charging_station_id' => $station->getKey(), 'connection_id' => '01J00000000000000000000001',
+                'connected' => true, 'connected_at' => now(), 'last_event_at' => now(), 'last_seen_at' => now(),
+            ]);
+            $this->travel(6)->seconds();
+            self::assertSame(1, $query->summary($user)['online_chargers']);
+            $this->travel(181)->seconds();
+            self::assertSame(0, $query->summary($user)['online_chargers']);
+        });
+    }
+
     public function test_dashboard_map_and_cache_follow_the_users_exact_site_scope(): void
     {
         $user = $this->createUser();

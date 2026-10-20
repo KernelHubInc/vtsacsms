@@ -1,0 +1,26 @@
+# Optional overlay for infra/compose.yaml or infra/cluster/compose.app.yaml.
+x-kyc-environment: &kyc-environment
+  KYC_ENABLED: ${KYC_ENABLED:-false}
+  KYC_AUTOMATIC_VERIFICATION_ENABLED: ${KYC_AUTOMATIC_VERIFICATION_ENABLED:-false}
+  KYC_ASSURANCE_PROFILE: ${KYC_ASSURANCE_PROFILE:-issuer_v1}
+  KYC_REQUIRED_FOR_CHARGING: ${KYC_REQUIRED_FOR_CHARGING:-false}
+  KYC_REQUIRED_FOR_PAYMENT: ${KYC_REQUIRED_FOR_PAYMENT:-false}
+  KYC_REQUIRED_FOR_WALLET: ${KYC_REQUIRED_FOR_WALLET:-false}
+  KYC_SERVICE_URL: ${KYC_SERVICE_URL:-http://host.docker.internal:8090}
+  KYC_REQUEST_SECRET: ${KYC_REQUEST_SECRET:-}
+  KYC_CALLBACK_SECRET: ${KYC_CALLBACK_SECRET:-}
+  KYC_CONSENT_VERSION: ${KYC_CONSENT_VERSION:-development-v1}
+  KYC_CONSENT_TEXT: ${KYC_CONSENT_TEXT:-I consent to processing my identity information, identity document images and selfie for identity verification and authorized manual review.}
+  KYC_PRIVACY_URL: ${KYC_PRIVACY_URL:-}
+  KYC_TERMS_URL: ${KYC_TERMS_URL:-}
+  KYC_CONSENT_URL: ${KYC_CONSENT_URL:-}
+  KYC_RETENTION_DAYS: ${KYC_RETENTION_DAYS:-30}
+  KYC_VALIDITY_DAYS: ${KYC_VALIDITY_DAYS:-365}
+
+services:
+  platform:
+    environment: *kyc-environment
+  worker:
+    environment: *kyc-environment
+  scheduler:
+    environment: *kyc-environment

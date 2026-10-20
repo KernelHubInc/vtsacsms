@@ -5,9 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature\Portal;
 
 use App\Filament\Auth\Login as PanelLogin;
+use App\Filament\Operator\Resources\ChargingStations\Pages\EditChargingStation;
 use App\Filament\Operator\Resources\SupportTickets\SupportTicketResource;
+use App\Filament\Platform\Pages\KycSettings;
+use App\Filament\Platform\Pages\KycVerifications;
 use App\Filament\Platform\Pages\MasterData;
 use App\Foundation\Audit\Models\AuditEvent;
+use App\Modules\Assets\Domain\Models\ChargingCurrentType;
+use App\Modules\Assets\Domain\Models\ChargingStation;
+use App\Modules\Assets\Domain\Models\Connector;
+use App\Modules\Assets\Domain\Models\ConnectorStandard;
+use App\Modules\Assets\Domain\Models\Evse;
+use App\Modules\Charging\Domain\Models\ConnectorStatus;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Identity\Application\AccountLifecycleService;
 use App\Modules\Inventory\Application\InventoryCatalogService;
 use App\Modules\Inventory\Domain\Models\InventoryItem;
@@ -25,18 +35,86 @@ use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Support\TenantSecurityTestCase;
 
 final class AdminCrudFoundationTest extends TenantSecurityTestCase
 {
+    public function test_station_edit_and_save_work_with_connection_reporting_and_keep_tenant_isolation(): void
+    {
+        $this->freezeTime();
+        $user = $this->createUser();
+        $tenant = $this->createTenant('station-edit');
+        $otherTenant = $this->createTenant('station-edit-other');
+        [$station, $unseen] = $this->withinTenant($tenant, $user, function () use ($tenant, $user): array {
+            $this->createOrganization($tenant);
+            $membership = $this->createMembership($tenant, $user);
+            $role = $this->createRole($tenant, 'station-editor', [
+                PermissionKey::PlatformPanelAccess,
+                PermissionKey::LocationView,
+                PermissionKey::AssetView,
+                PermissionKey::AssetManage,
+            ]);
+            $this->assignDirectly($tenant, $membership, $role);
+            $station = ChargingStation::factory()->create();
+            $connection = StationConnection::query()->create([
+                'charging_station_id' => $station->getKey(),
+                'connection_id' => (string) Str::ulid(),
+                'connected' => true,
+                'connected_at' => now(),
+                'last_event_at' => now(),
+                'last_seen_at' => now(),
+            ]);
+            $evse = Evse::factory()->create(['charging_station_id' => $station->getKey()]);
+            ConnectorStandard::query()->create(['code' => 'type2', 'name' => 'Type 2']);
+            ChargingCurrentType::query()->create(['code' => 'ac', 'name' => 'AC']);
+            $connector = Connector::factory()->create(['evse_id' => $evse->getKey()]);
+            ConnectorStatus::query()->create([
+                'connector_id' => $connector->getKey(), 'status' => 'occupied',
+                'reported_status' => 'charging', 'observed_at' => now(),
+                'ocpp_connection_id' => $connection->connection_id, 'stale_after_seconds' => 300,
+            ]);
+
+            return [$station, ChargingStation::factory()->create()];
+        });
+        $other = $this->withinTenant($otherTenant, $user, fn () => ChargingStation::factory()->create());
+
+        $this->actingAs($user)->get('/admin/charging-stations')
+            ->assertOk()->assertSee($station->name)->assertSee($unseen->name)->assertDontSee($other->name)->assertSee('Charging');
+        $this->get('/admin/connector-statuses')->assertOk()->assertSee('Charging');
+        $this->travel(181)->seconds();
+        $this->get('/admin/connector-statuses')->assertOk()->assertSee('Offline')->assertDontSee('>Charging<', false);
+        foreach ([$station, $unseen] as $record) {
+            $this->get('/admin/charging-stations/'.$record->getKey().'/edit')->assertOk();
+        }
+        $this->get('/admin/charging-stations/'.$other->getKey().'/edit')->assertNotFound();
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->withinTenant($tenant, $user, function () use ($station): void {
+            Livewire::test(EditChargingStation::class, ['record' => $station->getKey()])
+                ->fillForm(['name' => 'Updated station name'])
+                ->call('save')
+                ->assertHasNoFormErrors();
+            $this->assertSame('Updated station name', $station->fresh()->name);
+            $this->assertFalse($station->fresh()->is_public);
+        });
+        $this->assertDatabaseHas('audit_events', [
+            'tenant_id' => $tenant->getKey(),
+            'action' => 'assets.charging_station.updated',
+            'target_id' => $station->getKey(),
+        ]);
+    }
+
     public function test_admin_registry_contains_every_audited_resource_and_custom_page(): void
     {
         $panel = Filament::getPanel('admin');
 
         $this->assertCount(47, $panel->getResources());
         $this->assertContains(SupportTicketResource::class, $panel->getResources());
-        $this->assertCount(7, $panel->getPages());
+        $this->assertCount(9, $panel->getPages());
+        $this->assertContains(KycSettings::class, $panel->getPages());
+        $this->assertContains(KycVerifications::class, $panel->getPages());
         $this->assertContains(MasterData::class, $panel->getPages());
     }
 

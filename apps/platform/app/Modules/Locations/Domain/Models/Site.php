@@ -9,6 +9,7 @@ use App\Modules\Locations\Domain\SiteLifecycleStatus;
 use App\Modules\Organizations\Domain\Models\Organization;
 use App\Modules\Tenancy\Domain\Models\Tenant;
 use App\Modules\Tenancy\Infrastructure\Eloquent\BelongsToTenant;
+use Carbon\CarbonImmutable;
 use Database\Factories\Modules\Locations\Domain\Models\SiteFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $tenant_id
  * @property string|null $operator_organization_id
  * @property string $timezone
+ * @property SiteLifecycleStatus $lifecycle_status
+ * @property CarbonImmutable|null $published_at
  */
 final class Site extends Model
 {

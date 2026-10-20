@@ -1,6 +1,6 @@
 # Charging Session State Machine
 
-**Status:** Phase 7 implemented canonical baseline; charger certification profiles remain open  
+**Status:** Phase 7 implemented canonical baseline; charger certification profiles remain open
 **Owner:** Charging
 
 ## 1. Purpose
@@ -189,3 +189,18 @@ Possible quality codes include `complete`, `missing_start_meter`, `missing_stop_
 - Whether and how a stopped incomplete session can be automatically completed after late data.
 - Tariff selection instant, session overlap handling, and maximum session duration.
 - Protocol evidence and meter sample retention/partition/archive policies.
+
+## Pending-start withdrawal (2026-10-13)
+
+Customer cancellation before dispatch prevents command delivery and cancels the session. After dispatch, `cancellation_reason = customer_cancel_requested` is a durable intent, not a new physical session state. The session stays pending/active until charger evidence advances it. Charging's prepaid monitor requests an idempotent remote stop when a transaction ID becomes available, using at most three attempts after explicit rejection. Unknown delivery keeps the connector reservation and wallet hold; only definite rejection or finalized transaction evidence resolves them. The API adds `cancellation_requested`; clients must not infer physical cancellation from HTTP success. Authorization and original payer attribution are unchanged.
+
+### Confirmed-idle recovery (2026-10-17)
+
+A pending cancellation now revokes its unused session authorization token. The prepaid monitor can resolve an ambiguous start as `CANCELLED` with reason `customer_cancelled_after_idle_confirmation` when all of these conditions hold:
+
+- The start command is terminal and at least 60 seconds have passed beyond both command expiry and the session start deadline.
+- No start time, protocol transaction, start meter register, energy or stored meter readings exist for the session.
+- The connector's actual OCPP status is Available, reported after that deadline buffer on the station's current, online connection. Reports from a prior connection, future timestamps, offline stations and busy connectors do not qualify.
+- No unprocessed or quarantined transaction/meter evidence has arrived for that station since the request.
+
+The transition and audit retain the command ID, its original outcome, current connection ID and idle report timestamp. Charging invokes Billing's existing idempotent zero-cost settlement contract to release the hold in the same transaction. It does not manufacture a StopTransaction or rewrite unknown delivery as rejection. Confirmed physical starts continue through stop/finalization. The pending-session correlation query excludes requests created after a delayed start's source timestamp, preventing old evidence from being assigned to a newer request.

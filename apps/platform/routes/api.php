@@ -4,15 +4,22 @@ declare(strict_types=1);
 
 use App\Foundation\Features\Feature;
 use App\Http\Controllers\Api\V1\AppConfigurationController;
+use App\Http\Controllers\Api\V1\AubQrWebhookController;
+use App\Http\Controllers\Api\V1\ChargerAuthenticationController;
+use App\Http\Controllers\Api\V1\ChargingAccountController;
 use App\Http\Controllers\Api\V1\ChargingSessionController;
 use App\Http\Controllers\Api\V1\ChargingStationController;
+use App\Http\Controllers\Api\V1\CustomerChargingController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\DriverVehicleController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
 use App\Http\Controllers\Api\V1\IdentityContextController;
 use App\Http\Controllers\Api\V1\InventoryAdjustmentController;
 use App\Http\Controllers\Api\V1\InventoryCatalogController;
 use App\Http\Controllers\Api\V1\InvitationController;
+use App\Http\Controllers\Api\V1\KycCallbackController;
+use App\Http\Controllers\Api\V1\KycController;
 use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\MembershipLifecycleController;
 use App\Http\Controllers\Api\V1\MobileAuthController;
@@ -37,8 +44,10 @@ use App\Http\Controllers\Api\V1\StockTransferController;
 use App\Http\Controllers\Api\V1\TariffController;
 use App\Http\Controllers\Api\V1\TariffVersionController;
 use App\Http\Controllers\Api\V1\VendorInvoiceController;
+use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WorkOrderPartsController;
 use App\Http\Middleware\AuthenticateApiToken;
+use App\Http\Middleware\EnsureKycEnabled;
 use App\Http\Middleware\EnsureVerifiedIdentity;
 use App\Http\Middleware\EstablishSanctumTenantContext;
 use App\Http\Middleware\EstablishTenantContext;
@@ -48,11 +57,35 @@ use App\Http\Middleware\RequireSanctumPermission;
 use App\Modules\Organizations\Domain\PermissionKey;
 use Illuminate\Support\Facades\Route;
 
+Route::post('/internal/v1/ocpp/resolve', [ChargerAuthenticationController::class, 'resolve'])->middleware('throttle:300,1');
+Route::post('/internal/v1/ocpp/authenticate', ChargerAuthenticationController::class)
+    ->middleware('throttle:300,1')->name('api.internal.v1.ocpp.authenticate');
+
 Route::get('/v1/public/stations', PublicStationSearchController::class)
     ->middleware('throttle:60,1')->name('api.v1.public.stations.index');
 
 Route::get('/v1/app/config', AppConfigurationController::class)
     ->middleware('throttle:60,1')->name('api.v1.app.config');
+
+Route::post('/v1/webhooks/kyc', KycCallbackController::class)
+    ->middleware('throttle:120,1')->name('api.v1.webhooks.kyc');
+
+Route::prefix('v1/kyc')->name('api.v1.kyc.')->middleware([
+    'auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class,
+    EnsureKycEnabled::class, 'throttle:30,1',
+])->group(function (): void {
+    $controller = KycController::class;
+    Route::get('/status', [$controller, 'status'])->name('status');
+    Route::post('/start', [$controller, 'start'])->name('start');
+    Route::post('/resubmit', [$controller, 'start'])->name('resubmit');
+    Route::get('/verification/{verification}', [$controller, 'show'])->whereUlid('verification')->name('show');
+    Route::post('/verification/{verification}/document', [$controller, 'upload'])->whereUlid('verification')->name('document');
+    Route::post('/verification/{verification}/selfie', [$controller, 'upload'])->whereUlid('verification')->name('selfie');
+    Route::post('/verification/{verification}/live/start', [$controller, 'liveStart'])->whereUlid('verification')->middleware('throttle:kyc.live.start')->name('live.start');
+    Route::post('/verification/{verification}/live/frame', [$controller, 'liveFrame'])->whereUlid('verification')->withoutMiddleware('throttle:30,1')->middleware('throttle:kyc.live.frame')->name('live.frame');
+    Route::post('/verification/{verification}/submit', [$controller, 'submit'])->whereUlid('verification')->name('submit');
+    Route::post('/verification/{verification}/cancel', [$controller, 'cancel'])->whereUlid('verification')->name('cancel');
+});
 
 Route::post('/v1/webhooks/payments/{tenant}/{configuration}', PaymentWebhookController::class)
     ->whereUlid('tenant')->whereUlid('configuration')
@@ -61,8 +94,11 @@ Route::post('/v1/webhooks/payments/{tenant}/{configuration}', PaymentWebhookCont
         'throttle:payment.webhooks',
     ])->name('api.v1.webhooks.payments');
 
+Route::post('/v2/auth/register', RegistrationController::class)
+    ->middleware('throttle:auth.login')->name('api.v2.auth.register');
+
 Route::prefix('v1/auth')->group(function (): void {
-    Route::post('/register', RegistrationController::class)
+    Route::post('/register', [RegistrationController::class, 'legacy'])
         ->middleware('throttle:auth.login')->name('api.v1.auth.register');
     Route::post('/login', [MobileAuthController::class, 'login'])
         ->middleware('throttle:auth.login')->name('api.v1.auth.login');
@@ -72,6 +108,8 @@ Route::prefix('v1/auth')->group(function (): void {
         ->middleware('throttle:auth.recovery')->name('api.v1.auth.password.reset');
     Route::post('/invitations/accept', [InvitationController::class, 'accept'])
         ->middleware('throttle:auth.recovery')->name('api.v1.auth.invitations.accept');
+    Route::get('/email/verify/{user}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware(['signed', 'throttle:auth.verify'])->name('api.v1.auth.email.verify');
 });
 
 Route::prefix('v1')->middleware([
@@ -81,10 +119,22 @@ Route::prefix('v1')->middleware([
     Route::post('/auth/logout', [MobileAuthController::class, 'logout'])->name('api.v1.auth.logout');
     Route::post('/auth/email/verification-notification', [EmailVerificationController::class, 'send'])
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
-    Route::get('/auth/email/verify/{user}/{hash}', [EmailVerificationController::class, 'verify'])
-        ->middleware(['signed', 'throttle:auth.verify'])->name('api.v1.auth.email.verify');
 
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
+        Route::prefix('mobile')->middleware('throttle:60,1')->group(function (): void {
+            $charging = CustomerChargingController::class;
+            Route::post('/charging/prepare', [$charging, 'prepare']);
+            Route::post('/charging-sessions/remote-start', [$charging, 'start'])
+                ->middleware(RequireEnabledFeature::class.':'.Feature::RemoteCharging->value);
+            Route::get('/charging-sessions/active', [$charging, 'active']);
+            Route::get('/charging-sessions', [$charging, 'index']);
+            Route::get('/charging-sessions/{session}', [$charging, 'show'])->whereUlid('session');
+            Route::post('/charging-sessions/{session}/remote-stop', [$charging, 'stop'])->whereUlid('session');
+            Route::post('/charging-sessions/{session}/cancel', [$charging, 'cancel'])->whereUlid('session');
+        });
+        Route::get('/vehicles', [DriverVehicleController::class, 'index'])->name('api.v1.vehicles.index');
+        Route::put('/vehicles/{vehicle}', [DriverVehicleController::class, 'store'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.store');
+        Route::delete('/vehicles/{vehicle}', [DriverVehicleController::class, 'destroy'])->whereUlid('vehicle')->middleware('throttle:30,1')->name('api.v1.vehicles.destroy');
         Route::get('/me', SanctumIdentityController::class)->name('api.v1.me');
         Route::post('/auth/mobile/verification', [MobileVerificationController::class, 'start'])
             ->middleware('throttle:auth.verify')->name('api.v1.auth.mobile.start');
@@ -408,4 +458,36 @@ Route::prefix('v1')->middleware([
     Route::get('/identity/context', IdentityContextController::class)
         ->middleware(RequirePermission::class.':'.PermissionKey::IdentityContextView->value)
         ->name('api.v1.identity.context');
+});
+
+Route::post('/v1/webhooks/aub/qrph', AubQrWebhookController::class)
+    ->middleware('throttle:120,1')->name('api.v1.webhooks.aub.qrph');
+Route::prefix('v1/charging-accounts')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class])->group(function (): void {
+    $controller = ChargingAccountController::class;
+    Route::middleware('throttle:120,1,charging-accounts-read:')->group(function () use ($controller): void {
+        Route::get('/', [$controller, 'index']);
+        Route::get('/invitations', [$controller, 'invitations']);
+        Route::get('/{account}/members', [$controller, 'members'])->whereUlid('account');
+        Route::get('/{account}/invitations', [$controller, 'invitations'])->whereUlid('account');
+        Route::get('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assignments'])->whereUlid(['account', 'vehicle']);
+        Route::get('/{account}/limits', [$controller, 'limits'])->whereUlid('account');
+    });
+    Route::middleware('throttle:30,1,charging-accounts-write:')->group(function () use ($controller): void {
+        Route::post('/', [$controller, 'store']);
+        Route::patch('/{account}', [$controller, 'update'])->whereUlid('account');
+        Route::delete('/{account}', [$controller, 'destroy'])->whereUlid('account');
+        Route::post('/invitations/{invitation}/accept', [$controller, 'accept'])->whereUlid('invitation');
+        Route::patch('/{account}/members/{subject}', [$controller, 'member'])->whereUlid(['account', 'subject']);
+        Route::post('/{account}/invitations', [$controller, 'invite'])->whereUlid('account');
+        Route::delete('/{account}/invitations/{invitation}', [$controller, 'revoke'])->whereUlid(['account', 'invitation']);
+        Route::put('/{account}/vehicles/{vehicle}/assignments', [$controller, 'assign'])->whereUlid(['account', 'vehicle']);
+        Route::put('/{account}/limits', [$controller, 'limit'])->whereUlid('account');
+    });
+});
+Route::prefix('v1/wallet')->middleware(['auth:sanctum', EstablishSanctumTenantContext::class, EnsureVerifiedIdentity::class, 'throttle:30,1'])->group(function (): void {
+    $controller = WalletController::class;
+    Route::get('/', [$controller, 'index']);
+    Route::get('/topups', [$controller, 'topups']);
+    Route::post('/topups', [$controller, 'create']);
+    Route::get('/topups/{topup}', [$controller, 'show'])->whereUlid('topup');
 });

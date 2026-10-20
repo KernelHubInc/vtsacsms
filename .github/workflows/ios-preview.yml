@@ -1,0 +1,45 @@
+name: iOS simulator build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: App version
+        required: true
+        default: '1.0.16'
+      build_number:
+        description: Build number
+        required: true
+        default: '17'
+
+permissions:
+  contents: read
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+          cache: true
+      - name: Check build script safeguards
+        run: python3 -m unittest discover -s tests/infra -p test_ios_build.py
+      - name: Build and check simulator app
+        env:
+          IOS_VERSION: ${{ inputs.version }}
+          IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: python3 scripts/build-ios.py --mode simulator --version "$IOS_VERSION" --build-number "$IOS_BUILD_NUMBER"
+      - name: Package simulator app
+        run: ditto -c -k --sequesterRsrc --keepParent apps/mobile/build/ios/iphonesimulator/Runner.app Power-Solutions-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Power-Solutions-iOS-Simulator-${{ github.run_number }}
+          path: Power-Solutions-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 7

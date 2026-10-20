@@ -37,7 +37,9 @@ class VtsaButton extends StatelessWidget {
           Icon(icon, size: 18),
           const SizedBox(width: VtsaSpacing.xs),
         ],
-        Text(loading ? '$label…' : label),
+        Flexible(
+          child: Text(loading ? '$label…' : label, textAlign: TextAlign.center),
+        ),
       ],
     );
 

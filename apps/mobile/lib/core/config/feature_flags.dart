@@ -12,7 +12,6 @@ final class FeatureFlags {
     required this.inventory,
     required this.maintenance,
     required this.procurement,
-    required this.demoMode,
     required this.simulatedCharging,
     required this.simulatedPayments,
   });
@@ -39,10 +38,6 @@ final class FeatureFlags {
         'FEATURE_PROCUREMENT',
         defaultValue: true,
       ),
-      demoMode = const bool.fromEnvironment(
-        'FEATURE_DEMO_MODE',
-        defaultValue: true,
-      ),
       simulatedCharging = const bool.fromEnvironment(
         'FEATURE_SIMULATED_CHARGING',
       ),
@@ -62,7 +57,6 @@ final class FeatureFlags {
   final bool inventory;
   final bool maintenance;
   final bool procurement;
-  final bool demoMode;
   final bool simulatedCharging;
   final bool simulatedPayments;
 }

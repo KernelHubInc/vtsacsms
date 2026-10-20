@@ -5,9 +5,11 @@ import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/config/app_environment.dart';
 import 'package:vtsa_mobile/core/config/feature_flags.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/core/maps/device_location_service.dart';
 import 'package:vtsa_mobile/core/maps/map_configuration.dart';
 import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -15,7 +17,9 @@ import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
+import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 final class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.signedIn = false});
@@ -23,7 +27,14 @@ final class FakeAuthRepository implements AuthRepository {
   bool signedIn;
   bool passwordResetRequested = false;
   bool registrationRequested = false;
-  final user = const UserProfile(
+  bool verificationEmailSent = true;
+  int verificationEmailsSent = 0;
+  AppFailure? currentUserFailure;
+  AppFailure? logoutFailure;
+  AppFailure? resetFailure;
+  Completer<void>? resetCompleter;
+  Completer<UserProfile>? currentUserCompleter;
+  UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
     email: 'ada@example.test',
@@ -32,8 +43,19 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    if (currentUserCompleter case final pending?) return pending.future;
+    if (currentUserFailure case final failure?) {
+      throw failure;
+    }
     if (!signedIn) {
       throw StateError('Not signed in');
+    }
+    if (!user.emailVerified) {
+      throw const AppFailure(
+        kind: FailureKind.forbidden,
+        code: 'email_unverified',
+        message: 'Email verification is required.',
+      );
     }
     return user;
   }
@@ -56,21 +78,36 @@ final class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async => signedIn = false;
+  Future<void> logout() async {
+    if (logoutFailure case final failure?) throw failure;
+    signedIn = false;
+  }
 
   @override
-  Future<void> register({
+  Future<RegistrationResult> register({
     required String name,
     required String email,
     required String password,
-  }) async => registrationRequested = true;
+    String? firstName,
+    String? middleName,
+    String? lastName,
+    String? birthDate,
+    String? plateNumber,
+    bool platePending = false,
+  }) async {
+    registrationRequested = true;
+    return RegistrationResult(verificationEmailSent: verificationEmailSent);
+  }
 
   @override
-  Future<void> requestPasswordReset(String email) async =>
-      passwordResetRequested = true;
+  Future<void> requestPasswordReset(String email) async {
+    passwordResetRequested = true;
+    if (resetFailure case final failure?) throw failure;
+    if (resetCompleter case final pending?) await pending.future;
+  }
 
   @override
-  Future<void> resendEmailVerification() async {}
+  Future<void> resendEmailVerification() async => verificationEmailsSent++;
 }
 
 final class FakeStationRepository implements StationRepository {
@@ -188,6 +225,7 @@ ChargingSession sampleChargingSession({
   ChargingDocument? receipt,
   ChargingDocument? invoice,
   bool refundable = false,
+  bool cancellationRequested = false,
 }) => ChargingSession(
   id: id,
   state: state,
@@ -215,6 +253,7 @@ ChargingSession sampleChargingSession({
   receipt: receipt,
   invoice: invoice,
   refundable: refundable,
+  cancellationRequested: cancellationRequested,
 );
 
 final class FakeChargingRepository implements ChargingRepository {
@@ -229,11 +268,19 @@ final class FakeChargingRepository implements ChargingRepository {
   AppFailure? prepareFailure;
   AppFailure? startFailure;
   AppFailure? stopFailure;
+  AppFailure? issueFailure;
+  AppFailure? historyFailure;
   Completer<ChargingSession>? startCompleter;
+  Completer<ChargePreparation>? prepareCompleter;
   Completer<ChargingSession>? stopCompleter;
+  AppFailure? getSessionFailure;
+  Completer<ChargingHistoryPage>? historyCompleter;
   int prepareCalls = 0;
+  String? lastPreparedCode;
   int startCalls = 0;
   int stopCalls = 0;
+  int cancelCalls = 0;
+  ChargingSession? cancelResult;
   int activeCalls = 0;
   int historyCalls = 0;
   int refundCalls = 0;
@@ -254,17 +301,22 @@ final class FakeChargingRepository implements ChargingRepository {
     required String sessionId,
     required String reason,
   }) async {
-    final cancelled = sampleChargingSession(
-      id: sessionId,
-      state: ChargingSessionState.cancelled,
-      aggregateVersion: 9,
-    );
+    cancelCalls++;
+    final cancelled =
+        cancelResult ??
+        sampleChargingSession(
+          id: sessionId,
+          state: ChargingSessionState.cancelled,
+          paymentState: PaymentState.notRequired,
+          aggregateVersion: 9,
+        );
     sessions[sessionId] = cancelled;
     return cancelled;
   }
 
   @override
   Future<ChargingSession> getSession(String sessionId) async {
+    if (getSessionFailure case final failure?) throw failure;
     final result = sessions[sessionId] ?? active;
     if (result == null) {
       throw const AppFailure(
@@ -278,6 +330,8 @@ final class FakeChargingRepository implements ChargingRepository {
   @override
   Future<ChargingHistoryPage> history({String? cursor}) async {
     historyCalls++;
+    if (historyFailure case final failure?) throw failure;
+    if (historyCompleter case final pending?) return pending.future;
     return historyResult;
   }
 
@@ -287,10 +341,11 @@ final class FakeChargingRepository implements ChargingRepository {
     String? vehicleId,
   }) async {
     prepareCalls++;
+    lastPreparedCode = code.value;
     if (prepareFailure case final failure?) {
       throw failure;
     }
-    return preparation;
+    return prepareCompleter?.future ?? preparation;
   }
 
   @override
@@ -301,6 +356,7 @@ final class FakeChargingRepository implements ChargingRepository {
     required String idempotencyKey,
   }) async {
     issueCalls++;
+    if (issueFailure case final failure?) throw failure;
     lastIssueSessionId = sessionId;
   }
 
@@ -365,12 +421,18 @@ buildTestDependencies({
   bool signedIn = false,
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
+  KycRepository? kycRepository,
+  WalletRepository? walletRepository,
+  ChargingAccountsController? accounts,
+  TokenStore? tokenStore,
+  MapConfiguration? maps,
+  DeviceLocationService location = const UnavailableDeviceLocationService(),
 }) async {
   SharedPreferences.setMockInitialValues({
     'onboarding_complete_v1': onboardingComplete,
   });
   final preferences = await SharedPreferences.getInstance();
-  final tokens = MemoryTokenStore();
+  final tokens = tokenStore ?? MemoryTokenStore();
   if (signedIn) {
     await tokens.write(
       TokenBundle(
@@ -390,23 +452,26 @@ buildTestDependencies({
       apiBaseUrl: Uri.parse('http://localhost:8000'),
       defaultTenantId: '01K0M0JJ5X0M0JJ5X0M0JJ5X0N',
       googleMapsApiKey: '',
-      maps: const MapConfiguration(
-        requestedProvider: MapProviderKind.openstreetmap,
-        provider: MapProviderKind.openstreetmap,
-        defaultLatitude: 14.5995,
-        defaultLongitude: 120.9842,
-        defaultZoom: 11,
-        minimumZoom: 3,
-        maximumZoom: 19,
-        tileUrlTemplate: '',
-        tileAttribution: '© OpenStreetMap contributors',
-        tileMaximumNativeZoom: 19,
-        clusteringEnabled: true,
-        googleReady: false,
-        status: 'widget_test_list_default',
-      ),
+      maps:
+          maps ??
+          const MapConfiguration(
+            requestedProvider: MapProviderKind.openstreetmap,
+            provider: MapProviderKind.openstreetmap,
+            defaultLatitude: 14.5995,
+            defaultLongitude: 120.9842,
+            defaultZoom: 11,
+            minimumZoom: 3,
+            maximumZoom: 19,
+            tileUrlTemplate: '',
+            tileAttribution: '© OpenStreetMap contributors',
+            tileMaximumNativeZoom: 19,
+            clusteringEnabled: true,
+            googleReady: false,
+            status: 'widget_test_list_default',
+          ),
     ),
     preferences: preferences,
+    location: location,
     tokenStore: tokens,
     connectivity: const AlwaysOnlineConnectivity(),
     authRepository: auth,
@@ -414,6 +479,9 @@ buildTestDependencies({
     vehicleRepository: LocalVehicleRepository(preferences),
     favoritesRepository: LocalFavoritesRepository(preferences),
     chargingRepository: charging,
+    kycRepository: kycRepository,
+    walletRepository: walletRepository,
+    accounts: accounts,
     featureFlags: const FeatureFlags(
       ocpp: false,
       remoteCharging: false,
@@ -424,7 +492,6 @@ buildTestDependencies({
       inventory: true,
       maintenance: true,
       procurement: true,
-      demoMode: true,
       simulatedCharging: true,
       simulatedPayments: true,
     ),

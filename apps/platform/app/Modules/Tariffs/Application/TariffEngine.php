@@ -32,7 +32,8 @@ final class TariffEngine
             $dimension = TariffDimension::from((string) $component['dimension']);
             $quantity = match ($dimension) {
                 TariffDimension::Energy => $input->energyWh,
-                TariffDimension::Time => $input->durationSeconds,
+                TariffDimension::Time => ($snapshot['time_basis'] ?? 'elapsed') === 'energy_flow'
+                    ? $input->energyFlowSeconds : $input->durationSeconds,
                 TariffDimension::Parking => $input->parkingSeconds,
                 TariffDimension::Idle => $input->idleSeconds,
                 TariffDimension::Session => 1,
@@ -180,7 +181,7 @@ final class TariffEngine
 
     private function assertNonNegative(RatingInput $input): void
     {
-        if (min($input->energyWh, $input->durationSeconds, $input->parkingSeconds, $input->idleSeconds) < 0) {
+        if (min($input->energyWh, $input->durationSeconds, $input->parkingSeconds, $input->idleSeconds, $input->energyFlowSeconds) < 0) {
             throw new InvalidArgumentException('Rating inputs must be non-negative integer measurements.');
         }
     }

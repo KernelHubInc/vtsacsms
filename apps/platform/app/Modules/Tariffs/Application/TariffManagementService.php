@@ -81,6 +81,7 @@ final readonly class TariffManagementService
                 'site_id' => $data['site_id'] ?? null,
                 'connector_id' => $data['connector_id'] ?? null,
                 'timezone' => $data['timezone'],
+                'time_basis' => $data['time_basis'] ?? 'energy_flow',
             ]);
             foreach ($data['components'] as $component) {
                 $dimension = TariffDimension::from($component['dimension']);
@@ -122,6 +123,7 @@ final readonly class TariffManagementService
     public function publish(TariffVersion $version): TariffVersion
     {
         return DB::transaction(function () use ($version): TariffVersion {
+            Tariff::query()->whereKey($version->tariff_id)->lockForUpdate()->firstOrFail();
             $locked = TariffVersion::query()->whereKey($version->getKey())->lockForUpdate()->firstOrFail();
             if ($locked->status !== TariffStatus::Draft) {
                 throw new DomainException('Only draft tariff versions can be published.');
@@ -132,6 +134,10 @@ final readonly class TariffManagementService
             $overlap = TariffVersion::query()
                 ->where('tariff_id', $locked->tariff_id)
                 ->where('status', TariffStatus::Published->value)
+                ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('tariff_version_endings')
+                    ->whereColumn('tariff_version_endings.tenant_id', 'tariff_versions.tenant_id')
+                    ->whereColumn('tariff_version_endings.tariff_version_id', 'tariff_versions.id')
+                    ->where('ended_at', '<=', $locked->effective_from))
                 ->where($this->sameScope($locked))
                 ->where('effective_from', '<', $locked->effective_to ?? '9999-12-31 23:59:59+00')
                 ->where(fn (Builder $query): Builder => $query
@@ -172,6 +178,9 @@ final readonly class TariffManagementService
     /** @param array<string, mixed> $data */
     private function validateScope(array $data): void
     {
+        if (isset($data['connector_id'], $data['site_id']) && $this->connectors->byId($data['connector_id'])?->siteId !== $data['site_id']) {
+            throw new DomainException('The selected connector does not belong to the selected site.');
+        }
         if (isset($data['connector_id']) && $this->connectors->byId($data['connector_id']) === null) {
             throw new DomainException('Tariff connector scope does not exist in this tenant.');
         }
@@ -186,6 +195,9 @@ final readonly class TariffManagementService
     /** @param array<string, mixed> $data */
     private function validateRatingRules(array $data): void
     {
+        if (isset($data['time_basis']) && $data['time_basis'] !== 'energy_flow') {
+            throw new DomainException('New time tariffs must use metered energy-flow duration.');
+        }
         $minimum = $data['minimum_fee_minor'] ?? null;
         $maximum = $data['maximum_fee_minor'] ?? null;
         if (is_int($minimum) && is_int($maximum) && $maximum < $minimum) {

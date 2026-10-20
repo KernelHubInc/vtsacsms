@@ -42,6 +42,10 @@ abstract interface class TokenStore {
   Future<void> clear();
 }
 
+abstract interface class LockableTokenStore implements TokenStore {
+  bool get locked;
+}
+
 final class SecureTokenStore implements TokenStore {
   SecureTokenStore(this._storage);
 

@@ -29,6 +29,6 @@ final class SanctumIdentityController extends Controller
                 $authorization->effectivePermissions($user),
                 static fn (string $permission): bool => $user->tokenCan($permission),
             )),
-        ]]);
+        ]])->header('Cache-Control', 'no-store');
     }
 }

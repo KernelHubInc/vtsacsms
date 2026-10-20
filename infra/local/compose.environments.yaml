@@ -1,0 +1,242 @@
+name: ${LOCAL_ENVIRONMENTS_COMPOSE_PROJECT_NAME:-vtsa-csms-local-environments}
+
+x-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: 20m
+    max-file: "3"
+
+x-production-environment: &production-environment
+  APP_NAME: VTSA CSMS Production Local
+  APP_ENV: production
+  APP_KEY: ${PRODUCTION_APP_KEY:?PRODUCTION_APP_KEY is required}
+  APP_DEBUG: "false"
+  APP_URL: http://localhost:${PRODUCTION_WEB_PORT:-8000}
+  LOG_CHANNEL: stderr-json
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${POSTGRES_PRODUCTION_DATABASE:-vtsa_production}
+  DB_USERNAME: ${POSTGRES_APP_USER:-vtsa_app}
+  DB_PASSWORD: ${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}
+  DB_SSLMODE: disable
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  SESSION_COOKIE: vtsa_production_local_session
+  SESSION_SECURE_COOKIE: "false"
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis-production
+  REDIS_PORT: 6379
+  REDIS_DB: 0
+  REDIS_CACHE_DB: 1
+  REDIS_PREFIX: "vtsa:production-local:"
+  MAIL_MAILER: smtp
+  MAIL_HOST: mailpit
+  MAIL_PORT: 1025
+  FILESYSTEM_DISK: local
+  MAP_PROVIDER_DEFAULT: openstreetmap
+  MAP_PROVIDER_ADMIN: openstreetmap
+  MAP_PROVIDER_OPERATOR: openstreetmap
+  MAP_PROVIDER_USER_WEB: openstreetmap
+  MAP_PROVIDER_PUBLIC: openstreetmap
+  FEATURE_STORE_LOCATOR: "true"
+  FEATURE_INVENTORY: "true"
+  FEATURE_MAINTENANCE: "true"
+  FEATURE_PROCUREMENT: "true"
+  FEATURE_DEMO_MODE: "false"
+  FEATURE_REAL_PAYMENTS: "false"
+
+x-staging-environment: &staging-environment
+  APP_NAME: VTSA CSMS Staging Local
+  APP_ENV: staging
+  APP_KEY: ${STAGING_APP_KEY:?STAGING_APP_KEY is required}
+  APP_DEBUG: "false"
+  APP_URL: http://localhost:${STAGING_WEB_PORT:-8001}
+  LOG_CHANNEL: stderr-json
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${POSTGRES_STAGING_DATABASE:-vtsa_staging}
+  DB_USERNAME: ${POSTGRES_APP_USER:-vtsa_app}
+  DB_PASSWORD: ${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}
+  DB_SSLMODE: disable
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  SESSION_COOKIE: vtsa_staging_local_session
+  SESSION_SECURE_COOKIE: "false"
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis-staging
+  REDIS_PORT: 6379
+  REDIS_DB: 0
+  REDIS_CACHE_DB: 1
+  REDIS_PREFIX: "vtsa:staging-local:"
+  MAIL_MAILER: smtp
+  MAIL_HOST: mailpit
+  MAIL_PORT: 1025
+  FILESYSTEM_DISK: local
+  MAP_PROVIDER_DEFAULT: openstreetmap
+  MAP_PROVIDER_ADMIN: openstreetmap
+  MAP_PROVIDER_OPERATOR: openstreetmap
+  MAP_PROVIDER_USER_WEB: openstreetmap
+  MAP_PROVIDER_PUBLIC: openstreetmap
+  FEATURE_STORE_LOCATOR: "true"
+  FEATURE_INVENTORY: "true"
+  FEATURE_MAINTENANCE: "true"
+  FEATURE_PROCUREMENT: "true"
+  FEATURE_DEMO_MODE: "true"
+  FEATURE_REAL_PAYMENTS: "false"
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27.6
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "127.0.0.1:8025:8025"
+    volumes:
+      - mailpit-data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *json-logging
+
+  redis-production:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-production-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *json-logging
+
+  redis-staging:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis-staging-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *json-logging
+
+  platform-production:
+    build:
+      context: ../../apps/platform
+      target: development
+    environment: *production-environment
+    ports:
+      - "${PRODUCTION_WEB_PORT:-8000}:8000"
+    depends_on:
+      mailpit:
+        condition: service_healthy
+      redis-production:
+        condition: service_healthy
+    networks: [default, database]
+    restart: unless-stopped
+    logging: *json-logging
+
+  worker-production:
+    build:
+      context: ../../apps/platform
+      target: development
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    environment: *production-environment
+    depends_on:
+      platform-production:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [default, database]
+    restart: unless-stopped
+    logging: *json-logging
+
+  platform-staging:
+    build:
+      context: ../../apps/platform
+      target: development
+    environment: *staging-environment
+    ports:
+      - "${STAGING_WEB_PORT:-8001}:8000"
+    depends_on:
+      mailpit:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    networks: [default, database]
+    restart: unless-stopped
+    logging: *json-logging
+
+  worker-staging:
+    build:
+      context: ../../apps/platform
+      target: development
+    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90"]
+    environment: *staging-environment
+    depends_on:
+      platform-staging:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [default, database]
+    restart: unless-stopped
+    logging: *json-logging
+
+  mobile-production:
+    image: nginx:1.29-alpine
+    volumes:
+      - ../../.cache/mobile-production:/usr/share/nginx/html:ro
+    ports:
+      - "${PRODUCTION_MOBILE_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *json-logging
+
+  mobile-staging:
+    image: nginx:1.29-alpine
+    volumes:
+      - ../../.cache/mobile-staging:/usr/share/nginx/html:ro
+    ports:
+      - "${STAGING_MOBILE_PORT:-3001}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *json-logging
+
+volumes:
+  mailpit-data:
+  redis-production-data:
+  redis-staging-data:
+
+networks:
+  database:
+    external: true
+    name: ${POSTGRES_DOCKER_NETWORK:-vtsa-database}

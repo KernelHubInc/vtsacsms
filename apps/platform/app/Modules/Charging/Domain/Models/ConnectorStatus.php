@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $connector_id
  * @property ConnectorAvailability $status
  * @property CarbonImmutable $observed_at
+ * @property string|null $ocpp_connection_id
+ * @property string|null $reported_status
+ * @property CarbonImmutable|null $last_ocpp_event_at
  * @property int $stale_after_seconds
  */
 final class ConnectorStatus extends Model
@@ -25,11 +28,14 @@ final class ConnectorStatus extends Model
 
     protected $guarded = [];
 
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected function casts(): array
     {
         return [
             'status' => ConnectorAvailability::class,
             'observed_at' => 'immutable_datetime',
+            'last_ocpp_event_at' => 'immutable_datetime',
             'stale_after_seconds' => 'integer',
         ];
     }

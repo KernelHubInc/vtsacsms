@@ -49,7 +49,8 @@ def test_charger_connections_are_denied_until_authentication_is_configured() -> 
     assert error.value.code == 1008
 
 
-def test_authenticated_internal_command_reports_disconnected_target() -> None:
+@pytest.mark.parametrize("lowercase", [False, True])
+def test_authenticated_internal_command_reports_disconnected_target(lowercase: bool) -> None:
     client = TestClient(create_app(Settings(internal_api_token="local-service-token")))
 
     response = client.post(
@@ -58,7 +59,9 @@ def test_authenticated_internal_command_reports_disconnected_target() -> None:
         json={
             "command_id": "01K0M0AA1A0M0AA1A0M0AA1A0M",
             "tenant_id": "01K0M0BB2B0M0BB2B0M0BB2B0M",
-            "charger_id": "01K0M0CC3C0M0CC3C0M0CC3C0M",
+            "charger_id": "01K0M0CC3C0M0CC3C0M0CC3C0M".lower()
+            if lowercase
+            else "01K0M0CC3C0M0CC3C0M0CC3C0M",
             "charge_point_identity": "CP-OFFLINE",
             "action": "TriggerMessage",
             "payload": {"requested_message": "Heartbeat"},

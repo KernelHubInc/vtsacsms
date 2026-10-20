@@ -1,0 +1,68 @@
+# Isolated synthetic integration harness, never an existing application database.
+services:
+  kyc-api:
+    ports: !reset []
+    environment:
+      KYC_MODE: mock
+      KYC_MOCK_OUTCOME: NEEDS_REVIEW
+      KYC_CALLBACK_URL: http://kyc-platform:8000/api/v1/webhooks/kyc
+  kyc-worker:
+    environment:
+      KYC_MODE: mock
+      KYC_MOCK_OUTCOME: NEEDS_REVIEW
+      KYC_CALLBACK_URL: http://kyc-platform:8000/api/v1/webhooks/kyc
+  kyc-beat:
+    environment:
+      KYC_MODE: mock
+      KYC_MOCK_OUTCOME: NEEDS_REVIEW
+      KYC_CALLBACK_URL: http://kyc-platform:8000/api/v1/webhooks/kyc
+  kyc-core-postgres:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: kyc_platform_test
+      POSTGRES_USER: kyc_platform_test
+      POSTGRES_PASSWORD: ${KYC_POSTGRES_PASSWORD:?Generate local environment}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U kyc_platform_test -d kyc_platform_test']
+      interval: 5s
+      retries: 15
+    networks: [private]
+    tmpfs: [/var/lib/postgresql]
+  kyc-platform:
+    build:
+      context: ../../apps/platform
+      target: development
+    image: vtsa-kyc-platform:local
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: ${KYC_PLATFORM_APP_KEY:?Run prepare_integration.py}
+      APP_URL: http://localhost:8091
+      DB_CONNECTION: pgsql
+      DB_HOST: kyc-core-postgres
+      DB_PORT: 5432
+      DB_DATABASE: kyc_platform_test
+      DB_USERNAME: kyc_platform_test
+      DB_PASSWORD: ${KYC_POSTGRES_PASSWORD}
+      CACHE_STORE: redis
+      REDIS_HOST: kyc-redis
+      REDIS_DB: 2
+      REDIS_CACHE_DB: 3
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: log
+      LOG_CHANNEL: stderr
+      KYC_ENABLED: 'true'
+      KYC_ASSURANCE_PROFILE: issuer_v1
+      KYC_SERVICE_URL: http://kyc-api:8090
+      KYC_REQUEST_SECRET: ${KYC_REQUEST_SECRET}
+      KYC_CALLBACK_SECRET: ${KYC_CALLBACK_SECRET}
+      KYC_SMOKE: 'true'
+      KYC_SMOKE_PASSWORD: ${KYC_SMOKE_PASSWORD:?Run prepare_integration.py}
+    ports: ['127.0.0.1:8091:8000']
+    depends_on:
+      kyc-core-postgres:
+        condition: service_healthy
+      kyc-api:
+        condition: service_healthy
+    networks: [private]

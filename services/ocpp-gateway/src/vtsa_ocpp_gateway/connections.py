@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import structlog
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from vtsa_ocpp_gateway.config import Settings
@@ -53,7 +53,14 @@ class WebSocketOcppConnection:
 
     async def recv(self) -> str:
         while True:
-            raw = await self.websocket.receive_text()
+            try:
+                raw = await asyncio.wait_for(
+                    self.websocket.receive_text(), self._settings.message_idle_timeout_seconds
+                )
+            except TimeoutError:
+                await logger.ainfo("ocpp_message_idle_timeout")
+                await self.close(code=1001, reason="OCPP heartbeat timeout")
+                raise WebSocketDisconnect(code=1001) from None
             message_type, unique_id, action = await self._raw_logger.log(
                 raw, direction="charger_to_gateway", protocol=self.protocol
             )

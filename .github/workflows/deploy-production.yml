@@ -38,6 +38,9 @@ jobs:
           - image: ocpp-gateway
             context: services/ocpp-gateway
             target: runtime
+          - image: kyc
+            context: services/kyc-service
+            target: runtime
     steps:
       - uses: actions/checkout@v5
         with:

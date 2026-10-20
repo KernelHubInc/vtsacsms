@@ -95,13 +95,20 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
             mapController: _map,
             options: MapOptions(
               initialCenter: LatLng(
-                configuration.defaultLatitude,
-                configuration.defaultLongitude,
+                widget.userPosition?.latitude ?? configuration.defaultLatitude,
+                widget.userPosition?.longitude ??
+                    configuration.defaultLongitude,
               ),
-              initialZoom: configuration.defaultZoom,
+              initialZoom: widget.userPosition == null
+                  ? configuration.defaultZoom
+                  : 13,
               minZoom: configuration.minimumZoom,
               maxZoom: configuration.maximumZoom,
               keepAlive: true,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+              onTap: (_, _) => widget.discovery.select(null),
               onMapEvent: _onMapEvent,
             ),
             children: [
@@ -269,6 +276,7 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
 
   void _synchronizeSelection() {
     final id = widget.discovery.selectedStationId;
+    if (id == null) _lastFocusedId = null;
     if (_disposed || id == null || id == _lastFocusedId) return;
     final station = widget.discovery.byId(id);
     if (station != null) {

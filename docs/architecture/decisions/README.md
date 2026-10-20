@@ -20,6 +20,17 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0014](0014-use-configurable-map-provider-adapters.md) | Use configurable OpenStreetMap and Google adapters across web and Flutter | Accepted |
 | [0015](0015-promote-isolated-staging-and-production-stacks.md) | Promote isolated staging and production stacks across two app nodes | Accepted |
 | [0016](0016-use-wireguard-for-app-to-data-transport.md) | Use WireGuard for application-to-data transport | Accepted |
+| [0017](0017-isolate-kyc-evidence-processing.md) | Isolate private KYC evidence processing; Identity owns status | Accepted for development |
+| [0018](0018-private-kyc-deployment-and-review-policy.md) | Private KYC deployments and explicit review policy | Assurance choice superseded by 0019 |
+| [0019](0019-optical-kyc-and-live-capture.md) | Optical KYC and a self-hosted live camera challenge | Accepted; production acceptance gated |
+| [0020](0020-mobile-pin-and-biometric-unlock.md) | Device-local mobile PIN and biometric unlock | Accepted; physical-device release verification required |
+| [0021](0021-driver-onboarding-and-server-garages.md) | Adult onboarding and server-owned driver garages | Accepted for staging |
+| [0022](0022-prepaid-balances-and-aub-qrph.md) | Prepaid balances and AUB QR Ph collections | Accepted for simulation; live acceptance gated |
+| [0023](0023-authenticate-ocpp-against-platform-stations.md) | Authenticate OCPP against current platform stations and Identity credentials | Superseded for URL-only deployments by 0024 |
+| [0024](0024-url-only-registered-chargers.md) | URL-only connections for registered chargers | Accepted by explicit operator request |
+| [0025](0025-native-staging-ocpp-runtime.md) | Native systemd gateway with Docker rollback on staging | Accepted by explicit operator request |
+
+| [0026](0026-prepaid-mobile-charging-and-metered-time.md) | Prepaid mobile charging and metered energy-flow time | Staging; physical EV acceptance pending |
 
 ## ADR Template
 

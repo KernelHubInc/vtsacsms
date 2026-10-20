@@ -21,6 +21,11 @@ final readonly class EvsePolicy
         return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::AssetView);
     }
 
+    public function create(User $user): bool
+    {
+        return $this->tenant->has() && $this->authorization->holdsAnywhere($user, PermissionKey::AssetManage);
+    }
+
     public function view(User $user, Evse $evse): bool
     {
         return $this->allows($user, $evse, PermissionKey::AssetView);
@@ -29,6 +34,11 @@ final readonly class EvsePolicy
     public function update(User $user, Evse $evse): bool
     {
         return $this->allows($user, $evse, PermissionKey::AssetManage);
+    }
+
+    public function delete(User $user, Evse $evse): bool
+    {
+        return $this->update($user, $evse);
     }
 
     private function allows(User $user, Evse $evse, PermissionKey $permission): bool

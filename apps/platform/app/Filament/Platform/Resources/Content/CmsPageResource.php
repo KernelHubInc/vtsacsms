@@ -32,7 +32,7 @@ final class CmsPageResource extends CmsResource
     {
         return $schema->components([
             TextInput::make('title')->required()->maxLength(180), TextInput::make('slug')->required()->maxLength(180)->unique(ignoreRecord: true),
-            TextInput::make('eyebrow')->maxLength(120), Select::make('template')->options(array_combine(['home', 'network', 'map', 'default', 'app', 'articles', 'faq', 'contact', 'support', 'legal'], ['Home', 'Network', 'Map', 'Default', 'App', 'Articles', 'FAQ', 'Contact', 'Support', 'Legal']))->required(),
+            Select::make('template')->options(array_combine(['home', 'network', 'map', 'default', 'app', 'articles', 'faq', 'contact', 'support', 'legal'], ['Home', 'Network', 'Map', 'Default', 'App', 'Articles', 'FAQ', 'Contact', 'Support', 'Legal']))->required(),
             TextInput::make('hero_heading')->maxLength(240)->columnSpanFull(), Textarea::make('hero_copy')->columnSpanFull(), Textarea::make('body')->columnSpanFull(),
             TextInput::make('primary_action_label')->maxLength(80), TextInput::make('primary_action_url')->maxLength(500), TextInput::make('secondary_action_label')->maxLength(80), TextInput::make('secondary_action_url')->maxLength(500),
             Select::make('status')->options(['draft' => 'Draft', 'published' => 'Published'])->required()->disabled(fn (): bool => ! self::canPublish()), DateTimePicker::make('published_at')->timezone('UTC')->disabled(fn (): bool => ! self::canPublish()),

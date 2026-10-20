@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\Sites\Pages;
 
 use App\Filament\Operator\Resources\Sites\SiteResource;
+use App\Filament\Shared\Actions\DeleteNetworkRecordAction;
+use App\Filament\Shared\Actions\PublishSiteAction;
 use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
@@ -13,6 +15,11 @@ use Filament\Resources\Pages\EditRecord;
 final class EditSite extends EditRecord
 {
     protected static string $resource = SiteResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [PublishSiteAction::make(), DeleteNetworkRecordAction::make()];
+    }
 
     /** @var array<string, mixed> */
     private array $before = [];

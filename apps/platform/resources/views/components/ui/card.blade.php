@@ -11,9 +11,6 @@
     'border-border bg-panel shadow-elevation-1' => ! $subtle && ! $selected,
     'hover:-translate-y-0.5 hover:border-brand/60 hover:shadow-elevation-2' => $interactive,
 ]) }}>
-    @isset($eyebrow)
-        <div class="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-brand">{{ $eyebrow }}</div>
-    @endisset
 
     @if (isset($title) || isset($actions))
         <header class="mb-4 flex items-start justify-between gap-4">

@@ -6,8 +6,107 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
+import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
+import 'support/quick_unlock_fakes.dart';
 
 void main() {
+  test(
+    'locked background requests never reach the server or expire the session',
+    () async {
+      final store = QuickUnlockStore(
+        tokens: MemoryTokenStore(),
+        settings: MemoryUnlockSettings(),
+        device: FakeDeviceAuthenticator(),
+      );
+      final adapter = _ScriptedAdapter();
+      var expired = false;
+      final client = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test'),
+        tokenStore: store,
+        dio: Dio()..httpClientAdapter = adapter,
+      )..onSessionExpired = () => expired = true;
+      await expectLater(
+        client.dio.get<void>('/api/v1/me'),
+        throwsA(
+          isA<DioException>().having(
+            (error) => error.type,
+            'type',
+            DioExceptionType.cancel,
+          ),
+        ),
+      );
+      expect(adapter.requests, isEmpty);
+      expect(expired, isFalse);
+    },
+  );
+  test('retries remove credentials retained before a local lock', () async {
+    final tokens = MemoryTokenStore()
+      ..value = TokenBundle(
+        accessToken: 'saved-token',
+        expiresAt: DateTime.utc(2030),
+        tenantId: 'tenant-a',
+        deviceId: 'device-a',
+      );
+    final adapter = _ScriptedAdapter()
+      ..responses.addAll([const _Reply(503, '{}'), const _Reply(200, '{}')]);
+    final client = ApiClient(
+      baseUrl: Uri.parse('https://api.example.test'),
+      tokenStore: tokens,
+      dio: Dio()..httpClientAdapter = adapter,
+      retryDelay: (_) => tokens.clear(),
+    );
+    await client.dio.get<void>('/api/v1/me');
+    expect(adapter.requests.last.headers.containsKey('Authorization'), isFalse);
+    expect(adapter.requests.last.headers.containsKey('X-Tenant-ID'), isFalse);
+  });
+
+  test(
+    'expired session without refresh token clears storage and notifies auth',
+    () async {
+      final tokens = MemoryTokenStore();
+      await tokens.write(
+        TokenBundle(
+          accessToken: 'rejected-token',
+          expiresAt: DateTime.utc(2026),
+          tenantId: 'test-tenant',
+          deviceId: 'test-device',
+        ),
+      );
+      final adapter = _ScriptedAdapter()
+        ..responses.add(const _Reply(401, '{}'));
+      var expired = false;
+      final client = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test'),
+        tokenStore: tokens,
+        dio: Dio()..httpClientAdapter = adapter,
+      )..onSessionExpired = () => expired = true;
+      await expectLater(
+        client.dio.get<void>('/api/v1/me'),
+        throwsA(isA<DioException>()),
+      );
+      expect(await tokens.read(), isNull);
+      expect(expired, isTrue);
+    },
+  );
+
+  test('anonymous login failure does not expire another session', () async {
+    final adapter = _ScriptedAdapter()..responses.add(const _Reply(401, '{}'));
+    var expired = false;
+    final client = ApiClient(
+      baseUrl: Uri.parse('https://api.example.test'),
+      tokenStore: MemoryTokenStore(),
+      dio: Dio()..httpClientAdapter = adapter,
+    )..onSessionExpired = () => expired = true;
+    await expectLater(
+      client.dio.post<void>(
+        '/api/v1/auth/login',
+        options: Options(extra: {'anonymous': true}),
+      ),
+      throwsA(isA<DioException>()),
+    );
+    expect(expired, isFalse);
+  });
+
   test('safe GET retries transient failure and mutation does not', () async {
     final adapter = _ScriptedAdapter();
     adapter.responses.addAll([

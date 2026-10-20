@@ -4,6 +4,414 @@
  */
 
 export interface paths {
+    "/api/v1/charging-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List personal and explicitly joined charging accounts
+         * @description List personal and explicitly joined charging accounts
+         */
+        get: operations["listChargingAccounts"];
+        put?: never;
+        /**
+         * Create a business or fleet account as its owner
+         * @description Create a business or fleet account as its owner
+         */
+        post: operations["createChargingAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an unused owned business or fleet account
+         * @description Accounts with members, vehicles, wallet activity, invitations or charging history cannot be deleted.
+         */
+        delete: operations["deleteUnusedChargingAccount"];
+        options?: never;
+        head?: never;
+        /** Rename or retype an owned business or fleet account */
+        patch: operations["updateChargingAccount"];
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List unexpired invitations for the verified login email
+         * @description List unexpired invitations for the verified login email
+         */
+        get: operations["listMyChargingInvitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/invitations/{invitation}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an invitation once using the verified recipient login
+         * @description Accept an invitation once using the verified recipient login
+         */
+        post: operations["acceptChargingInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List minimal member identity for authorized account managers
+         * @description List minimal member identity for authorized account managers
+         */
+        get: operations["listChargingAccountMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/members/{subject}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                subject: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Owner changes a member role or revokes access
+         * @description Null revokes immediately. The owner cannot be replaced or revoked through this endpoint. Historical session/payment attribution remains unchanged.
+         */
+        patch: operations["changeChargingAccountMember"];
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List pending invitations issued for an account
+         * @description List pending invitations issued for an account
+         */
+        get: operations["listChargingAccountInvitations"];
+        put?: never;
+        /**
+         * Invite an individual by email
+         * @description Owner may invite any non-owner role; admin may invite drivers and fleet managers. Expires after seven days. Delivery failure leaves the invitation discoverable in the verified recipient app.
+         */
+        post: operations["inviteChargingAccountMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/invitations/{invitation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                invitation: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an unaccepted invitation
+         * @description Revoke an unaccepted invitation
+         */
+        delete: operations["revokeChargingAccountInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/vehicles/{vehicle}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                vehicle: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List assigned driver subject IDs
+         * @description List assigned driver subject IDs
+         */
+        get: operations["listChargingVehicleAssignments"];
+        /**
+         * Allow or remove a vehicle driver assignment
+         * @description Allow or remove a vehicle driver assignment
+         */
+        put: operations["assignChargingVehicle"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/charging-accounts/{account}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Owner reads per-session reservation caps
+         * @description Owner reads per-session reservation caps
+         */
+        get: operations["listChargingAccountLimits"];
+        /**
+         * Owner sets or removes a per-session reservation cap
+         * @description Null removes the cap; zero blocks new starts. Lower driver/vehicle cap wins. Does not retroactively alter a running session or provide an offline hardware cutoff.
+         */
+        put: operations["setChargingAccountLimit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging/prepare": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review connector pricing and a live prepaid spending limit */
+        post: operations["prepareCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/remote-start": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve prepaid funds and request physical start */
+        post: operations["startCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recover only the caller's active or unsettled session */
+        get: operations["activeCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the caller's charging history */
+        get: operations["listCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one customer-owned session */
+        get: operations["getCustomerCharging"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}/remote-stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request physical stop without asserting completion */
+        post: operations["stopCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mobile/charging-sessions/{session}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an unsent start or record cancellation pending charger confirmation
+         * @description Idempotent. Unsent requests cancel and release reserved funds. A dispatched request persists cancellation_requested and retains its hold; the monitor requests Stop once a transaction ID is known. A successful response is not proof of physical cancellation. Authoritative rejection or final transaction evidence resolves payment.
+         */
+        post: operations["cancelCustomerCharging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/v1/ocpp/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a URL-only charger against active station and tenant state
+         * @description Gateway-only HTTPS registration query. No device credential is required or verified. Unknown or inactive stations and mismatched protocols fail closed.
+         */
+        post: operations["resolveOcppCharger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/internal/v1/ocpp/authenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authenticate a charger against current station and tenant state
+         * @description Gateway-only HTTPS query. No device passwords or hashes are returned. Unknown or inactive stations and incorrect credentials fail closed.
+         */
+        post: operations["authenticateOcppCharger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/app/config": {
         parameters: {
             query?: never;
@@ -408,6 +816,69 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a staging consumer account with an adult birth date and default vehicle
+         * @description Available only in demo-enabled development and staging. Replaces v1 registration, which returns 426 app_update_required. Existing sign-in endpoints are unchanged.
+         */
+        post: operations["registerAdultDriver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** List personal vehicles or shared vehicles authorized for the selected account role */
+        get: operations["listDriverVehicles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle}": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path: {
+                vehicle: components["schemas"]["Ulid"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Create or update an owned vehicle with a client-generated idempotent ULID */
+        put: operations["saveDriverVehicle"];
+        post?: never;
+        /** Remove an owned vehicle and promote the next saved vehicle if needed */
+        delete: operations["removeDriverVehicle"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1157,10 +1628,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wallet": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current account wallet and paginated balance activity */
+        get: operations["getPrepaidWallet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/topups": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** List owned top-ups for the current wallet book */
+        get: operations["listWalletTopups"];
+        put?: never;
+        /** Create a QR top-up with a stable retry key and server-enforced KYC policy */
+        post: operations["createWalletTopup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/topups/{topup}": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path: {
+                topup: components["schemas"]["Ulid"];
+            };
+            cookie?: never;
+        };
+        /** Read an owned payment request without initiating provider collection */
+        get: operations["getWalletTopup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/aub/qrph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify signed AUB XML and atomically confirm a matching prepaid top-up */
+        post: operations["confirmAubQrphPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        WalletTopup: {
+            id: components["schemas"]["Ulid"];
+            amount_minor: number;
+            /** @constant */
+            currency: "PHP";
+            /** @enum {string} */
+            mode: "simulated" | "live";
+            /** @enum {string} */
+            status: "creating" | "pending" | "unknown" | "review_required" | "paid" | "expired";
+            /** @description EMV QR content only for a pending unexpired live order; never a payment URL. */
+            qr_content: string | null;
+            /** Format: date-time */
+            expires_at: string | null;
+            /** Format: date-time */
+            created_at: string | null;
+        };
+        PrepaidWallet: {
+            /** @description Selected prepaid account ULID; null before its first funding. */
+            id?: string | null;
+            /** @constant */
+            currency: "PHP";
+            balance_minor: number;
+            reserved_minor: number;
+            available_minor: number;
+            /** @enum {string} */
+            mode: "disabled" | "simulated" | "live";
+            /** @enum {string} */
+            book: "simulated" | "live";
+            topups_enabled: boolean;
+            minimum_minor: number;
+            maximum_minor: number;
+            history: {
+                next_cursor: string | null;
+                items: {
+                    id: components["schemas"]["Ulid"];
+                    /** @enum {string} */
+                    kind: "topup" | "reserved" | "released" | "spent";
+                    amount_minor: number;
+                    /** Format: date-time */
+                    created_at: string | null;
+                }[];
+            };
+        };
         /** @example 01K0M0JJ5X0M0JJ5X0M0JJ5X0M */
         Ulid: string;
         MaintenanceWorkOrderInput: {
@@ -1513,6 +2107,11 @@ export interface components {
             connector_id?: components["schemas"]["Ulid"] | null;
             /** @description IANA timezone used for day/time rules */
             timezone: string;
+            /**
+             * @description New time tariffs count only metered energy-flow seconds.
+             * @enum {string}
+             */
+            time_basis?: "energy_flow";
             components: {
                 /** @enum {string} */
                 dimension: "energy" | "time" | "session" | "parking" | "idle";
@@ -1543,6 +2142,17 @@ export interface components {
         };
         /** @enum {string} */
         AssetLifecycleStatus: "draft" | "active" | "maintenance" | "retired";
+        DriverVehicle: {
+            id?: components["schemas"]["Ulid"];
+            nickname: string;
+            plate_pending: boolean;
+            plate_number?: string | null;
+            manufacturer?: string;
+            model?: string;
+            variant?: string | null;
+            connector_standards: ("Type 2" | "CCS2" | "CHAdeMO" | "GB/T" | "NACS")[];
+            is_default: boolean;
+        };
         PublicStation: {
             id: components["schemas"]["Ulid"];
             site_id: components["schemas"]["Ulid"];
@@ -1559,6 +2169,21 @@ export interface components {
             operator_name: string;
             /** @enum {string} */
             availability: "available" | "busy" | "faulted" | "offline" | "stale" | "unknown";
+            /**
+             * @description Preferred display status. Unlike legacy availability, unavailable does not imply loss of connectivity.
+             * @enum {string}
+             */
+            operational_status?: "available" | "busy" | "faulted" | "unavailable" | "offline" | "stale" | "unknown";
+            /**
+             * @description Recent authenticated station communication, independent of connector availability
+             * @enum {string}
+             */
+            connection_status?: "online" | "offline" | "unknown";
+            /**
+             * Format: date-time
+             * @description Last observed station communication in UTC
+             */
+            last_seen_at?: string | null;
             is_stale: boolean;
             /** Format: date-time */
             status_observed_at?: string | null;
@@ -1568,11 +2193,24 @@ export interface components {
                 standard: string;
                 name: string;
                 maximum_power_w: number;
+                id?: components["schemas"]["Ulid"];
+                current_type?: string;
+                /** @enum {string} */
+                availability?: "available" | "occupied" | "reserved" | "unavailable" | "faulted" | "offline" | "stale" | "unknown";
+                /** Format: date-time */
+                status_observed_at?: string | null;
+                /**
+                 * @description Detailed device status; null when disconnected, stale, replaced or superseded by orchestration.
+                 * @enum {string|null}
+                 */
+                reported_status?: "available" | "preparing" | "charging" | "suspendedev" | "suspendedevse" | "finishing" | "occupied" | "reserved" | "unavailable" | "faulted" | null;
             }[];
             qr_identifier?: string;
             distance_m?: number | null;
         };
         ChargingStationMutableFields: {
+            /** @description Set or rotate the station's OCPP Basic credential; never returned. Used only by legacy Basic-auth mode; not needed for URL-only registration. */
+            ocpp_password?: string;
             name?: string;
             charger_model_id?: components["schemas"]["Ulid"] | null;
             ocpp_version_id?: components["schemas"]["Ulid"] | null;
@@ -1602,6 +2240,131 @@ export interface components {
             checks: {
                 [key: string]: string;
             };
+        };
+        ChargingAccount: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            type: "personal" | "business" | "fleet";
+            /** @enum {string} */
+            role: "owner" | "admin" | "billing_manager" | "fleet_manager" | "driver";
+            permissions: string[];
+        };
+        ChargingAccountInvitation: {
+            id: string;
+            account_id: string;
+            account_name: string;
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            role: "admin" | "billing_manager" | "fleet_manager" | "driver";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        ChargingAccountMember: {
+            subject_id: string;
+            name: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "billing_manager" | "fleet_manager" | "driver";
+        };
+        ChargingAccountLimit: {
+            /** @enum {string} */
+            target_type: "driver" | "vehicle";
+            target_id: string;
+            /** @description PHP minor units per session reservation; zero blocks starts, not a monthly allowance. */
+            amount_minor: number;
+        };
+        ChargingAttribution: {
+            driver_id: string;
+            driver_name?: string;
+            account_id?: string;
+            account_name?: string;
+            payer: string;
+            wallet_id?: string | null;
+            vehicle?: {
+                id: string;
+                nickname: string;
+            } | null;
+            /** @constant */
+            limit_period?: "per_session";
+        };
+        CustomerChargePreparation: {
+            target: {
+                connector_id: string;
+                connector_name: string;
+                connector_standard: string;
+                maximum_power_w: number;
+                station_id: string;
+                station_name: string;
+                station_address: string | null;
+                readiness: string;
+                /** Format: date-time */
+                status_observed_at: string;
+            };
+            quote: {
+                id: string;
+                tariff_version_id: string;
+                name: string;
+                currency: string;
+                tax_inclusive: boolean;
+                lines: {
+                    dimension: string;
+                    price_minor: number;
+                    unit_quantity: number;
+                    description: string;
+                }[];
+                estimated_preauthorization: {
+                    amount_minor: number;
+                    /** @enum {string} */
+                    currency: "PHP";
+                };
+                /** Format: date-time */
+                expires_at: string;
+                tax_rate_basis_points: number;
+            };
+            payment_methods: {
+                /** @enum {string} */
+                id: "prepaid_wallet";
+                label: string;
+                is_default: boolean;
+            }[];
+            attribution?: components["schemas"]["ChargingAttribution"];
+        };
+        CustomerChargingSession: {
+            id: string;
+            state: string;
+            station_id: string;
+            station_name: string;
+            connector_id: string;
+            connector_name: string;
+            energy_wh: number;
+            duration_seconds: number;
+            energy_flow_seconds: number;
+            current_power_w: number | null;
+            currency: string | null;
+            estimated_cost_minor: number | null;
+            final_cost_minor: number | null;
+            /** Format: date-time */
+            requested_at: string;
+            started_at: string | null;
+            stopped_at: string | null;
+            start_deadline_at: string | null;
+            updated_at: string | null;
+            aggregate_version: number;
+            failure_reason: string | null;
+            anomaly_flags: string[];
+            /** @enum {string} */
+            payment_state: "authorized" | "captured" | "not_required" | "requires_action";
+            reserved_budget_minor: number;
+            refundable: boolean;
+            receipt: null;
+            invoice: null;
+            attribution?: components["schemas"]["ChargingAttribution"];
+            /**
+             * @description A durable customer cancellation awaits charger confirmation; it does not mean stopped or funds released.
+             * @default false
+             */
+            cancellation_requested: boolean;
         };
     };
     responses: {
@@ -1651,6 +2414,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+        ChargingAccountSelector: string;
         /** @description Optional selector that must equal the tenant bound to the credential. */
         TenantSelector: components["schemas"]["Ulid"];
         SessionId: components["schemas"]["Ulid"];
@@ -1668,6 +2433,1521 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listChargingAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccount"][];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createChargingAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @enum {string} */
+                    type: "business" | "fleet";
+                };
+            };
+        };
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccount"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteUnusedChargingAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unused account deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            deleted: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the owner can delete; personal accounts are immutable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account has linked members or history and must be retained. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateChargingAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Charging account ULID in the current tenant */
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @enum {string} */
+                    type: "business" | "fleet";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccount"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only the owner can edit; personal accounts are immutable. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid name or account type. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMyChargingInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccountInvitation"][];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    acceptChargingInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            accepted: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listChargingAccountMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccountMember"][];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    changeChargingAccountMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                subject: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string|null} */
+                    role: "admin" | "billing_manager" | "fleet_manager" | "driver" | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            saved: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listChargingAccountInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccountInvitation"][];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    inviteChargingAccountMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    /** @enum {string} */
+                    role: "admin" | "billing_manager" | "fleet_manager" | "driver";
+                };
+            };
+        };
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccountInvitation"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokeChargingAccountInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                invitation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            revoked: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listChargingVehicleAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                vehicle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: string[];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assignChargingVehicle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+                vehicle: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    subject_id: string;
+                    assigned: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            saved: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listChargingAccountLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargingAccountLimit"][];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setChargingAccountLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    target_type: "driver" | "vehicle";
+                    target_id: string;
+                    amount_minor: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Authorized response. Cache-Control: no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** @constant */
+                            saved: true;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Verified identity and action permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible account/resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting membership or pending invitation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or expired/consumed invitation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Too many requests. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prepareCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    charger_code: string;
+                    vehicle_id?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargePreparation"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startCustomerCharging: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    quote_id: string;
+                    connector_id: string;
+                    /** @enum {string} */
+                    payment_method_id: "prepaid_wallet";
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    activeCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"] | null;
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCustomerCharging: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"][];
+                        meta: {
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stopCustomerCharging: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelCustomerCharging: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Customer-owned response. Never cache. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CustomerChargingSession"];
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or inaccessible resource. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or charging precondition failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolveOcppCharger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    identity: string;
+                    /** @enum {string} */
+                    protocol: "ocpp1.6" | "ocpp2.0.1";
+                };
+            };
+        };
+        responses: {
+            /** @description Registered station binding; response must not be cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            tenant_id: components["schemas"]["Ulid"];
+                            charger_id: components["schemas"]["Ulid"];
+                            charge_point_identity: string;
+                            /** @constant */
+                            authentication: "registered";
+                        };
+                    };
+                };
+            };
+            /** @description Invalid service credential or station registration denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request; credentials are never echoed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication rate limit reached. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Core unavailable; gateway must fail closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    authenticateOcppCharger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    identity: string;
+                    password: string;
+                    /** @enum {string} */
+                    protocol: "ocpp1.6" | "ocpp2.0.1";
+                };
+            };
+        };
+        responses: {
+            /** @description Verified station binding; response must not be cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            tenant_id: components["schemas"]["Ulid"];
+                            charger_id: components["schemas"]["Ulid"];
+                            charge_point_identity: string;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid service credential or charger authentication denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request; credentials are never echoed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication rate limit reached. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Core unavailable; gateway must fail closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getAppConfiguration: {
         parameters: {
             query?: never;
@@ -2351,6 +4631,159 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    registerAdultDriver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    first_name: string;
+                    middle_name?: string | null;
+                    last_name: string;
+                    /**
+                     * Format: date
+                     * @description At least 18 years old on the current UTC date; earliest 1900-01-01.
+                     */
+                    birth_date: string;
+                    /** Format: email */
+                    email: string;
+                    password: string;
+                    password_confirmation: string;
+                    tenant_id: components["schemas"]["Ulid"];
+                    plate_pending: boolean;
+                    /** @description Required when plate_pending is false; omit when true. */
+                    plate_number?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Account and default vehicle committed; verification_email_sent indicates mail delivery initiation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registration is disabled for this environment or tenant. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listDriverVehicles: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account garage; no-store response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["DriverVehicle"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    saveDriverVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path: {
+                vehicle: components["schemas"]["Ulid"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriverVehicle"];
+            };
+        };
+        responses: {
+            /** @description Saved; first vehicle automatically becomes default. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Vehicle is not owned by this driver. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Identifier conflict; refresh and retry with a new vehicle identifier. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    removeDriverVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path: {
+                vehicle: components["schemas"]["Ulid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Vehicle removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Vehicle not found for this driver. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     searchPublicStations: {
         parameters: {
             query?: {
@@ -2361,6 +4794,8 @@ export interface operations {
                 south?: number;
                 east?: number;
                 north?: number;
+                "connectors[]"?: string[];
+                amenity?: string;
                 connector?: string;
                 min_power_w?: number;
                 availability?: "available" | "busy" | "faulted" | "offline" | "stale" | "unknown";
@@ -3617,6 +6052,200 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getPrepaidWallet: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No-store wallet summary. Simulated and live books are separate. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PrepaidWallet"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listWalletTopups: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cursor-paginated top-ups, newest first; no-store. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: {
+                            items: components["schemas"]["WalletTopup"][];
+                            next_cursor: string | null;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createWalletTopup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description PHP centavos; deployment limits also apply. */
+                    amount_minor: number;
+                    idempotency_key: components["schemas"]["Ulid"];
+                };
+            };
+        };
+        responses: {
+            /** @description Persisted order, including pending or unknown outcome; not proof of payment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["WalletTopup"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Idempotency key already used for another amount. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+            /** @description Collection is disabled or configuration is not approved. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getWalletTopup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Explicit charging account ULID. Missing selects the original personal scope. An inaccessible or unfunded shared account never falls back to personal funds. */
+                "X-Charging-Account-ID"?: components["parameters"]["ChargingAccountSelector"];
+            };
+            path: {
+                topup: components["schemas"]["Ulid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authoritative stored status; late verified payments can resolve expired requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["WalletTopup"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Request not owned by the current tenant and subject. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirmAubQrphPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/xml": string;
+            };
+        };
+        responses: {
+            /** @description Durable confirmation or identical already-processed confirmation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": "success";
+                };
+            };
+            /** @description Invalid signature, schema or financial binding. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Callback not enabled or order not found for the configured merchant tenant. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflicting payment evidence requires review. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

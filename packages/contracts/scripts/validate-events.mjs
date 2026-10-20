@@ -20,6 +20,16 @@ for (const [schemaFile, exampleFile] of contracts) {
     throw new Error(`${exampleFile} is invalid: ${ajv.errorsText(validate.errors)}`);
   }
 
+  const lowercase = structuredClone(example);
+  for (const field of ['tenant_id', 'aggregate_id']) {
+    if (typeof lowercase[field] === 'string') {
+      lowercase[field] = lowercase[field].toLowerCase();
+    }
+  }
+  if (!validate(lowercase)) {
+    throw new Error(`${schemaFile} rejected lowercase platform IDs: ${ajv.errorsText(validate.errors)}`);
+  }
+
   const invalid = structuredClone(example);
   invalid.event_id = 'not-a-ulid';
 

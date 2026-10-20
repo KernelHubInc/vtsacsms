@@ -86,7 +86,7 @@ final class MobileAuthController extends Controller
                 'device_id' => $issued->accessToken->device_id,
                 'expires_at' => $issued->accessToken->expires_at->utc()->toIso8601String(),
             ],
-        ]);
+        ])->header('Cache-Control', 'no-store');
     }
 
     public function logout(Request $request, MobileTokenService $tokens): JsonResponse

@@ -21,11 +21,15 @@ final readonly class AccessibleSitesQuery
     ) {}
 
     /** @return Builder<Site> */
-    public function for(User $user): Builder
+    public function for(User $user, PermissionKey $permission = PermissionKey::LocationView): Builder
     {
         $query = Site::query();
 
-        if ($this->authorization->allows($user, PermissionKey::LocationView)) {
+        if (! $user->isEnabled()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($this->authorization->allows($user, $permission)) {
             return $query;
         }
 
@@ -42,7 +46,7 @@ final readonly class AccessibleSitesQuery
             ->where('memberships.tenant_id', $tenantId)
             ->where('memberships.user_id', $user->getKey())
             ->where('memberships.status', 'active')
-            ->where('role_permissions.permission_key', PermissionKey::LocationView->value)
+            ->where('role_permissions.permission_key', $permission->value)
             ->where(function ($query): void {
                 $query->whereNull('memberships.expires_at')->orWhere('memberships.expires_at', '>', now('UTC'));
             })

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/ids/ulid_generator.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle.dart';
 import 'package:vtsa_mobile/features/vehicles/domain/vehicle_repository.dart';
@@ -17,18 +18,41 @@ final class VehiclesController extends ChangeNotifier {
   final UlidGenerator _ids;
   List<Vehicle> _vehicles = const [];
   bool _loading = false;
+  AppFailure? failure;
+  int _generation = 0;
+  String? _loadedOwner;
 
-  List<Vehicle> get vehicles => _vehicles;
+  List<Vehicle> get vehicles =>
+      _loadedOwner == _ownerId() ? _vehicles : const [];
   bool get isLoading => _loading;
   Vehicle? get defaultVehicle =>
-      _vehicles.where((vehicle) => vehicle.isDefault).firstOrNull;
+      vehicles.where((vehicle) => vehicle.isDefault).firstOrNull;
 
   Future<void> load() async {
+    final generation = ++_generation;
+    final owner = _ownerId();
     _loading = true;
+    failure = null;
     notifyListeners();
-    _vehicles = await _repository.list(_ownerId());
-    _loading = false;
-    notifyListeners();
+    try {
+      final items = owner == 'guest'
+          ? <Vehicle>[]
+          : await _repository.list(owner);
+      if (generation == _generation && owner == _ownerId()) {
+        _vehicles = items;
+        _loadedOwner = owner;
+      }
+    } on AppFailure catch (error) {
+      if (generation == _generation) {
+        failure = error;
+        _vehicles = [];
+      }
+    } finally {
+      if (generation == _generation) {
+        _loading = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> save({
@@ -37,6 +61,8 @@ final class VehiclesController extends ChangeNotifier {
     required String manufacturer,
     required String model,
     String? variant,
+    String? plateNumber,
+    bool platePending = false,
     required Set<String> connectorStandards,
     required bool isDefault,
   }) async {
@@ -46,6 +72,8 @@ final class VehiclesController extends ChangeNotifier {
       manufacturer: manufacturer.trim(),
       model: model.trim(),
       variant: variant?.trim(),
+      plateNumber: plateNumber?.trim().toUpperCase(),
+      platePending: platePending,
       connectorStandards: connectorStandards,
       isDefault: isDefault,
     );

@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Charging\Domain\Models;
 
 use App\Modules\Tenancy\Infrastructure\Eloquent\BelongsToTenant;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property array<string, mixed> $payload
+ * @property CarbonImmutable $occurred_at
+ */
 final class InboundOcppEvent extends Model
 {
     use BelongsToTenant;

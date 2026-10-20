@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 repo_dir="${VTSA_REPO_DIR:-/opt/vtsa-csms}"
+repository_read_key="${VTSA_REPOSITORY_READ_KEY:-/root/.ssh/vtsa_repository_read}"
 compose_file="$repo_dir/infra/cluster/compose.app.yaml"
 environment="${1:-}"
 release_tag="${2:-}"
@@ -23,6 +24,8 @@ state_file="$state_dir/current-app-image-tag"
     fail "Usage: vtsa-deploy-app staging|production sha-<40-character-commit> [--migrate]"
 [[ -z "$migrate" || "$migrate" == "--migrate" ]] || fail "The only supported option is --migrate."
 [[ -d "$repo_dir/.git" ]] || fail "$repo_dir is not a Git checkout."
+[[ -r "$repository_read_key" ]] || \
+    fail "Repository read key $repository_read_key is missing or unreadable."
 [[ -f "$env_file" ]] || fail "$env_file does not exist."
 command -v docker >/dev/null 2>&1 || fail "Docker is not installed."
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is not available."
@@ -112,7 +115,8 @@ export IMAGE_TAG="$release_tag"
 compose=(docker compose --env-file "$env_file" -f "$compose_file")
 
 cd "$repo_dir"
-git fetch --quiet --prune origin main
+git -c core.sshCommand="ssh -i $repository_read_key -o IdentitiesOnly=yes -o BatchMode=yes" \
+    fetch --quiet --prune origin main
 git cat-file -e "$commit^{commit}" 2>/dev/null || fail "Commit $commit was not fetched from origin."
 git checkout --quiet --detach "$commit"
 "${compose[@]}" config --quiet
