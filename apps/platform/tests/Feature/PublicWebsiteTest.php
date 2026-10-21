@@ -66,7 +66,37 @@ final class PublicWebsiteTest extends TestCase
         Cache::clear();
         DB::enableQueryLog();
         $response = $this->get('/')->assertOk();
-        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
+        // The live map adds a schema check and the platform map-settings lookup.
+        $this->assertLessThanOrEqual(10, count(DB::getQueryLog()));
         $this->assertLessThan(180_000, strlen((string) $response->getContent()));
+    }
+
+    public function test_homepage_uses_responsive_design_and_searches_the_live_map(): void
+    {
+        $this->get('/')->assertOk()
+            ->assertSee('One connected network, built place by place.')
+            ->assertSee('branding/home/hero-desktop.png')
+            ->assertSee('branding/home/hero-mobile.png')
+            ->assertSee('action="'.route('public.charging-map').'"', false)
+            ->assertSee('name="query"', false)
+            ->assertSee('name="connector"', false)
+            ->assertSee('name="availability"', false)
+            ->assertSee('All statuses')
+            ->assertSee('Published stations stay on the map when offline.')
+            ->assertSee('data-home-map', false)
+            ->assertSee('data-map-canvas', false)
+            ->assertSee('data-station-list', false)
+            ->assertSee('data-station-drawer', false)
+            ->assertSee('A clearer view of charging.')
+            ->assertSee('Good questions.')
+            ->assertDontSee('site-footer__wordmark')
+            ->assertDontSee('3 example stations')
+            ->assertDontSee('Map illustration');
+
+        foreach (['hero', 'driver', 'destination-1', 'destination-2', 'destination-3'] as $scene) {
+            foreach (['desktop', 'mobile'] as $size) {
+                $this->assertGreaterThan(0, filesize(public_path("branding/home/{$scene}-{$size}.png")));
+            }
+        }
     }
 }

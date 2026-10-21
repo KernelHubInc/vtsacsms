@@ -19,6 +19,7 @@ use App\Modules\Assets\Domain\Models\Evse;
 use App\Modules\Assets\Domain\Models\FirmwareVersion;
 use App\Modules\Charging\Domain\ConnectorAvailability;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
+use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Locations\Domain\Models\SiteOperatingHour;
 use App\Modules\Locations\Domain\SiteLifecycleStatus;
@@ -32,10 +33,38 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Support\TenantSecurityTestCase;
 
 final class MasterDataAssetFoundationTest extends TenantSecurityTestCase
 {
+    public function test_published_offline_station_remains_discoverable_without_configured_connectors(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('offline-public-map');
+
+        $this->withinTenant($tenant, $actor, function () use ($tenant): void {
+            $site = $this->site($tenant, $this->operator($tenant, 'OFFLINE'), 'OFFLINE', 14.5995, 120.9842, true);
+            $station = $this->station($tenant, $site, 'CP-OFFLINE', true);
+            StationConnection::query()->create([
+                'charging_station_id' => $station->getKey(),
+                'connection_id' => (string) Str::ulid(),
+                'connected' => false,
+                'connected_at' => now('UTC')->subHour(),
+                'last_event_at' => now('UTC')->subHour(),
+                'last_seen_at' => now('UTC')->subHour(),
+            ]);
+        });
+
+        $this->getJson('/api/v1/public/stations')->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.name', 'CP-OFFLINE')
+            ->assertJsonPath('data.0.connection_status', 'offline')
+            ->assertJsonPath('data.0.availability', 'offline')
+            ->assertJsonPath('data.0.connector_count', 0);
+        $this->getJson('/api/v1/public/stations?availability=offline')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/v1/public/stations?availability=available')->assertOk()->assertJsonCount(0, 'data');
+    }
+
     public function test_public_map_filters_connector_power_availability_operator_site_type_and_open_hours(): void
     {
         CarbonImmutable::setTestNow('2026-07-22T04:00:00Z');
@@ -94,6 +123,9 @@ final class MasterDataAssetFoundationTest extends TenantSecurityTestCase
 
         $this->getJson('/api/v1/public/stations?west=123&south=10&east=124.5&north=11')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'CP-CEB');
+
+        $this->getJson('/api/v1/public/stations?query=cp-mnl')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'CP-MNL');
     }
 
     public function test_station_administration_and_site_scope_never_leak_between_sites_or_tenants(): void

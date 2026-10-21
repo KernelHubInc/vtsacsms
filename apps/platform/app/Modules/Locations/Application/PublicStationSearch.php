@@ -44,14 +44,15 @@ final class PublicStationSearch
         if (isset($filters['site_type'])) {
             $query->where('site.site_type', $filters['site_type']);
         }
+        $searchOperator = DB::getDriverName() === 'pgsql' ? 'ilike' : 'like';
         if (isset($filters['query'])) {
-            $query->where(function (Builder $nested) use ($filters): void {
-                $nested->where('site.name', 'ilike', '%'.$filters['query'].'%')
-                    ->orWhere('station.name', 'ilike', '%'.$filters['query'].'%');
+            $query->where(function (Builder $nested) use ($filters, $searchOperator): void {
+                $nested->where('site.name', $searchOperator, '%'.$filters['query'].'%')
+                    ->orWhere('station.name', $searchOperator, '%'.$filters['query'].'%');
             });
         }
         if (isset($filters['city'])) {
-            $query->where('city.name', 'ilike', '%'.$filters['city'].'%');
+            $query->where('city.name', $searchOperator, '%'.$filters['city'].'%');
         }
         $candidateLimit = min(max((int) $filters['limit'] * 5, 250), 1000);
         $stations = DB::getDriverName() === 'pgsql'
@@ -271,18 +272,23 @@ final class PublicStationSearch
     private function matchesFilters(array $station, array $filters): bool
     {
         $normalize = static fn (string $code): string => strtolower((string) preg_replace('/[^a-zA-Z0-9]/', '', $code));
+        $hasConnectorCriteria = isset($filters['connector']) || isset($filters['connectors'])
+            || isset($filters['min_power_w']) || isset($filters['current']);
         if (isset($filters['connector']) || isset($filters['connectors']) || isset($filters['availability']) || isset($filters['min_power_w']) || isset($filters['current'])) {
-            $matches = collect(is_array($station['connectors']) ? $station['connectors'] : [])->contains(function (array $item) use ($filters, $normalize): bool {
-                $wanted = $filters['connectors'] ?? [];
+            $connectors = is_array($station['connectors']) ? $station['connectors'] : [];
+            $matches = $connectors === [] && ! $hasConnectorCriteria && isset($filters['availability'])
+                ? $station['availability'] === $filters['availability']
+                : collect($connectors)->contains(function (array $item) use ($filters, $normalize): bool {
+                    $wanted = $filters['connectors'] ?? [];
 
-                return (! isset($filters['connector']) || $normalize($item['standard']) === $normalize($filters['connector']))
-                    && ($wanted === [] || in_array($normalize($item['standard']), array_map($normalize, $wanted), true))
-                    && (! isset($filters['min_power_w']) || $item['maximum_power_w'] >= $filters['min_power_w'])
-                    && (! isset($filters['current']) || strtoupper($item['current_type']) === strtoupper($filters['current']))
-                    && (! isset($filters['availability']) || ($filters['availability'] === 'busy'
-                        ? in_array($item['availability'], ['occupied', 'reserved'], true)
-                        : ($filters['availability'] === 'offline' ? in_array($item['availability'], ['offline', 'unavailable'], true) : $item['availability'] === $filters['availability'])));
-            });
+                    return (! isset($filters['connector']) || $normalize($item['standard']) === $normalize($filters['connector']))
+                        && ($wanted === [] || in_array($normalize($item['standard']), array_map($normalize, $wanted), true))
+                        && (! isset($filters['min_power_w']) || $item['maximum_power_w'] >= $filters['min_power_w'])
+                        && (! isset($filters['current']) || strtoupper($item['current_type']) === strtoupper($filters['current']))
+                        && (! isset($filters['availability']) || ($filters['availability'] === 'busy'
+                            ? in_array($item['availability'], ['occupied', 'reserved'], true)
+                            : ($filters['availability'] === 'offline' ? in_array($item['availability'], ['offline', 'unavailable'], true) : $item['availability'] === $filters['availability'])));
+                });
             if (! $matches) {
                 return false;
             }

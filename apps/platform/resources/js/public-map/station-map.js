@@ -1,5 +1,6 @@
 import { MapProviderFactory, parseMapConfiguration } from '../maps/map-provider-factory';
 import { directionsUrl } from '../maps/directions-launcher';
+import { stationSearchParameters } from './search-parameters';
 
 const statusLabel = (status) => ({ available: 'Available', busy: 'In use', faulted: 'Needs attention', offline: 'Offline', stale: 'Stale data', unknown: 'Unknown' }[status] || 'Unknown');
 const powerLabel = (watts) => watts ? `${Math.round(Number(watts) / 1000)} kW max` : 'Power not published';
@@ -21,9 +22,19 @@ class StationFinder {
         this.abortController = null;
         this.disposers = [];
         this.configuration = parseMapConfiguration(root);
+        this.isHomeMap = root.hasAttribute('data-home-map');
+        this.lastFittedKey = null;
     }
 
     async start() {
+        const initial = new URLSearchParams(window.location.search);
+        for (const name of ['query', 'connector', 'availability']) {
+            const field = this.form.elements.namedItem(name);
+            const value = initial.get(name)?.slice(0, 120);
+            if (!field || !value) continue;
+            if (field instanceof HTMLSelectElement && ![...field.options].some((option) => option.value === value)) continue;
+            field.value = value;
+        }
         const bind = (target, event, listener) => {
             target.addEventListener(event, listener);
             this.disposers.push(() => target.removeEventListener(event, listener));
@@ -31,7 +42,7 @@ class StationFinder {
         bind(this.form, 'submit', (event) => { event.preventDefault(); this.fetchStations(); });
         bind(this.form, 'change', () => this.fetchStations());
         if (this.filterPanel) {
-            if (window.matchMedia('(max-width: 900px)').matches) {
+            if (window.matchMedia('(max-width: 900px)').matches && !initial.has('query') && !initial.has('connector') && !initial.has('availability')) {
                 this.filterPanel.open = false;
             }
             bind(this.filterPanel, 'toggle', () => window.requestAnimationFrame(() => this.adapter?.resize()));
@@ -54,7 +65,7 @@ class StationFinder {
                     onViewportChanged: (bounds) => {
                         if (!bounds) return;
                         this.bounds = bounds;
-                        this.fetchStations();
+                        if (!this.isHomeMap) this.fetchStations();
                     },
                     onMarkerSelect: (id) => this.select(id, true),
                     onError: (error) => this.mapError(error),
@@ -73,10 +84,7 @@ class StationFinder {
     }
 
     parameters() {
-        const params = new URLSearchParams(new FormData(this.form));
-        params.set('limit', '250');
-        if (this.bounds) Object.entries(this.bounds).forEach(([key, value]) => params.set(key, String(value)));
-        return params;
+        return stationSearchParameters(new FormData(this.form), this.isHomeMap ? null : this.bounds);
     }
 
     async fetchStations() {
@@ -91,6 +99,7 @@ class StationFinder {
             this.render();
             this.populateOperators();
             this.adapter?.setMarkers(this.stations);
+            this.fitHomeResults();
         } catch (error) {
             if (error.name === 'AbortError') return;
             this.showState(navigator.onLine ? 'We could not refresh stations. Try again shortly.' : 'You are offline. Station information cannot be refreshed.', 'error');
@@ -107,7 +116,9 @@ class StationFinder {
         this.list.replaceChildren();
         this.count.textContent = this.stations.length;
         if (!this.stations.length) {
-            this.showState('No public stations match this view. Move the map or clear a filter.', 'empty');
+            this.showState(this.isHomeMap
+                ? 'No published stations match these filters. Try another search or connector.'
+                : 'No public stations match this view. Move the map or clear a filter.', 'empty');
             return;
         }
         this.state.hidden = true;
@@ -132,11 +143,20 @@ class StationFinder {
 
     populateOperators() {
         const select = this.form.querySelector('[data-operator-filter]');
+        if (!select) return;
         const selected = select.value;
         const known = new Map([...select.options].map((option) => [option.value, option.textContent]));
         this.stations.forEach((station) => known.set(station.operator_id, station.operator_name));
         select.replaceChildren();
         known.forEach((name, id) => { const option = document.createElement('option'); option.value = id; option.textContent = name; option.selected = id === selected; select.append(option); });
+    }
+
+    fitHomeResults() {
+        if (!this.isHomeMap || !this.adapter || !this.stations.length) return;
+        const key = new URLSearchParams(new FormData(this.form)).toString();
+        if (key === this.lastFittedKey) return;
+        this.lastFittedKey = key;
+        this.adapter.fitBounds(this.stations.map((station) => [Number(station.latitude), Number(station.longitude)]));
     }
 
     select(id, focusMap) {
@@ -152,8 +172,11 @@ class StationFinder {
         const directions = document.createElement('a'); directions.className = 'button'; directions.target = '_blank'; directions.rel = 'noopener'; directions.textContent = 'Get directions'; directions.href = directionsUrl(this.configuration.directionsUrlTemplate, station);
         const detail = document.createElement('a'); detail.className = 'button button--secondary'; detail.textContent = 'Station details'; detail.href = `/stations/${encodeURIComponent(station.public_slug)}`;
         const actions = document.createElement('div'); actions.className = 'station-drawer__actions'; actions.append(directions, detail);
-        const demo = document.createElement('p'); demo.className = 'demo-data-label'; demo.textContent = 'Demo · Test data · Not a real charging location';
-        this.drawerContent.append(demo, title, status, address, meta, actions);
+        if (this.root.dataset.demoData === 'true') {
+            const demo = document.createElement('p'); demo.className = 'demo-data-label'; demo.textContent = 'Demo · Test data · Not a real charging location';
+            this.drawerContent.append(demo);
+        }
+        this.drawerContent.append(title, status, address, meta, actions);
         this.drawer.hidden = false;
         this.drawer.scrollTop = 0;
         this.adapter?.selectMarker(id, { focus: focusMap });

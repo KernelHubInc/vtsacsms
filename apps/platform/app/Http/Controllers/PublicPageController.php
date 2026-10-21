@@ -25,10 +25,14 @@ final class PublicPageController extends Controller
         $data['testimonials'] = $page->template === 'home' ? $content->testimonials() : collect();
         $data['appLinks'] = in_array($page->template, ['home', 'app'], true) ? $content->appLinks() : collect();
         $data['contacts'] = in_array($page->template, ['contact', 'support'], true) ? $content->contacts() : collect();
-        $data['mapConfig'] = $page->template === 'map'
+        $data['mapConfig'] = in_array($page->template, ['home', 'map'], true)
             ? $maps->forSurface(MapSurface::Public)->toWebArray()
             : null;
 
-        return view($page->template === 'map' ? 'public.map' : 'public.page', $data);
+        return view(match ($page->template) {
+            'map' => 'public.map',
+            'home' => 'public.home',
+            default => 'public.page',
+        }, $data);
     }
 }

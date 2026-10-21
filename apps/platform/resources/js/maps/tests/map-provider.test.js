@@ -77,3 +77,10 @@ test('station markers preserve exact WGS84 coordinates and stable IDs', () => {
     assert.equal(validCoordinate(marker.latitude, marker.longitude), true);
     assert.equal(validCoordinate(91, marker.longitude), false);
 });
+
+test('an offline published station remains a map marker', () => {
+    const marker = stationMarker({ id: '01OFFLINE', latitude: 14.6, longitude: 120.9, availability: 'offline' });
+
+    assert.equal(marker.status, 'offline');
+    assert.equal(validCoordinate(marker.latitude, marker.longitude), true);
+});
