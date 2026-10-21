@@ -198,7 +198,15 @@ jobs:
         run: |
           python scripts/setup_local.py
           python scripts/prepare_integration.py
-          docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml up -d --build kyc-platform kyc-worker kyc-beat
+          for attempt in 1 2 3; do
+            if docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml up -d --build kyc-platform kyc-worker kyc-beat; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
           docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php artisan migrate --force
           docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php tests/kyc-smoke.php seed
           python scripts/integration_smoke.py

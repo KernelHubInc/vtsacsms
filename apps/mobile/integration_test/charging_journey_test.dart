@@ -45,8 +45,8 @@ void main() {
     await tester.pump();
     expect(find.text('Charging in progress'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Stop charging'));
-    await tester.tap(find.text('Stop charging'));
+    await tester.ensureVisible(find.text('End charging'));
+    await tester.tap(find.text('End charging'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Request stop'));
     await tester.pumpAndSettle();
@@ -67,7 +67,7 @@ void main() {
       ),
     );
     await fixture.dependencies.charging.refresh();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Session complete'), findsOneWidget);
     expect(find.text('6.60 kWh'), findsOneWidget);
