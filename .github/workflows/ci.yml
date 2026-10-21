@@ -102,6 +102,7 @@ jobs:
         working-directory: .
       - name: Run Android integration journeys
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
         with:
           api-level: 35
           target: google_apis
@@ -109,7 +110,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           working-directory: apps/mobile
-          script: flutter test integration_test
+          script: flutter test integration_test --reporter expanded
       - run: flutter build apk --debug --dart-define-from-file=dart_defines.example.json
 
   gateway:
