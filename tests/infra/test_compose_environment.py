@@ -52,7 +52,10 @@ class ComposeEnvironmentTest(unittest.TestCase):
             if line.strip() and not line.lstrip().startswith("#"):
                 key, value = line.split("=", 1)
                 values[key] = value.strip().strip('"')
-        for key in ("APP_KEY", "POSTGRES_PASSWORD", "REDIS_PASSWORD", "MINIO_ROOT_PASSWORD"):
+        for key in (
+            "APP_KEY", "POSTGRES_PASSWORD", "DB_PASSWORD", "REDIS_PASSWORD",
+            "MINIO_ROOT_PASSWORD", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
+        ):
             values[key] = "compose-test-only"
         return values
 

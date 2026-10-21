@@ -91,6 +91,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Cache fonts used by widget tests
+        run: flutter precache --universal
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
