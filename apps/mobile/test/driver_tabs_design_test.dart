@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
@@ -18,28 +15,11 @@ import 'package:vtsa_mobile/features/wallet/wallet_screen.dart';
 import 'driver_journey_design_test.dart' show preview;
 import 'map_configuration_test.dart' show configuration;
 import 'support/fakes.dart';
+import 'support/test_fonts.dart';
 import 'wallet_test.dart' show TestWallet;
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    for (final (family, file) in [
-      ('Roboto', 'roboto-regular.ttf'),
-      ('MaterialIcons', 'materialicons-regular.otf'),
-    ]) {
-      final loader = FontLoader(family)
-        ..addFont(
-          Future.value(
-            ByteData.sublistView(
-              File(
-                '$root/bin/cache/artifacts/material_fonts/$file',
-              ).readAsBytesSync(),
-            ),
-          ),
-        );
-      await loader.load();
-    }
-  });
+  setUpAll(loadTestFonts);
 
   for (final (width, scale) in [(390.0, 1.0), (320.0, 1.6)]) {
     testWidgets(

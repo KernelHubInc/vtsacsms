@@ -65,6 +65,8 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate --force
       - run: composer audit
       - run: composer lint
+      - run: npm ci
+      - run: npm run build
       - run: composer test
       - name: Verify PostgreSQL migrations
         env:
@@ -74,8 +76,6 @@ jobs:
           DB_DATABASE: vtsa_test
           DB_USERNAME: vtsa
         run: php artisan migrate:fresh --force && php artisan migrate:status
-      - run: npm ci
-      - run: npm run build
 
   mobile:
     name: Flutter mobile
@@ -102,6 +102,7 @@ jobs:
         working-directory: .
       - name: Run Android integration journeys
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
         with:
           api-level: 35
           target: google_apis
@@ -109,7 +110,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           working-directory: apps/mobile
-          script: flutter test integration_test
+          script: flutter test integration_test --reporter expanded
       - run: flutter build apk --debug --dart-define-from-file=dart_defines.example.json
 
   gateway:
@@ -198,13 +199,24 @@ jobs:
         run: |
           python scripts/setup_local.py
           python scripts/prepare_integration.py
-          docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml up -d --build kyc-platform kyc-worker kyc-beat
+          for attempt in 1 2 3; do
+            if docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml up -d --build kyc-platform kyc-worker kyc-beat; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
           docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php artisan migrate --force
           docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml exec -T kyc-platform php tests/kyc-smoke.php seed
           python scripts/integration_smoke.py
       - name: Stop isolated KYC integration services
         if: always()
-        run: docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml down --remove-orphans
+        run: |
+          if [[ -f .env ]]; then
+            docker compose -p vtsa-kyc-integration --env-file .env -f docker-compose.yml -f docker-compose.integration.yml down --remove-orphans
+          fi
 
   containers:
     name: Container images

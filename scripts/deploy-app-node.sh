@@ -165,7 +165,7 @@ fi
 "${compose[@]}" exec -T platform php artisan queue:restart
 
 ready=false
-for attempt in $(seq 1 30); do
+for ((attempt = 1; attempt <= 30; attempt++)); do
     if "${compose[@]}" exec -T web wget --quiet --spider http://127.0.0.1:8080/health/ready; then
         ready=true
         break

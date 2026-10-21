@@ -55,14 +55,19 @@ compose=(docker compose --env-file "$environment_file" -f "$compose_file")
 "${compose[@]}" --profile init run --rm minio-production-init
 "${compose[@]}" --profile init run --rm minio-staging-init
 
+# The quoted commands expand credentials inside their containers.
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T postgres sh -ec \
     'PGPASSWORD="$VTSA_PRODUCTION_DB_PASSWORD" psql -h 127.0.0.1 -U vtsa_production -d vtsa_production -Atc "SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';"' \
     | grep -Eq '^[0-9]'
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T postgres sh -ec \
     'PGPASSWORD="$VTSA_STAGING_DB_PASSWORD" psql -h 127.0.0.1 -U vtsa_staging -d vtsa_staging -Atc "SELECT extversion FROM pg_extension WHERE extname = '\''postgis'\'';"' \
     | grep -Eq '^[0-9]'
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T redis-production sh -ec \
     'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' | grep -q PONG
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T redis-staging sh -ec \
     'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping' | grep -q PONG
 

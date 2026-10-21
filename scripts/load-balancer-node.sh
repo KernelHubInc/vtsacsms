@@ -127,7 +127,9 @@ if ! nginx -t; then
 fi
 if ! systemctl reload nginx; then
     restore_upstreams
-    nginx -t && systemctl reload nginx || true
+    if nginx -t; then
+        systemctl reload nginx || true
+    fi
     fail "Nginx reload failed; the previous upstream configuration was restored."
 fi
 

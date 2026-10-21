@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
@@ -19,6 +18,7 @@ import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 import 'driver_journey_design_test.dart' show preview;
 import 'support/fakes.dart';
+import 'support/test_fonts.dart';
 
 const personal = ChargingAccount(
   id: 'personal',
@@ -127,24 +127,7 @@ class AccountRepositoryFake implements ChargingAccountRepository {
 }
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    for (final entry in {
-      'Roboto': 'roboto-regular.ttf',
-      'MaterialIcons': 'materialicons-regular.otf',
-    }.entries) {
-      await (FontLoader(entry.key)..addFont(
-            Future.value(
-              ByteData.sublistView(
-                File(
-                  '$root/bin/cache/artifacts/material_fonts/${entry.value}',
-                ).readAsBytesSync(),
-              ),
-            ),
-          ))
-          .load();
-    }
-  });
+  setUpAll(loadTestFonts);
 
   testWidgets('Personal opens account management through the app router', (
     tester,

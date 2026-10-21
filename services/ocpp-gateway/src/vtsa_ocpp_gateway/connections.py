@@ -195,9 +195,16 @@ class ConnectionRegistry:
             )
             self._metrics.connections.labels(protocol=connection.protocol).inc()
         if previous_local is not None and previous_local.connection_id != connection.connection_id:
-            await previous_local.transport.close(
-                code=1012, reason="Superseded by a newer charger connection"
-            )
+            try:
+                await previous_local.transport.close(
+                    code=1012, reason="Superseded by a newer charger connection"
+                )
+            except Exception:
+                await logger.aexception(
+                    "ocpp_superseded_connection_close_failed",
+                    charge_point_identity=connection.charge_point_identity,
+                    old_connection_id=previous_local.connection_id,
+                )
             await logger.awarning(
                 "ocpp_connection_superseded",
                 charge_point_identity=connection.charge_point_identity,

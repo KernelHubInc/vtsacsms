@@ -25,6 +25,11 @@ class FakeTransport:
         self.closed.append((code, reason))
 
 
+class BrokenTransport(FakeTransport):
+    async def close(self, code: int = 1000, reason: str = "") -> None:
+        raise RuntimeError("the previous socket has already gone away")
+
+
 class FakeChargePoint:
     async def start(self) -> None:
         return None
@@ -73,6 +78,24 @@ async def test_latest_connection_wins_and_stale_unregister_cannot_release_it() -
     await registry.unregister("CP-1", "old")
 
     assert old_transport.closed == [(1012, "Superseded by a newer charger connection")]
+    assert await registry.get("CP-1") is new
+    assert store.connections["CP-1"][1] == "new"
+    await registry.unregister("CP-1", "new")
+
+
+@pytest.mark.asyncio
+async def test_reconnect_survives_failure_to_close_previous_socket() -> None:
+    settings = Settings(connection_lease_seconds=9)
+    store = MemoryGatewayStore()
+    metrics = GatewayMetrics()
+    registry = ConnectionRegistry(store, settings, metrics)
+    old = _connection("CP-1", "old", BrokenTransport(), store, settings, metrics)
+    new = _connection("CP-1", "new", FakeTransport(), store, settings, metrics)
+
+    await registry.register(old)
+    await registry.register(new)
+    await registry.unregister("CP-1", "old")
+
     assert await registry.get("CP-1") is new
     assert store.connections["CP-1"][1] == "new"
     await registry.unregister("CP-1", "new")

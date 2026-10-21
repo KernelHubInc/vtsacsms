@@ -3,13 +3,13 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 
 import 'support/fakes.dart';
+import 'support/test_fonts.dart';
 
 const availableStation = Station(
   id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0Q',
@@ -76,29 +76,7 @@ Future<void> preview(WidgetTester tester, String name) async {
 }
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT'];
-    if (root == null) {
-      throw StateError('FLUTTER_ROOT is required for readable preview fonts.');
-    }
-    final font = File(
-      '$root/bin/cache/artifacts/material_fonts/roboto-regular.ttf',
-    );
-    final loader = FontLoader('Roboto')
-      ..addFont(Future.value(ByteData.sublistView(font.readAsBytesSync())));
-    await loader.load();
-    final icons = FontLoader('MaterialIcons')
-      ..addFont(
-        Future.value(
-          ByteData.sublistView(
-            File(
-              '$root/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
-            ).readAsBytesSync(),
-          ),
-        ),
-      );
-    await icons.load();
-  });
+  setUpAll(loadTestFonts);
 
   for (final (width, scale) in [(320.0, 1.0), (390.0, 1.0), (320.0, 1.6)]) {
     testWidgets(
