@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
@@ -13,31 +11,10 @@ import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'driver_journey_design_test.dart' show preview;
 import 'support/fakes.dart';
 import 'support/quick_unlock_fakes.dart';
+import 'support/test_fonts.dart';
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    await (FontLoader('Roboto')..addFont(
-          Future.value(
-            ByteData.sublistView(
-              File(
-                '$root/bin/cache/artifacts/material_fonts/roboto-regular.ttf',
-              ).readAsBytesSync(),
-            ),
-          ),
-        ))
-        .load();
-    await (FontLoader('MaterialIcons')..addFont(
-          Future.value(
-            ByteData.sublistView(
-              File(
-                '$root/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
-              ).readAsBytesSync(),
-            ),
-          ),
-        ))
-        .load();
-  });
+  setUpAll(loadTestFonts);
   for (final (width, scale) in [(390.0, 1.0), (320.0, 1.6)]) {
     testWidgets('branded login and PIN remain usable at $width / $scale', (
       tester,

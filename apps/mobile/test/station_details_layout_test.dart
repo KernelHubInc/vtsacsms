@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
@@ -9,27 +6,10 @@ import 'package:vtsa_mobile/features/charging/presentation/charging_start_screen
 
 import 'driver_journey_design_test.dart' show availableStation, preview;
 import 'support/fakes.dart';
+import 'support/test_fonts.dart';
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    for (final (family, file) in [
-      ('Roboto', 'roboto-regular.ttf'),
-      ('MaterialIcons', 'materialicons-regular.otf'),
-    ]) {
-      final loader = FontLoader(family)
-        ..addFont(
-          Future.value(
-            ByteData.sublistView(
-              File(
-                '$root/bin/cache/artifacts/material_fonts/$file',
-              ).readAsBytesSync(),
-            ),
-          ),
-        );
-      await loader.load();
-    }
-  });
+  setUpAll(loadTestFonts);
 
   for (final (width, scale, empty) in [
     (360.0, 1.0, true),

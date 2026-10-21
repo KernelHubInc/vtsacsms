@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
@@ -12,26 +9,10 @@ import 'package:vtsa_mobile/features/charging/presentation/live_charging_screen.
 
 import 'driver_journey_design_test.dart' show preview;
 import 'support/fakes.dart';
+import 'support/test_fonts.dart';
 
 void main() {
-  setUpAll(() async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    for (final entry in {
-      'Roboto': 'roboto-regular.ttf',
-      'MaterialIcons': 'materialicons-regular.otf',
-    }.entries) {
-      await (FontLoader(entry.key)..addFont(
-            Future.value(
-              ByteData.sublistView(
-                File(
-                  '$root/bin/cache/artifacts/material_fonts/${entry.value}',
-                ).readAsBytesSync(),
-              ),
-            ),
-          ))
-          .load();
-    }
-  });
+  setUpAll(loadTestFonts);
   for (final width in [320.0, 390.0]) {
     testWidgets('pending start can be cancelled before timeout at $width', (
       tester,
