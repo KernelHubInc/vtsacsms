@@ -172,10 +172,6 @@ class StationFinder {
         const directions = document.createElement('a'); directions.className = 'button'; directions.target = '_blank'; directions.rel = 'noopener'; directions.textContent = 'Get directions'; directions.href = directionsUrl(this.configuration.directionsUrlTemplate, station);
         const detail = document.createElement('a'); detail.className = 'button button--secondary'; detail.textContent = 'Station details'; detail.href = `/stations/${encodeURIComponent(station.public_slug)}`;
         const actions = document.createElement('div'); actions.className = 'station-drawer__actions'; actions.append(directions, detail);
-        if (this.root.dataset.demoData === 'true') {
-            const demo = document.createElement('p'); demo.className = 'demo-data-label'; demo.textContent = 'Demo · Test data · Not a real charging location';
-            this.drawerContent.append(demo);
-        }
         this.drawerContent.append(title, status, address, meta, actions);
         this.drawer.hidden = false;
         this.drawer.scrollTop = 0;

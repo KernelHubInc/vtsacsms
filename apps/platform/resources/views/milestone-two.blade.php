@@ -13,7 +13,7 @@
             <h1 class="mt-3 text-3xl font-semibold text-slate-950 dark:text-white">{{ $feature->label() }}</h1>
             <p class="mt-4 text-lg text-slate-700 dark:text-slate-200">{{ \App\Foundation\Features\FeatureFlags::MILESTONE_TWO_MESSAGE }}</p>
             <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">No charger, payment, or external-provider request was made.</p>
-            <a href="{{ route('home') }}" class="mt-8 inline-flex rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-teal-300 dark:bg-white dark:text-slate-950">Return to the demo</a>
+            <a href="{{ route('home') }}" class="mt-8 inline-flex rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-teal-300 dark:bg-white dark:text-slate-950">Return to the website</a>
         </section>
     </main>
 </body>

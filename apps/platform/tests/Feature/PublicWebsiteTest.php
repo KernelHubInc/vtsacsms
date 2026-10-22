@@ -27,7 +27,8 @@ final class PublicWebsiteTest extends TestCase
     {
         foreach (['/', '/network', '/charging-map', '/drivers', '/operators-and-site-hosts', '/installation-and-maintenance', '/mobile-app', '/news-and-resources', '/partner-program', '/frequently-asked-questions', '/contact', '/support', '/privacy-policy', '/terms-of-service', '/charging-terms', '/refund-policy'] as $path) {
             $this->get($path)->assertOk()->assertSee('<main id="main-content"', false)
-                ->assertDontSee('class="eyebrow"', false);
+                ->assertDontSee('class="eyebrow"', false)
+                ->assertDontSee('Demo');
         }
     }
 
@@ -42,7 +43,9 @@ final class PublicWebsiteTest extends TestCase
             ->assertSee('data-station-drawer hidden role="dialog"', false)
             ->assertSee('data-map-unavailable', false)
             ->assertSee('Connector')->assertSee('Minimum power')->assertSee('Availability')
-            ->assertDontSee('AIza');
+            ->assertDontSee('AIza')
+            ->assertDontSee('Demo environment')
+            ->assertDontSee('data-demo-data', false);
     }
 
     public function test_refund_placeholder_is_noindex_and_cannot_look_approved(): void
