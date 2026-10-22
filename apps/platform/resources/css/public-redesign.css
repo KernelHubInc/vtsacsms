@@ -30,6 +30,28 @@
     .public-site:not(.public-site--home):not(.public-site--map) .public-section--tint { background: #edf5f8; }
     .public-site:not(.public-site--home):not(.public-site--map) .signal-list li { font-weight: 620; }
 
+    .station-detail-intro { padding-block: clamp(2.5rem, 4vw, 3.5rem); }
+    .station-detail-intro h1 { max-width: 850px; margin: 0 0 .75rem; font-size: clamp(2.15rem, 4vw, 3.6rem); line-height: 1.08; letter-spacing: -.045em; overflow-wrap: anywhere; }
+    .station-detail { padding-block: clamp(2.5rem, 5vw, 4.5rem); }
+    .station-detail .feature-layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(2rem, 5vw, 5rem); }
+    .station-detail__status { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; }
+    .station-detail .feature-layout h2 { margin: 0; font-size: clamp(1.35rem, 2vw, 1.65rem); font-weight: 650; line-height: 1.2; letter-spacing: -.025em; }
+    .station-detail__availability { display: inline-flex; align-items: center; gap: .45rem; padding: .42rem .75rem; border-radius: 999px; background: #e7edf2; color: #30445a; font-size: .9rem; font-weight: 700; line-height: 1.2; }
+    .station-detail__availability::before { content: ''; width: .5rem; height: .5rem; flex: none; border-radius: 50%; background: #758698; }
+    .station-detail__availability--available { background: #e0f4e9; color: #135a3e; }
+    .station-detail__availability--available::before { background: #18845a; }
+    .station-detail__availability--busy,.station-detail__availability--occupied,.station-detail__availability--reserved { background: #fff0d4; color: #81531a; }
+    .station-detail__availability--busy::before,.station-detail__availability--occupied::before,.station-detail__availability--reserved::before { background: #cd861f; }
+    .station-detail__availability--faulted { background: #fce5e7; color: #8e2e3a; }
+    .station-detail__availability--faulted::before { background: #c44754; }
+    .station-detail .section-copy { max-width: 42rem; margin: 1rem 0 0; font-size: 1rem; line-height: 1.6; }
+    .station-detail__facts { margin: 0; }
+    .station-detail__facts > div { display: grid; grid-template-columns: minmax(8rem, .55fr) minmax(0, 1fr); gap: .6rem 1rem; padding: .8rem 0; border-bottom: 1px solid #d7e0e8; }
+    .station-detail__facts > div:first-child { padding-top: 0; }
+    .station-detail__facts dt { color: #607184; font-size: .86rem; font-weight: 650; }
+    .station-detail__facts dd { min-width: 0; margin: 0; color: #102b4d; font-size: .94rem; line-height: 1.5; overflow-wrap: anywhere; }
+    .station-detail .public-actions { margin-top: 1.5rem; }
+
     .public-site--home { --home-ink: #081b35; --home-muted: #607184; --home-paper: #f5f8fb; --home-accent: #57ddd2; background: var(--home-paper); }
     .public-site--home #main-content { overflow: hidden; }
     .home-wrap { width: min(1312px, calc(100% - 3rem)); margin-inline: auto; }
@@ -154,6 +176,7 @@
 }
 
 @media (max-width: 900px) {
+    .station-detail .feature-layout { grid-template-columns: 1fr; }
     .public-site .site-header__inner,.home-wrap { width: min(100% - 3rem, 1312px); }
     .public-site .site-footer__grid { grid-template-columns: repeat(3, 1fr); }
     .public-site .site-footer__grid > div { grid-column: 1 / -1; }
@@ -169,6 +192,7 @@
 }
 
 @media (max-width: 640px) {
+    .station-detail__facts > div { grid-template-columns: 1fr; gap: .15rem; }
     .public-site .site-header__inner,.home-wrap { width: calc(100% - 3rem); }
     .public-site .site-header__inner { min-height: 80px; }
     .public-site .site-header .power-solutions-logo img { height: 32px; }

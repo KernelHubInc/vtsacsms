@@ -1,7 +1,7 @@
 @extends('public.layout')
 
 @section('content')
-<section class="map-intro">
+<section class="map-intro station-detail-intro">
     <div class="public-shell">
         <h1>{{ $station['site_name'] }}</h1>
         <p>{{ $station['address_line_1'] }}{{ $station['city_name'] ? ', '.$station['city_name'] : '' }}</p>
@@ -14,15 +14,22 @@
         <span>The station information and directions action remain available.</span>
     </div>
 </section>
-<section class="public-section">
+<section class="public-section station-detail">
     <div class="public-shell feature-layout">
         <div>
-            <div class="legal-review">
-                <strong>Demo · Test data</strong>
-                <span>This is a fictional location and is not a real operational EV charger.</span>
+            <div class="station-detail__status">
+                <h2>Availability</h2>
+                <span class="station-detail__availability station-detail__availability--{{ $station['availability'] }}">{{ ucfirst($station['availability']) }}</span>
             </div>
-            <h2>Availability: {{ ucfirst($station['availability']) }}</h2>
-            <p class="section-copy">Status {{ $station['is_stale'] ? 'is stale and should be confirmed on arrival' : 'was recently observed' }}. No charger command is sent from this Milestone 1 page.</p>
+            <p class="section-copy">
+                @if ($station['is_stale'])
+                    This status may be out of date. Confirm at the station before relying on it.
+                @elseif ($station['availability'] === 'unknown')
+                    The charger has not reported a confirmed availability status. Check on arrival.
+                @else
+                    This is the latest reported status. Check the station when you arrive.
+                @endif
+            </p>
             <div class="connector-tags">
                 @foreach ($siteStations->flatMap(fn ($item) => $item['connectors'])->unique(fn ($connector) => $connector['standard'].'-'.$connector['maximum_power_w']) as $connector)
                     <span>{{ $connector['name'] }} · {{ $connector['current_type'] }} · {{ round($connector['maximum_power_w'] / 1000) }} kW</span>
@@ -30,10 +37,12 @@
             </div>
         </div>
         <div>
-            <p><strong>Operator</strong><br>{{ $station['operator_name'] }}</p>
-            <p><strong>Site category</strong><br>{{ str($station['site_type'])->replace('_', ' ')->title() }}</p>
-            <p><strong>Operating state</strong><br>{{ $station['open_now'] ? 'Open now' : 'Closed or hours unavailable' }}</p>
-            <p><strong>Amenities</strong><br>{{ collect($station['amenities'])->pluck('name')->join(', ') ?: 'No amenities published' }}</p>
+            <dl class="station-detail__facts">
+                <div><dt>Operator</dt><dd>{{ $station['operator_name'] }}</dd></div>
+                <div><dt>Site category</dt><dd>{{ str($station['site_type'])->replace('_', ' ')->title() }}</dd></div>
+                <div><dt>Operating state</dt><dd>{{ $station['open_now'] ? 'Open now' : 'Closed or hours unavailable' }}</dd></div>
+                <div><dt>Amenities</dt><dd>{{ collect($station['amenities'])->pluck('name')->join(', ') ?: 'No amenities published' }}</dd></div>
+            </dl>
             <div class="public-actions">
                 <a class="button" target="_blank" rel="noopener" href="{{ $directionsUrl }}">Directions</a>
                 <a class="button button--quiet" href="{{ route('public.charging-map') }}">Back to locator</a>

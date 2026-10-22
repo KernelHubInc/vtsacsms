@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Modules\CMS\Application\PublicContentRepository;
 use App\Modules\CMS\Domain\Models\CmsRedirect;
 use Database\Seeders\PublicCmsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,5 +99,35 @@ final class PublicWebsiteTest extends TestCase
                 $this->assertGreaterThan(0, filesize(public_path("branding/home/{$scene}-{$size}.png")));
             }
         }
+    }
+
+    public function test_station_detail_shows_a_compact_status_without_demo_copy(): void
+    {
+        $station = [
+            'site_name' => 'Sample charging site',
+            'address_line_1' => 'Sample address',
+            'city_name' => null,
+            'availability' => 'unknown',
+            'is_stale' => false,
+            'connectors' => [],
+            'operator_name' => 'Sample operator',
+            'site_type' => 'workplace',
+            'open_now' => false,
+            'amenities' => [],
+        ];
+
+        $html = view('public.station', [
+            'page' => app(PublicContentRepository::class)->page('charging-map'),
+            'station' => $station,
+            'siteStations' => collect([$station]),
+            'mapConfig' => [],
+            'directionsUrl' => 'https://example.com/directions',
+        ])->render();
+
+        $this->assertStringContainsString('<h2>Availability</h2>', $html);
+        $this->assertStringContainsString('station-detail__availability--unknown', $html);
+        $this->assertStringNotContainsString('Demo · Test data', $html);
+        $this->assertStringNotContainsString('fictional location', $html);
+        $this->assertStringNotContainsString('Milestone 1 page', $html);
     }
 }
