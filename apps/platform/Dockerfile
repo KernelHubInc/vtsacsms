@@ -1,4 +1,4 @@
-FROM php:8.4-cli-alpine AS php-base
+FROM php:8.4.27-cli-alpine3.24 AS php-base
 
 ENV APP_ENV=local \
     COMPOSER_ALLOW_SUPERUSER=1
@@ -50,7 +50,7 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
 
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "server.php"]
 
-FROM php:8.4-fpm-alpine AS production-base
+FROM php:8.4.27-fpm-alpine3.24 AS production-base
 
 ENV APP_ENV=production \
     APP_DEBUG=false \
