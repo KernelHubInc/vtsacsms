@@ -71,8 +71,22 @@ final class InfrastructureTest extends TestCase
         $this->get('/admin/login')
             ->assertOk()
             ->assertSee('Sign in')
-            ->assertSee('power-solutions-logo-horizontal', false)
+            ->assertSee('Charging operations,')
+            ->assertSee('Enter your email address')
+            ->assertSee('Enter your password')
+            ->assertSee('branding/power-solutions-mark.svg', false)
+            ->assertSee('branding/admin-login/charging-destination.png', false)
+            ->assertSee('wire:submit="authenticate"', false)
             ->assertDontSee('VTSA Platform Administration');
+    }
+
+    public function test_operator_login_uses_the_same_responsive_sign_in_shell(): void
+    {
+        $this->get('/operator/login')
+            ->assertOk()
+            ->assertSee('Operator workspace')
+            ->assertSee('Use your operator account to continue.')
+            ->assertSee('wire:submit="authenticate"', false);
     }
 
     public function test_power_solutions_assets_and_tokens_are_centralized(): void
