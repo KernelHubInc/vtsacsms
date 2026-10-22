@@ -6,3 +6,7 @@ export function stationSearchParameters(formData, bounds) {
     }
     return params;
 }
+
+export function shouldFetchStations(previousKey, nextKey, force = false) {
+    return force || previousKey !== nextKey;
+}

@@ -150,7 +150,7 @@
     }
 
     .public-site--map .station-finder__workspace {
-        grid-row: 4;
+        grid-row: 3;
         height: auto;
         min-height: 0;
         overflow: hidden;

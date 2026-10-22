@@ -1,6 +1,6 @@
 import { MapProviderFactory, parseMapConfiguration } from '../maps/map-provider-factory';
 import { directionsUrl } from '../maps/directions-launcher';
-import { stationSearchParameters } from './search-parameters';
+import { shouldFetchStations, stationSearchParameters } from './search-parameters';
 
 const statusLabel = (status) => ({ available: 'Available', busy: 'In use', faulted: 'Needs attention', offline: 'Offline', stale: 'Stale data', unknown: 'Unknown' }[status] || 'Unknown');
 const powerLabel = (watts) => watts ? `${Math.round(Number(watts) / 1000)} kW max` : 'Power not published';
@@ -24,6 +24,7 @@ class StationFinder {
         this.configuration = parseMapConfiguration(root);
         this.isHomeMap = root.hasAttribute('data-home-map');
         this.lastFittedKey = null;
+        this.lastRequestKey = null;
     }
 
     async start() {
@@ -39,7 +40,7 @@ class StationFinder {
             target.addEventListener(event, listener);
             this.disposers.push(() => target.removeEventListener(event, listener));
         };
-        bind(this.form, 'submit', (event) => { event.preventDefault(); this.fetchStations(); });
+        bind(this.form, 'submit', (event) => { event.preventDefault(); this.fetchStations(true); });
         bind(this.form, 'change', () => this.fetchStations());
         if (this.filterPanel) {
             if (window.matchMedia('(max-width: 900px)').matches && !initial.has('query') && !initial.has('connector') && !initial.has('availability')) {
@@ -49,7 +50,7 @@ class StationFinder {
         }
         bind(this.root.querySelector('[data-drawer-close]'), 'click', () => { this.drawer.hidden = true; });
         bind(this.root.querySelector('[data-use-location]'), 'click', () => this.useLocation());
-        bind(window, 'online', () => this.fetchStations());
+        bind(window, 'online', () => this.fetchStations(true));
         bind(window, 'offline', () => this.showState('You are offline. Previously loaded station details may be stale.', 'offline'));
         bind(window, 'resize', () => this.adapter?.resize());
         if ('ResizeObserver' in window) {
@@ -74,6 +75,7 @@ class StationFinder {
             );
             this.adapter = result.instance;
             this.root.dataset.resolvedProvider = result.provider;
+            if (!this.isHomeMap) this.bounds = this.adapter.getVisibleBounds();
             if (result.fallbackActive) {
                 this.root.querySelector('[data-provider-warning]')?.removeAttribute('hidden');
             }
@@ -87,12 +89,16 @@ class StationFinder {
         return stationSearchParameters(new FormData(this.form), this.isHomeMap ? null : this.bounds);
     }
 
-    async fetchStations() {
+    async fetchStations(force = false) {
+        const params = this.parameters();
+        const key = params.toString();
+        if (!shouldFetchStations(this.lastRequestKey, key, force)) return;
+        this.lastRequestKey = key;
         this.abortController?.abort();
         this.abortController = new AbortController();
-        this.showState('Loading stations…', 'loading');
+        if (!this.stations.length) this.showState('Loading stations…', 'loading');
         try {
-            const response = await fetch(`${this.endpoint}?${this.parameters()}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal });
+            const response = await fetch(`${this.endpoint}?${params}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal });
             if (!response.ok) throw new Error('Station search is temporarily unavailable.');
             const payload = await response.json();
             this.stations = payload.data;
@@ -102,6 +108,7 @@ class StationFinder {
             this.fitHomeResults();
         } catch (error) {
             if (error.name === 'AbortError') return;
+            this.lastRequestKey = null;
             this.showState(navigator.onLine ? 'We could not refresh stations. Try again shortly.' : 'You are offline. Station information cannot be refreshed.', 'error');
         }
     }
@@ -188,6 +195,7 @@ class StationFinder {
     }
 
     async fetchUrl(params) {
+        this.lastRequestKey = null;
         this.abortController?.abort(); this.abortController = new AbortController(); this.showState('Finding nearby stations…', 'loading');
         try { const response = await fetch(`${this.endpoint}?${params}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal }); if (!response.ok) throw new Error(); const payload = await response.json(); this.stations = payload.data; this.render(); this.populateOperators(); this.adapter?.setMarkers(this.stations); }
         catch (error) { if (error.name !== 'AbortError') this.showState('Nearby stations could not be loaded.', 'error'); }
