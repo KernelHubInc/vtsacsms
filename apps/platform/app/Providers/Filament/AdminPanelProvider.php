@@ -64,7 +64,7 @@ final class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->brandName('Power Solutions Administration')
-            ->brandLogo(asset('branding/power-solutions-logo-horizontal-dark.svg'))
+            ->brandLogo(asset('branding/power-solutions-logo-horizontal.svg'))
             ->darkModeBrandLogo(asset('branding/power-solutions-logo-horizontal-dark.svg'))
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('branding/power-solutions-favicon.png'))

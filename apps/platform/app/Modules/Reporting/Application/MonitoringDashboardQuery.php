@@ -35,6 +35,7 @@ final readonly class MonitoringDashboardQuery
         $now = CarbonImmutable::now('UTC');
         $from = $now->setTimezone('Asia/Manila')->startOfDay()->subDays($days - 1)->utc();
         $sites = $this->sites->for($user)->whereIn('id', $this->sites->for($user, PermissionKey::ReportingView)->select('id'))
+            ->where('is_active', true)->where('lifecycle_status', '!=', 'retired')
             ->orderBy('name')->get(['id', 'name', 'address_line_1', 'timezone']);
         abort_if($siteId !== '' && ! $sites->contains('id', $siteId), 403);
         $siteIds = $sites->when($siteId !== '', fn ($rows) => $rows->where('id', $siteId))->pluck('id')->all();
@@ -97,7 +98,22 @@ final readonly class MonitoringDashboardQuery
         $page = min(max(1, $page), $pages);
         $sessions = $this->sessions->for($user)->whereIn('site_id', $siteIds);
         $sessionStates = (clone $sessions)->groupBy('state')->selectRaw('state, COUNT(*) AS total')->pluck('total', 'state')->all();
+        $liveSessions = (clone $sessions)->where('state', 'charging')->orderByDesc('started_at')->limit(4)
+            ->get(['id', 'charge_point_identity', 'energy_wh', 'started_at'])
+            ->map(static fn (ChargingSession $session): array => [
+                'id' => $session->getKey(),
+                'station' => $session->charge_point_identity,
+                'energy_wh' => (int) $session->energy_wh,
+                'started_at' => $session->started_at?->toIso8601String(),
+            ])->all();
         $completed = (clone $sessions)->where('state', 'completed')->whereBetween('stopped_at', [$from, $now]);
+        $siteNames = $sites->pluck('name', 'id');
+        $topSites = (clone $completed)->selectRaw('site_id, SUM(energy_wh) AS energy_wh')
+            ->groupBy('site_id')->orderByDesc('energy_wh')->limit(3)->toBase()->get()
+            ->map(static fn (object $row): array => [
+                'name' => (string) ($siteNames->get($row->site_id) ?? 'Site'),
+                'energy_wh' => (int) $row->energy_wh,
+            ])->all();
         $dateSql = DB::connection()->getDriverName() === 'pgsql'
             ? "DATE(stopped_at AT TIME ZONE 'Asia/Manila')" : "DATE(stopped_at, '+8 hours')";
         $daily = (clone $completed)->selectRaw($dateSql.' AS day, COUNT(*) AS sessions, SUM(energy_wh) AS energy_wh')
@@ -143,7 +159,8 @@ final readonly class MonitoringDashboardQuery
             'connector_count' => $connectors->count(), 'breakdown' => $breakdown,
             'available_percent' => $connectors->isEmpty() ? null : round($breakdown['Available'] / $connectors->count() * 100, 1),
             'stations' => $filtered->slice(($page - 1) * 8, 8)->values()->all(), 'matches' => $filtered->count(), 'page' => $page, 'pages' => $pages,
-            'session_states' => $sessionStates, 'energy_wh' => (int) (clone $completed)->sum('energy_wh'), 'completed_sessions' => (clone $completed)->count(),
+            'session_states' => $sessionStates, 'live_sessions' => $liveSessions, 'top_sites' => $topSites,
+            'energy_wh' => (int) (clone $completed)->sum('energy_wh'), 'completed_sessions' => (clone $completed)->count(),
             'trend' => $trend, 'charges' => $charges, 'topups' => $topups, 'wallet_visible' => $walletVisible,
             'finance_visible' => $this->authorization->holdsAnywhere($user, PermissionKey::PaymentView),
             'attention_count' => count($attention), 'attention' => array_slice($attention, 0, 10), 'waiting' => $waiting, 'review' => $review,

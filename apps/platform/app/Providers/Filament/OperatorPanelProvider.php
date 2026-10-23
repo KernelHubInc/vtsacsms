@@ -32,7 +32,7 @@ final class OperatorPanelProvider extends PanelProvider
             ->path('operator')
             ->login(Login::class)
             ->brandName('Power Solutions Operator Workspace')
-            ->brandLogo(asset('branding/power-solutions-logo-horizontal-dark.svg'))
+            ->brandLogo(asset('branding/power-solutions-logo-horizontal.svg'))
             ->darkModeBrandLogo(asset('branding/power-solutions-logo-horizontal-dark.svg'))
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('branding/power-solutions-favicon.png'))

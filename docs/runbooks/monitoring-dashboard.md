@@ -2,10 +2,12 @@
 
 The `/admin` and `/operator` home pages use the same Reporting-owned, read-only dashboard. No schema migration, charger command, payment request, or mobile release is needed.
 
+The operations layout groups four immediate signals (active stations, available connectors, charging sessions and completed-session energy), then shows daily activity, connector state, issues needing attention, current sessions, site energy, finance and station setup. The shared admin/operator theme gives other resource pages the same sidebar spacing, headings and panel treatment. It follows the CSMS Operations Dashboard design direction using Power Solutions branding and real authorized records. Example counts, service-uptime claims and payment-method splits from the design are not shown because this query does not have evidence for them.
+
 ## Access and filters
 
 - Panel access remains governed by the existing Identity policy. Reporting permission is required for dashboard data; other panel users receive a workspace message and keep their existing navigation.
-- Location choices intersect Locations view and Reporting view grants. Asset data additionally intersects Assets view grants. Session data uses the existing authorized-session query. Finance data uses session Payment view grants. Maintenance counts intersect Maintenance view grants.
+- Location choices intersect Locations view and Reporting view grants and include only active, non-retired sites. Retired sites remain in historical records but are excluded from this operational dashboard and cannot be selected by a forged filter. Asset data additionally intersects Assets view grants. Session data uses the existing authorized-session query. Finance data uses session Payment view grants. Maintenance counts intersect Maintenance view grants.
 - A forged or revoked location filter returns 403. Permission decisions are repeated on every refresh, with no shared dashboard cache.
 - Live wallet top-ups require tenant-wide Reporting and Payment view. They are hidden when a location is selected because wallet funding has no location attribution. Site-only and organization-only operators must not see tenant-wide wallet totals.
 - The period selector supports 7, 30 and 90 calendar days, including today, in `Asia/Manila` (GMT+8). Stored instants remain UTC. Location and period filter the metrics; search and connection/lifecycle filter the station cards only.
@@ -25,6 +27,8 @@ The `/admin` and `/operator` home pages use the same Reporting-owned, read-only 
 | Delayed starts | Requested/authorizing/authorized/starting sessions past their start deadline or requested more than five minutes ago. Read-only warning; no automatic cancellation or refund. |
 | Payment exceptions | Failed or expired session Payment intents created during the period, intersected with authorized sessions. QR wallet orders are not included in this session-payment count. |
 | Maintenance | Current non-closed/non-canceled work orders; SLA breach means the resolution target has passed. Counts are scoped by selected location and Maintenance permissions. |
+| Live charging sessions | At most four newest sessions in canonical `charging` state, scoped through the authorized Charging query. Energy is the session's current stored Wh, not a guaranteed live power reading. |
+| Top sites | The three authorized sites with the most completed-session energy in the selected period. Empty networks show an explicit empty state. |
 
 ## Operator workflow
 
@@ -51,3 +55,10 @@ Limits: this dashboard does not replace settlement reconciliation, invoice repor
 - The real admin dashboard rendered successfully against PostgreSQL; the read query took 221 ms during verification. Existing network data remained intact: 35 stations, 61 connectors, one active station online at the check time. These are a dated observation, not permanent expected totals.
 - Browser preview could not attach in this session. Livewire rendering and filter interactions were verified by automated tests and server-side rendering; desktop/mobile visual appearance still needs a browser check.
 - Release evidence and backup: `/opt/vtsa-releases/monitoring-20261016/`. Local source changes are not committed by this deployment.
+
+## Admin dashboard design staging release — 2026-10-22
+
+- The Power Solutions operations dashboard layout was released to staging as `vtsa-prepaid-platform:20261022-admin-dashboard-design`, layered on the prior `20261022-location-filter` image. The bundle contains only the Reporting dashboard query, shared dashboard Blade template, admin/operator theme source, and Vite build assets. Unrelated mobile, charging, notification, and payment work in the local tree was not included.
+- The existing staging platform container was stopped, updated with those exact files, restarted, and had its Blade cache rebuilt. `/etc/vtsa-csms/compose.staging-prepaid-platform.json` now selects the new image for future platform recreation. Its previous version is saved under `/root/admin-dashboard-design-20261022/compose.staging-prepaid-platform.json.before`. The extracted release bundle and Dockerfile are in that root-only directory. Roll back by restoring the prior override and the `20261022-location-filter` image; the OCPP gateway and database were unchanged.
+- The uploaded bundle SHA-256 is `59ad31815718e98376addf882f55ebf60b01fbfb6c0853cf43112a3013ad5845`. Deployed query, template, and Vite manifest hashes matched the tested local files. Local Vite build and Blade compile passed; the candidate image passed PHP syntax and Blade compilation. After restart, the platform container was healthy, `/admin/login` returned HTTP 200, and the new theme asset returned HTTP 200.
+- The preceding full Laravel suite passed (281 tests, 2,526 assertions), including the dashboard regression; Pint and Composer audit passed. Local PHPStan was blocked by a Windows PHP readability issue on `phpstan.neon.dist`. An authenticated browser visual check of the dashboard remains outstanding. These source changes are still uncommitted on `test_env`; future deployments built from an older Git revision must include them or they will replace this staging design.
