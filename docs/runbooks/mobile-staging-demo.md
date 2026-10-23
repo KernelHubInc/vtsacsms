@@ -9,6 +9,14 @@ Every requested mobile release must return both links after verification:
 
 The demo URL points to the latest verified versioned APK and requires cache revalidation. Both downloads use the same staging build and backend; the demo link is not a separate simulated app.
 
+## Explore map starts near the driver — 1.0.26 / Android build 27
+
+Published on 2026-10-23 from commit `883ec5a1`. The [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.26.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200 with an 80,093,014-byte content length. The uploaded SHA-256 matched the clean local release build: `fa33a3d9338b48dac0b8e0fa81c00fdf31f1ad243b8629f1b46be1d57301dce1`. Android package `com.vtsa.vtsa_mobile` uses version code 27 and the same signing certificate as 1.0.25.
+
+Explore now requests foreground location when it opens, centers the map on the returned position, and loads nearby stations. If permission is declined or GPS is unavailable, it retains the configured map center and loads the existing default area. The **Show my location** control remains available for a later retry. The iOS permission explanation now describes this startup behavior; an iOS build was not produced on Windows.
+
+The clean release checkout passed Flutter analysis, all 211 mobile tests, the Android release build, APK signature verification, and the GPS startup/recenter regression test. The full repository push checks also passed. A physical-phone check of permission prompts and GPS accuracy is still needed; no Android device was connected to the build host.
+
 ## Wallet cleanup — 1.0.25 / Android build 26
 
 Published on 2026-10-20. The [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.25.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200 with an 80,093,014-byte content length. The uploaded SHA256 matches the local signed build: `66f344bcaf9a5f6c451d5e881067f85b698af34436a09e88fbff74c14fcdc820`. It uses the same package and signing certificate as 1.0.24.
