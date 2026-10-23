@@ -1,5 +1,23 @@
 # Mobile staging demo: registration and email verification
 
+## Browser app at /mobile
+
+The staging Flutter web build is served at `https://staging.evcspowersolutions.com/mobile/`. Build from a clean `test_env` checkout so unrelated working-tree changes do not enter the release:
+
+```powershell
+cd apps/mobile
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --release --base-href /mobile/ --no-web-resources-cdn --dart-define-from-file=dart_defines.staging-demo.json
+```
+
+The staging Nginx server includes `infra/nginx/mobile-staging-location.conf` and serves `/var/www/staging-mobile/current/`. Upload `build/web` to a new release directory, verify `index.html` contains `<base href="/mobile/">`, then atomically switch `current` to that directory. Run `nginx -t` before reloading and check `/mobile`, `/mobile/`, `/mobile/flutter_bootstrap.js`, and the browser login screen. The `/mobile` URL redirects to `/mobile/`. Roll back by switching `current` to the previous release and reloading Nginx; no database migration is needed.
+
+The web build uses the same staging API origin as Android. Browser geolocation and camera access require HTTPS and the user's permission. PIN/biometric quick unlock and Android push delivery remain native-only; manual charger code entry remains available if a browser cannot scan QR codes. Treat a browser charging session as real staging activity, not a simulation.
+
+Published on 2026-10-23 from clean source commit `304176c6`. The compressed build SHA-256 is `364ea90b2b3a8e8c5946d335bb804fd721b5eec9ce074953f79df23be269c33f`. Nginx configuration validation passed. `/mobile` redirects to `/mobile/`; the page and Flutter bootstrap asset return HTTP 200. The live browser rendered sign-in, a local browser preview opened registration, and the same-origin public station API returned HTTP 200. Authenticated browser charging, wallet payment, camera scanning, and physical location permission were not exercised in this release check.
+
 ## Download links for every mobile release
 
 Every requested mobile release must return both links after verification:
