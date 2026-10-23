@@ -164,6 +164,10 @@ void main() {
         tester.getSize(find.byType(FlutterMap)).height,
         greaterThanOrEqualTo(300),
       );
+      expect(location.calls, 1);
+      var map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(map.mapController!.camera.center.latitude, closeTo(14.61, .001));
+      expect(map.mapController!.camera.center.longitude, closeTo(121.01, .001));
       await preview(tester, 'explore-map-390');
       final mapState = tester.state(find.byType(OpenStreetMapStationMap));
       await tester.ensureVisible(find.byTooltip('Expand map'));
@@ -176,8 +180,8 @@ void main() {
       );
       await tester.tap(find.byTooltip('Show my location'));
       await tester.pumpAndSettle();
-      expect(location.calls, 1);
-      var map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(location.calls, 2);
+      map = tester.widget<FlutterMap>(find.byType(FlutterMap));
       expect(map.mapController!.camera.center.latitude, closeTo(14.61, .001));
       await tester.drag(find.byType(FlutterMap), const Offset(90, 80));
       await tester.pumpAndSettle();
