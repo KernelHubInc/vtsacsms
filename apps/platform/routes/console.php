@@ -12,6 +12,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('charging:expire-operations')->everyMinute()->withoutOverlapping();
 Schedule::command('charging:monitor-prepaid')->everyTenSeconds()->withoutOverlapping();
+Schedule::command('notifications:send-charging-summaries')->everyMinute()->withoutOverlapping();
 Schedule::command('integrations:publish-outbox --limit=250')->everySecond()->withoutOverlapping();
 Schedule::command('maintenance:run-automation')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('kyc:reconcile')->everyFiveMinutes()->withoutOverlapping();
