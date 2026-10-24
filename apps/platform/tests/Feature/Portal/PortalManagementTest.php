@@ -201,7 +201,8 @@ final class PortalManagementTest extends TenantSecurityTestCase
             ->assertSee('Tenant-safe CSV exports');
         $this->actingAs($user)->get('/operator')
             ->assertOk()
-            ->assertSee('Network availability');
+            ->assertSee('Operations overview')
+            ->assertSee('Available connectors');
     }
 
     public function test_authenticated_platform_admin_can_open_master_data_and_health_surfaces(): void
