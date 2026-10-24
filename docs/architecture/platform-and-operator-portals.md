@@ -44,14 +44,14 @@ OpenStreetMap is the default and fallback. The map remains usable as a station l
 
 ## Queued exports
 
-Portal exports are durable `portal_exports` records and tenant-aware queue jobs. An export records its ULID, tenant, requester public ULID, type, filters, state, private-storage path, row count, and completion/failure state.
+Portal exports are durable `portal_exports` records and tenant-aware jobs on the `reports` queue. A deployment must run a worker for that queue and configure the same private `FILESYSTEM_DISK` for the web and worker containers. An export records its ULID, tenant, requester public ULID, type, filters, state, storage disk and path, row count, and completion/failure state.
 
 The queue envelope propagates tenant, human actor, correlation, job, and causation ULIDs. At execution time the middleware verifies the tenant and membership again. The job intersects `reporting.view`, `reporting.export`, and the report's underlying data permission at the site level. Payment reconciliation requires `payments.view`. It stores a digest of the sites included in the actor's current scope; downloads are denied if that scope changes. Both PDF and CSV exports:
 
 - contain only safe reporting fields;
 - never contain payment tokens, provider credentials, PAN, CVV, or secret configuration;
 - are limited to the requesting actor's current tenant and site access;
-- are written to private local storage under a tenant-specific path;
+- are written to the configured private storage disk under a tenant-specific path;
 - are downloadable only by the requesting user from the tenant-scoped panel page for seven days.
 
 CSV contains every matching row and escapes spreadsheet-formula prefixes. PDF contains the total in-scope record count, relevant totals, and the first 200 detail rows; it explicitly directs readers to CSV for the complete detail set. The dates selected in the portal are UTC, inclusive at `from` and exclusive at `to`. Site inventory is a current snapshot and does not use the date filter. Report totals are recorded facts at generation time, not a live or final settlement guarantee. The portal exposes only report types for which the actor currently holds all required permissions.
