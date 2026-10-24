@@ -133,7 +133,8 @@ final class PortalManagementTest extends TenantSecurityTestCase
         Queue::assertPushed(GeneratePortalExport::class, function (GeneratePortalExport $pushed) use ($tenant, &$job): bool {
             $job = $pushed;
 
-            return $pushed->tenantJobEnvelope()->tenantId === (string) $tenant->getKey();
+            return $pushed->tenantJobEnvelope()->tenantId === (string) $tenant->getKey()
+                && $pushed->queue === 'reports';
         });
         /** @var PortalExport $export */
         $export = PortalExport::withoutGlobalScopes()->firstOrFail();
@@ -161,7 +162,8 @@ final class PortalManagementTest extends TenantSecurityTestCase
     public function test_pdf_export_is_private_and_contains_only_the_requesters_current_sites(): void
     {
         Queue::fake();
-        Storage::fake('local');
+        config()->set('filesystems.default', 's3');
+        Storage::fake('s3');
         $user = $this->createUser();
         $tenant = $this->createTenant('portal-pdf-export');
 
@@ -193,9 +195,10 @@ final class PortalManagementTest extends TenantSecurityTestCase
 
         $export = PortalExport::withoutGlobalScopes()->firstOrFail();
         self::assertSame('completed', $export->status);
+        self::assertSame('s3', $export->disk);
         self::assertSame(1, $export->row_count);
         self::assertStringEndsWith('.pdf', (string) $export->path);
-        self::assertStringStartsWith('%PDF-', Storage::disk('local')->get((string) $export->path));
+        self::assertStringStartsWith('%PDF-', Storage::disk('s3')->get((string) $export->path));
         $this->actingAs($user);
         $this->withinTenant($tenant, $user, function () use ($user, $siteA, $siteB, $assignment): void {
             $export = PortalExport::query()->firstOrFail();

@@ -61,7 +61,7 @@ final readonly class PortalExportService
             causationId: (string) $export->getKey(),
         );
 
-        GeneratePortalExport::dispatch((string) $export->getKey(), $envelope)->afterCommit();
+        GeneratePortalExport::dispatch((string) $export->getKey(), $envelope)->onQueue('reports')->afterCommit();
         $this->audit->record(new AuditEntry(
             action: 'reporting.portal_export.queued',
             targetType: 'portal_export',

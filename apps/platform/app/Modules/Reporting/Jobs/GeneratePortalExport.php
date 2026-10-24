@@ -60,15 +60,16 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
         $filters['_scope_hash'] = $access->scopeFingerprint($user, $export->type);
         $export->update(['status' => 'processing', 'failure_code' => null, 'filters' => $filters]);
         $report = $rows->for($export->type, $user, $export->filters);
+        $disk = (string) config('filesystems.default', 'local');
         if ($format === 'pdf') {
             $result = app(PortalPdfReport::class)->render($export->type, $report, $filters);
             $path = sprintf('portal-exports/%s/%s.pdf', $this->envelope->tenantId, $export->getKey());
-            if (! Storage::disk('local')->put($path, $result['bytes'])) {
+            if (! Storage::disk($disk)->put($path, $result['bytes'])) {
                 throw new RuntimeException('Unable to persist PDF export.');
             }
             $export->update([
                 'status' => 'completed',
-                'disk' => 'local',
+                'disk' => $disk,
                 'path' => $path,
                 'row_count' => $result['count'],
                 'completed_at' => now('UTC'),
@@ -90,7 +91,7 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
         }
         rewind($stream);
         $path = sprintf('portal-exports/%s/%s.csv', $this->envelope->tenantId, $export->getKey());
-        $written = Storage::disk('local')->writeStream($path, $stream);
+        $written = Storage::disk($disk)->writeStream($path, $stream);
         fclose($stream);
         if (! $written) {
             throw new RuntimeException('Unable to persist export.');
@@ -98,7 +99,7 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
 
         $export->update([
             'status' => 'completed',
-            'disk' => 'local',
+            'disk' => $disk,
             'path' => $path,
             'row_count' => $count,
             'completed_at' => now('UTC'),
