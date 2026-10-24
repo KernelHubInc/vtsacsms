@@ -26,6 +26,7 @@ use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Domain\Models\InboundOcppEvent;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
+use App\Modules\Notifications\Application\ChargingReceiptPdf;
 use App\Modules\Notifications\Application\ChargingSummaryDelivery;
 use App\Modules\Notifications\Application\ChargingSummaryQueue;
 use App\Modules\Notifications\Domain\Models\ChargingEmailDelivery;
@@ -111,7 +112,10 @@ final class CustomerChargingTest extends TenantSecurityTestCase
                     && $mail->summary['energy_wh'] === 750
                     && $mail->summary['payment_method'] === 'Personal prepaid wallet'
                     && str_contains($mail->render(), 'PHP 0.75')
-                    && str_contains($mail->render(), 'not a tax invoice');
+                    && str_contains($mail->render(), 'not an official tax receipt')
+                    && count($mail->attachments()) === 1
+                    && $mail->attachments()[0]->as === 'power-solutions-charging-'.$session->getKey().'.pdf'
+                    && $mail->attachments()[0]->mime === 'application/pdf';
             });
             Mail::assertSentCount(1);
             $balance = app(PrepaidWallet::class)->summary($actor->public_id, 'live');
@@ -120,6 +124,36 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             self::assertSame('captured', $service->present($session)['payment_state']);
             $this->assertDatabaseCount('charging_customer_sessions', 1);
         });
+    }
+
+    public function test_charging_receipt_email_and_pdf_show_the_same_confirmed_charge(): void
+    {
+        $summary = [
+            'session_id' => '01M5TESTRECEIPT0000000000',
+            'station' => 'Lumina Subic',
+            'connector' => 'Type 2',
+            'started_at' => '2026-10-24T02:00:00Z',
+            'stopped_at' => '2026-10-24T02:15:30Z',
+            'energy_wh' => 3443,
+            'duration_seconds' => 930,
+            'amount_minor' => 51,
+            'currency' => 'PHP',
+            'payment_method' => 'Personal prepaid wallet',
+        ];
+
+        $receipt = app(ChargingReceiptPdf::class);
+        $details = $receipt->details($summary);
+        self::assertSame('PHP 0.51', $details['amount']);
+        self::assertSame('3.443 kWh', $details['energy']);
+        self::assertSame('24 Oct 2026, 10:00 AM PHT', $details['started']);
+
+        $mail = new ChargingSummaryMail($summary);
+        self::assertSame('Your Power Solutions charging receipt', $mail->envelope()->subject);
+        self::assertCount(1, $mail->attachments());
+        self::assertSame('application/pdf', $mail->attachments()[0]->mime);
+        self::assertStringContainsString('PHP 0.51', $mail->render());
+        self::assertStringContainsString($summary['session_id'], $mail->render());
+        self::assertStringStartsWith('%PDF-', $receipt->render($summary));
     }
 
     public function test_charging_email_queue_is_tenant_scoped(): void
