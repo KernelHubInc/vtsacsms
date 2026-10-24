@@ -104,6 +104,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
     public function test_export_is_queued_with_tenant_context_and_rechecks_site_scope_when_generated(): void
     {
         Queue::fake();
+        config()->set('filesystems.default', 'local');
         Storage::fake('local');
         $user = $this->createUser();
         $tenant = $this->createTenant('portal-export');
