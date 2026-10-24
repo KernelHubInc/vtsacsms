@@ -32,6 +32,8 @@ replaying a failed or cancelled command. No device configuration change is neede
 6. Request Stop, or let the prepaid monitor request it near the budget. Wait for final charger evidence.
 7. Check final cost and wallet balance. Unused held funds are released. If review is required, retain the session reference; do not pay or start again for that attempt.
 
+The live session and Activity timeline show the request, charger-confirmed start and charger-confirmed end as distinct events in the phone's local timezone. Session duration is the last server-reported value until final stop evidence. The app shows current power only while its meter reading is fresh. Battery percentage is optional OCPP SoC telemetry: a valid 0-100% charger sample is retained as a session meter reading and shown with its report time, while a charger that does not send SoC displays "Not reported by charger." It is never estimated from kWh, and it has no effect on energy rating or wallet settlement. Confirm the physical charger's SoC capability and MeterValues configuration before expecting a percentage in a supervised test.
+
 The PHP 1 test budget can stop before 1 kWh to leave time for the charger to respond. It is separate from the PHP 1/kWh unit price. Charging completion debits the wallet; AUB funds the wallet. Network loss or charger refusal can delay a remote stop; this is not a hard hardware energy cap.
 
 ## Runtime requirements

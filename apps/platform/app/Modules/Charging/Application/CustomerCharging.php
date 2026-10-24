@@ -234,11 +234,12 @@ final readonly class CustomerCharging
     /** @return array<string, mixed> */
     public function present(ChargingSession $session): array
     {
-        $session->loadMissing(['customer.quote', 'latestPower']);
+        $session->loadMissing(['customer.quote', 'latestPower', 'latestStateOfCharge']);
         $owner = $session->customer ?? throw new DomainException('This session has no customer ownership record.');
         $quote = $owner->quote;
         $target = $quote->disclosure['target'];
         $power = $session->latestPower;
+        $battery = $session->latestStateOfCharge;
         if ($power !== null && ($power->sampled_at->lt(now('UTC')->subSeconds(60)) || $session->stopped_at !== null)) {
             $power = null;
         }
@@ -249,6 +250,8 @@ final readonly class CustomerCharging
             'connector_id' => $session->connector_id, 'connector_name' => $target['connector_name'],
             'energy_wh' => (int) $session->energy_wh, 'duration_seconds' => (int) $session->duration_seconds,
             'energy_flow_seconds' => (int) $session->energy_flow_seconds, 'current_power_w' => $power === null ? null : (int) $power->value,
+            'battery_percentage' => $battery === null ? null : (int) $battery->value,
+            'battery_reported_at' => $battery?->sampled_at->toISOString(),
             'currency' => $session->currency, 'estimated_cost_minor' => $session->estimated_cost_minor === null ? null : (int) $session->estimated_cost_minor,
             'final_cost_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor,
             'requested_at' => $session->requested_at->toISOString(), 'started_at' => $session->started_at?->toISOString(),

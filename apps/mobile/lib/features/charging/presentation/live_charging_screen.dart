@@ -112,6 +112,8 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
             const SizedBox(height: VtsaSpacing.md),
             _Metrics(session: session),
             const SizedBox(height: VtsaSpacing.md),
+            _ChargerReadings(session: session),
+            const SizedBox(height: VtsaSpacing.md),
             if (charging.phase == ChargingFlowPhase.live &&
                 charging.isOnline &&
                 !session.chargerDisconnected)
@@ -176,23 +178,9 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Power & session details'),
-              children: [
-                ListTile(
-                  title: const Text('Current power'),
-                  trailing: Text(formatPower(session.currentPowerW)),
-                ),
-                ListTile(
-                  title: const Text('Energy-flow time'),
-                  trailing: Text(formatDuration(session.energyFlowSeconds)),
-                ),
-                SelectableText(
-                  'Session ${session.id}',
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
+            SelectableText(
+              'Session ${session.id}',
+              style: Theme.of(context).textTheme.labelSmall,
             ),
           ],
         ),
@@ -386,7 +374,7 @@ class _Metrics extends StatelessWidget {
             children: [
               _Metric(
                 width: width,
-                label: 'TIME',
+                label: 'SESSION TIME',
                 value: formatDuration(session.durationSeconds),
               ),
               _Metric(
@@ -400,7 +388,93 @@ class _Metrics extends StatelessWidget {
           );
         },
       ),
+      const SizedBox(height: 8),
+      Text(
+        'Time and cost use the last server update until the session is finalized.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     ],
+  );
+}
+
+class _ChargerReadings extends StatelessWidget {
+  const _ChargerReadings({required this.session});
+
+  final ChargingSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final reportedAt = session.batteryReportedAt;
+    final age = reportedAt == null
+        ? null
+        : DateTime.now().difference(reportedAt.toLocal());
+    final fresh =
+        age != null && !age.isNegative && age <= const Duration(minutes: 5);
+    final battery = session.batteryPercentage == null
+        ? 'Not reported by charger'
+        : '${session.batteryPercentage}%${fresh ? '' : ' · last known'}';
+    String time(DateTime? value, String fallback) => value == null
+        ? fallback
+        : DateFormat.yMMMd().add_jms().format(value.toLocal());
+
+    return VtsaCard(
+      title: 'Charging timeline & vehicle',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Reading(
+            label: 'Started',
+            value: time(session.startedAt, 'Waiting for charger'),
+          ),
+          _Reading(label: 'Ended', value: time(session.stoppedAt, 'Not ended')),
+          _Reading(
+            label: 'Current power',
+            value: formatPower(session.currentPowerW),
+          ),
+          _Reading(label: 'Vehicle battery', value: battery),
+          if (reportedAt != null && session.batteryPercentage != null)
+            Text(
+              'Battery reported ${time(reportedAt, '')}. This value comes from the charger, not directly from your vehicle.',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            Text(
+              'Battery percentage appears only if the charger reports it. Energy delivered does not determine battery percentage.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          const SizedBox(height: 8),
+          _Reading(
+            label: 'Energy-flow time',
+            value: formatDuration(session.energyFlowSeconds),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Start and end are confirmed from charger transaction evidence. Times use your phone\'s local timezone.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Reading extends StatelessWidget {
+  const _Reading({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 3),
+        Text(value, style: Theme.of(context).textTheme.bodyLarge),
+      ],
+    ),
   );
 }
 

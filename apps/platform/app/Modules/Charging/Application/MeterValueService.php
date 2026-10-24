@@ -30,7 +30,10 @@ final readonly class MeterValueService
     ): void {
         DB::transaction(function () use ($session, $eventId, $samples, $receivedAt): void {
             $locked = ChargingSession::query()->whereKey($session->getKey())->lockForUpdate()->firstOrFail();
-            $latestAt = MeterReading::query()->where('session_id', $locked->getKey())->max('sampled_at');
+            $latestAt = MeterReading::query()
+                ->where('session_id', $locked->getKey())
+                ->where('measurand', '!=', 'SoC')
+                ->max('sampled_at');
             $latest = $latestAt === null ? null : CarbonImmutable::parse($latestAt)->utc();
             $anomalies = $this->anomalies($locked);
 
@@ -50,7 +53,8 @@ final readonly class MeterValueService
 
                     continue;
                 }
-                $outOfOrder = $latest !== null && $reading['sampled_at']->lt($latest);
+                $billingReading = $reading['measurand'] !== 'SoC';
+                $outOfOrder = $billingReading && $latest !== null && $reading['sampled_at']->lt($latest);
                 if ($outOfOrder) {
                     $anomalies[] = SessionAnomaly::OutOfOrderMeter->value;
                 }
@@ -68,7 +72,9 @@ final readonly class MeterValueService
                         'is_out_of_order' => $outOfOrder,
                     ],
                 );
-                $latest = $latest === null || $reading['sampled_at']->gt($latest) ? $reading['sampled_at'] : $latest;
+                if ($billingReading) {
+                    $latest = $latest === null || $reading['sampled_at']->gt($latest) ? $reading['sampled_at'] : $latest;
+                }
             }
 
             [$energyWh, $reset] = $this->recalculateEnergy($locked);
@@ -112,8 +118,23 @@ final readonly class MeterValueService
     {
         $unit = $sample['unit'] ?? null;
         $measurand = $sample['measurand'] ?? null;
-        $value = $this->integer($sample['value'] ?? null);
-        if (! is_string($unit) || ! in_array($unit, ['Wh', 'W'], true) || ! is_string($measurand) || $value === null || $value < 0) {
+        $raw = $sample['value'] ?? null;
+        if ($measurand === 'SoC' && ! in_array($unit, ['Percent', '%'], true)) {
+            return null;
+        }
+        if ($measurand === 'SoC' && ($sample['phase'] ?? null) === null) {
+            if (! is_numeric($raw) || ! is_finite((float) $raw) || (float) $raw < 0 || (float) $raw > 100) {
+                return null;
+            }
+            $value = (int) round((float) $raw);
+            $unit = 'Percent';
+        } else {
+            $value = $this->integer($raw);
+        }
+        if (! is_string($unit) || ! in_array($unit, ['Wh', 'W', 'Percent'], true) || ! is_string($measurand) || $value === null || $value < 0) {
+            return null;
+        }
+        if ($unit === 'Percent' && $measurand !== 'SoC') {
             return null;
         }
 

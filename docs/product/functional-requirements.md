@@ -39,6 +39,7 @@
 - **FR-MOB-009:** A driver MUST be able to set notification preferences subject to mandatory transactional/legal communications.
 - **FR-MOB-010:** A driver MUST be able to open a support case linked to their own location/session/payment record.
 - **FR-MOB-011:** Guest/ad-hoc charging MUST NOT be implemented until its market, identity, payment, and receipt requirements are approved.
+- **FR-MOB-013:** The app MUST distinguish requested, charger-confirmed start, and charger-confirmed stop times in the active session and history. It MAY show a vehicle battery percentage only from a valid charger-reported SoC sample, with its report time and an explicit unavailable state when no sample exists; delivered energy MUST NOT be converted to an inferred battery percentage.
 
 ## 4. Identity
 

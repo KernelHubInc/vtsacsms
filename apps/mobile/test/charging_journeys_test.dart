@@ -195,6 +195,12 @@ void main() {
 
     expect(find.text('Waiting for physical start'), findsOneWidget);
     expect(find.textContaining('charging is not active until'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Vehicle battery'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Not reported by charger'), findsOneWidget);
     expect(fixture.charging.startCalls, 1);
   });
 
@@ -207,6 +213,8 @@ void main() {
         energyWh: 6420,
         durationSeconds: 754,
         currentPowerW: 48750,
+        batteryPercentage: 64,
+        batteryReportedAt: DateTime.now(),
         aggregateVersion: 4,
       );
     repository.sessions[repository.active!.id] = repository.active!;
@@ -224,12 +232,14 @@ void main() {
     expect(find.text('6.42 kWh'), findsOneWidget);
     expect(find.text('00:12:34'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Power & session details'),
+      find.text('Charging timeline & vehicle'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Power & session details'));
-    await tester.pumpAndSettle();
+    expect(find.text('Started'), findsOneWidget);
+    expect(find.text('Not ended'), findsOneWidget);
+    expect(find.text('Vehicle battery'), findsOneWidget);
+    expect(find.text('64%'), findsOneWidget);
     expect(find.text('48.8 kW'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('End charging'),
@@ -278,6 +288,8 @@ void main() {
       durationSeconds: 1500,
       aggregateVersion: 8,
       finalCost: const Money(minorUnits: 36000, currency: 'PHP'),
+      batteryPercentage: 80,
+      batteryReportedAt: DateTime.utc(2026, 7, 26, 3, 30),
       receipt: ChargingDocument(
         id: 'receipt-1',
         reference: 'OR-2026-0001',
@@ -309,6 +321,15 @@ void main() {
 
     await tester.tap(find.text('Station A'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Charging timeline'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Start confirmed'), findsOneWidget);
+    expect(find.text('End confirmed'), findsOneWidget);
+    expect(find.text('Last charger-reported battery'), findsOneWidget);
+    expect(find.text('80%'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('OR-2026-0001'),
       300,

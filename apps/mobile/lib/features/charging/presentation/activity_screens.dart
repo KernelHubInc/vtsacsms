@@ -263,7 +263,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             ],
             const SizedBox(height: VtsaSpacing.md),
             VtsaCard(
-              title: 'Evidence',
+              title: 'Charging timeline',
               child: Column(
                 children: [
                   _Fact(
@@ -273,21 +273,26 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     ),
                   ),
                   _Fact(
-                    label: 'Started',
+                    label: 'Start confirmed',
                     value: session.startedAt == null
                         ? 'Not established'
-                        : DateFormat.yMMMd().add_Hm().format(
+                        : DateFormat.yMMMd().add_jms().format(
                             session.startedAt!.toLocal(),
                           ),
                   ),
                   _Fact(
-                    label: 'Stopped',
+                    label: 'End confirmed',
                     value: session.stoppedAt == null
                         ? 'Not finalized'
-                        : DateFormat.yMMMd().add_Hm().format(
+                        : DateFormat.yMMMd().add_jms().format(
                             session.stoppedAt!.toLocal(),
                           ),
                   ),
+                  if (session.batteryPercentage != null)
+                    _Fact(
+                      label: 'Last charger-reported battery',
+                      value: '${session.batteryPercentage}%',
+                    ),
                   _Fact(
                     label: 'Session ID',
                     value: session.id,

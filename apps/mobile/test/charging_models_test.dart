@@ -31,6 +31,8 @@ void main() {
       'energy_wh': 12345,
       'duration_seconds': 901,
       'current_power_w': 48750,
+      'battery_percentage': 64,
+      'battery_reported_at': '2026-07-26T03:15:00Z',
       'estimated_cost_minor': 12345,
       'currency': 'php',
       'requested_at': '2026-07-26T11:00:00+08:00',
@@ -44,6 +46,8 @@ void main() {
     expect(session.energyWh, 12345);
     expect(session.durationSeconds, 901);
     expect(session.currentPowerW, 48750);
+    expect(session.batteryPercentage, 64);
+    expect(session.batteryReportedAt, DateTime.utc(2026, 7, 26, 3, 15));
     expect(session.estimatedCost?.minorUnits, 12345);
     expect(session.estimatedCost?.currency, 'PHP');
     expect(session.requestedAt, DateTime.utc(2026, 7, 26, 3));
