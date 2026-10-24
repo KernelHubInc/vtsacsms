@@ -46,18 +46,20 @@ OpenStreetMap is the default and fallback. The map remains usable as a station l
 
 Portal exports are durable `portal_exports` records and tenant-aware queue jobs. An export records its ULID, tenant, requester public ULID, type, filters, state, private-storage path, row count, and completion/failure state.
 
-The queue envelope propagates tenant, human actor, correlation, job, and causation ULIDs. At execution time the middleware verifies the tenant and membership again; the job then rechecks `reporting.export` and reconstructs the actor's current site scope. Generated CSV files:
+The queue envelope propagates tenant, human actor, correlation, job, and causation ULIDs. At execution time the middleware verifies the tenant and membership again. The job intersects `reporting.view`, `reporting.export`, and the report's underlying data permission at the site level. Payment reconciliation requires `payments.view`. It stores a digest of the sites included in the actor's current scope; downloads are denied if that scope changes. Both PDF and CSV exports:
 
 - contain only safe reporting fields;
 - never contain payment tokens, provider credentials, PAN, CVV, or secret configuration;
-- escape spreadsheet-formula prefixes;
+- are limited to the requesting actor's current tenant and site access;
 - are written to private local storage under a tenant-specific path;
-- are downloadable only by the requesting user from the tenant-scoped panel page.
+- are downloadable only by the requesting user from the tenant-scoped panel page for seven days.
+
+CSV contains every matching row and escapes spreadsheet-formula prefixes. PDF contains the total in-scope record count, relevant totals, and the first 200 detail rows; it explicitly directs readers to CSV for the complete detail set. The dates selected in the portal are UTC, inclusive at `from` and exclusive at `to`. Site inventory is a current snapshot and does not use the date filter. Report totals are recorded facts at generation time, not a live or final settlement guarantee. The portal exposes only report types for which the actor currently holds all required permissions.
 
 ## Open decisions
 
 - Decide whether expensive historical Maintenance metrics require a dedicated reporting projection beyond the current bounded queries.
-- Decide whether completed export files require automatic retention/deletion and an object-storage lifecycle policy.
+- Add a scheduled purge of expired export files and decide whether encrypted object storage is required beyond the private, access-controlled local disk.
 - Decide whether platform administrators may assume a tenant or require a dedicated cross-tenant support workflow. The current implementation remains single-tenant per request.
 - Define editable, non-secret tenant settings. Deployment and secret-managed configuration is intentionally read-only in the portal.
 - Select a browser automation environment if end-to-end JavaScript tests beyond HTTP and Livewire boundaries are required.

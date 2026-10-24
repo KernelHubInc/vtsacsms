@@ -8,8 +8,6 @@ use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
 use App\Models\User;
-use App\Modules\Organizations\Application\AuthorizationService;
-use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Reporting\Domain\Models\PortalExport;
 use App\Modules\Reporting\Jobs\GeneratePortalExport;
 use App\Modules\Tenancy\Application\CurrentTenant;
@@ -21,19 +19,29 @@ final readonly class PortalExportService
 {
     public function __construct(
         private CurrentTenant $tenant,
-        private AuthorizationService $authorization,
+        private PortalReportAccess $access,
         private AuditRecorder $audit,
     ) {}
 
     /** @param array<string, scalar|null> $filters */
-    public function queue(User $user, string $type, array $filters = []): PortalExport
+    public function queue(User $user, string $type, array $filters = [], string $format = 'csv'): PortalExport
     {
-        if (! $this->authorization->holdsAnywhere($user, PermissionKey::ReportingExport)) {
-            throw new DomainException('You are not authorized to export reports.');
+        $this->access->assertCanExport($user, $type);
+        if (! in_array($format, ['csv', 'pdf'], true)) {
+            throw new DomainException('Unsupported report format.');
         }
-        if (! in_array($type, ['sessions', 'assets', 'finance'], true)) {
-            throw new DomainException('Unsupported report export type.');
+
+        $filters = array_intersect_key($filters, array_flip(['from', 'to']));
+        foreach ($filters as $value) {
+            if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1
+                || ! checkdate((int) substr($value, 5, 2), (int) substr($value, 8, 2), (int) substr($value, 0, 4))) {
+                throw new DomainException('Report dates must use YYYY-MM-DD.');
+            }
         }
+        if (isset($filters['from'], $filters['to']) && $filters['from'] >= $filters['to']) {
+            throw new DomainException('The end date must be after the start date.');
+        }
+        $filters['_format'] = $format;
 
         $context = $this->tenant->get();
         $export = PortalExport::query()->create([
@@ -59,7 +67,7 @@ final readonly class PortalExportService
             targetType: 'portal_export',
             targetId: (string) $export->getKey(),
             result: AuditResult::Succeeded,
-            metadata: ['type' => $type],
+            metadata: ['type' => $type, 'format' => $format],
         ));
 
         return $export;
