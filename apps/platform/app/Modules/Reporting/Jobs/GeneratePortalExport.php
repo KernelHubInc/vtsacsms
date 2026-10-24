@@ -60,7 +60,7 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
         $filters['_scope_hash'] = $access->scopeFingerprint($user, $export->type);
         $export->update(['status' => 'processing', 'failure_code' => null, 'filters' => $filters]);
         $report = $rows->for($export->type, $user, $export->filters);
-        $disk = (string) config('filesystems.default', 'local');
+        $disk = (string) config('filesystems.report_disk', 'local');
         if ($format === 'pdf') {
             $result = app(PortalPdfReport::class)->render($export->type, $report, $filters);
             $path = sprintf('portal-exports/%s/%s.pdf', $this->envelope->tenantId, $export->getKey());

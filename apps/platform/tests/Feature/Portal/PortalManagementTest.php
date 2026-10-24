@@ -104,7 +104,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
     public function test_export_is_queued_with_tenant_context_and_rechecks_site_scope_when_generated(): void
     {
         Queue::fake();
-        config()->set('filesystems.default', 'local');
+        config()->set('filesystems.report_disk', 'local');
         Storage::fake('local');
         $user = $this->createUser();
         $tenant = $this->createTenant('portal-export');
@@ -163,7 +163,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
     public function test_pdf_export_is_private_and_contains_only_the_requesters_current_sites(): void
     {
         Queue::fake();
-        config()->set('filesystems.default', 's3');
+        config()->set('filesystems.report_disk', 's3');
         Storage::fake('s3');
         $user = $this->createUser();
         $tenant = $this->createTenant('portal-pdf-export');

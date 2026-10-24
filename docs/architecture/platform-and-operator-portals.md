@@ -44,7 +44,7 @@ OpenStreetMap is the default and fallback. The map remains usable as a station l
 
 ## Queued exports
 
-Portal exports are durable `portal_exports` records and tenant-aware jobs on the `reports` queue. A deployment must run a worker for that queue and configure the same private `FILESYSTEM_DISK` for the web and worker containers. An export records its ULID, tenant, requester public ULID, type, filters, state, storage disk and path, row count, and completion/failure state.
+Portal exports are durable `portal_exports` records and tenant-aware jobs on the `reports` queue. A deployment must run a worker for that queue and configure the same private `REPORTING_EXPORT_DISK` for the web and worker containers; it defaults to `FILESYSTEM_DISK`. If the export disk is local, both containers must mount the same private, backed-up directory at `storage/app/private`. An export records its ULID, tenant, requester public ULID, type, filters, state, storage disk and path, row count, and completion/failure state.
 
 The queue envelope propagates tenant, human actor, correlation, job, and causation ULIDs. At execution time the middleware verifies the tenant and membership again. The job intersects `reporting.view`, `reporting.export`, and the report's underlying data permission at the site level. Payment reconciliation requires `payments.view`. It stores a digest of the sites included in the actor's current scope; downloads are denied if that scope changes. Both PDF and CSV exports:
 
