@@ -35,6 +35,7 @@ final class StationMapMarker {
     required this.title,
     required this.status,
     required this.selected,
+    this.branded = false,
   });
 
   final String id;
@@ -42,6 +43,7 @@ final class StationMapMarker {
   final String title;
   final StationMarkerStatus status;
   final bool selected;
+  final bool branded;
 }
 
 abstract interface class MapViewportPort {

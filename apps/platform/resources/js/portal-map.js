@@ -1,4 +1,5 @@
 import { MapProviderFactory, parseMapConfiguration } from './maps/map-provider-factory';
+import { statusBadge } from './maps/interface-assets';
 
 const escapeHtml = (value) => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -53,14 +54,15 @@ const initializePortalMap = async (root) => {
         empty.hidden = filtered.length !== 0;
         list.innerHTML = filtered.map((station) => `
             <button type="button" data-station-id="${escapeHtml(station.id)}" class="block w-full px-4 py-4 text-left transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 dark:hover:bg-white/5">
-                <span class="flex items-center justify-between gap-3">
-                    <strong class="truncate">${escapeHtml(station.site_name)}</strong>
-                    <span class="rounded-full px-2 py-1 text-xs font-semibold ${station.status === 'faulted' ? 'bg-danger-50 text-danger-700' : station.status === 'available' ? 'bg-success-50 text-success-700' : 'bg-gray-100 text-gray-700'}">${escapeHtml(station.status)}</span>
+                <span class="flex flex-wrap items-start justify-between gap-3">
+                    <strong class="flex min-w-0 items-center gap-2 truncate"><img src="/branding/interface/icon-site.svg" alt="" width="24" height="24">${escapeHtml(station.site_name)}</strong>
+                    <span data-station-status="${escapeHtml(station.status)}"></span>
                 </span>
                 <span class="mt-1 block truncate text-xs text-gray-500">${escapeHtml(station.address || 'Address not published')}</span>
-                <span class="mt-2 block text-xs text-gray-500">${station.connectors} connectors · ${station.active_sessions} active · ${station.stale} stale</span>
+                <span class="mt-2 flex items-center gap-1 text-xs text-gray-500"><img src="/branding/interface/icon-connector.svg" alt="" width="24" height="24">${station.connectors} connectors · ${station.active_sessions} active · ${station.stale} stale</span>
             </button>
         `).join('');
+        list.querySelectorAll('[data-station-status]').forEach((slot) => slot.append(statusBadge(slot.dataset.stationStatus)));
         list.querySelectorAll('[data-station-id]').forEach((button) => {
             button.addEventListener('click', () => showDetails(button.dataset.stationId));
         });

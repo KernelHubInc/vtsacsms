@@ -128,7 +128,7 @@ final class PublicWebsiteTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('<h2>Availability</h2>', $html);
-        $this->assertStringContainsString('station-detail__availability--unknown', $html);
+        $this->assertStringContainsString('branding/interface/status-unknown.svg', $html);
         $this->assertStringNotContainsString('Demo · Test data', $html);
         $this->assertStringNotContainsString('fictional location', $html);
         $this->assertStringNotContainsString('Milestone 1 page', $html);

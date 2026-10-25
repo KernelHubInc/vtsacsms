@@ -105,6 +105,14 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
                               runSpacing: 8,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
+                                if (connectorAsset(connector.standard)
+                                    case final asset?)
+                                  Image.asset(
+                                    'assets/interface/$asset.png',
+                                    width: 24,
+                                    height: 24,
+                                    excludeFromSemantics: true,
+                                  ),
                                 Text(
                                   '${connector.standard} · ${connector.name}',
                                   style: Theme.of(
@@ -432,7 +440,21 @@ class _DetailSection extends StatelessWidget {
                     color: context.vtsaColors.surfaceSubtle,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(value),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (amenityAsset(value) case final asset?) ...[
+                        Image.asset(
+                          'assets/interface/$asset.png',
+                          width: 24,
+                          height: 24,
+                          excludeFromSemantics: true,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(value),
+                    ],
+                  ),
                 ),
             ],
           )

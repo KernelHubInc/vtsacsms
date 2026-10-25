@@ -1,5 +1,6 @@
 @import '../../../../vendor/filament/filament/resources/css/theme.css';
 @import '../../tokens.css';
+@import '../../interface-assets.css';
 @import './login.css';
 @import './operations-dashboard.css';
 

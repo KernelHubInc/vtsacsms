@@ -93,6 +93,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
         $this->withinTenant($tenant, $user, function () use ($user, $siteA, $siteB, $assignment): void {
             $first = app(PortalDashboardQuery::class)->map($user);
             $this->assertSame([(string) $siteA->getKey()], array_column($first, 'id'));
+            $this->assertNotEmpty($first[0]['operator_name']);
 
             $assignment->update(['scope_id' => $siteB->getKey()]);
             $second = app(PortalDashboardQuery::class)->map($user);

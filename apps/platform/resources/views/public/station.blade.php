@@ -19,7 +19,14 @@
         <div>
             <div class="station-detail__status">
                 <h2>Availability</h2>
-                <span class="station-detail__availability station-detail__availability--{{ $station['availability'] }}">{{ ucfirst($station['availability']) }}</span>
+                @php
+                    $availability = $station['is_stale'] ? 'stale' : $station['availability'];
+                @endphp
+                @if (in_array($availability, ['available', 'busy', 'faulted', 'offline', 'unknown', 'stale'], true))
+                    <img class="status-asset" src="{{ asset('branding/interface/status-'.$availability.'.svg') }}" alt="{{ ['busy' => 'In use', 'faulted' => 'Needs attention', 'stale' => 'Stale data'][$availability] ?? ucfirst($availability) }}" width="{{ $availability === 'faulted' ? 178 : 164 }}" height="40">
+                @else
+                    <span class="station-detail__availability station-detail__availability--{{ $availability }}">{{ ucfirst($availability) }}</span>
+                @endif
             </div>
             <p class="section-copy">
                 @if ($station['is_stale'])
@@ -32,7 +39,21 @@
             </p>
             <div class="connector-tags">
                 @foreach ($siteStations->flatMap(fn ($item) => $item['connectors'])->unique(fn ($connector) => $connector['standard'].'-'.$connector['maximum_power_w']) as $connector)
-                    <span>{{ $connector['name'] }} · {{ $connector['current_type'] }} · {{ round($connector['maximum_power_w'] / 1000) }} kW</span>
+                    @php
+                        $standard = strtolower($connector['standard']);
+                        $connectorIcon = match (true) {
+                            str_contains($standard, 'ccs') => 'ccs2',
+                            str_contains($standard, 'chademo') => 'chademo',
+                            str_contains($standard, 'type2'), str_contains($standard, 'type 2') => 'type2',
+                            default => null,
+                        };
+                    @endphp
+                    <span>
+                        @if ($connectorIcon)
+                            <img src="{{ asset('branding/interface/icon-'.$connectorIcon.'.svg') }}" alt="" width="24" height="24">
+                        @endif
+                        {{ $connector['name'] }} · {{ $connector['current_type'] }} · {{ round($connector['maximum_power_w'] / 1000) }} kW
+                    </span>
                 @endforeach
             </div>
         </div>
@@ -41,7 +62,31 @@
                 <div><dt>Operator</dt><dd>{{ $station['operator_name'] }}</dd></div>
                 <div><dt>Site category</dt><dd>{{ str($station['site_type'])->replace('_', ' ')->title() }}</dd></div>
                 <div><dt>Operating state</dt><dd>{{ $station['open_now'] ? 'Open now' : 'Closed or hours unavailable' }}</dd></div>
-                <div><dt>Amenities</dt><dd>{{ collect($station['amenities'])->pluck('name')->join(', ') ?: 'No amenities published' }}</dd></div>
+                <div><dt>Amenities</dt><dd class="station-detail__amenities">
+                    @forelse ($station['amenities'] as $amenity)
+                        @php
+                            $name = $amenity['name'];
+                            $amenityKey = strtolower($amenity['code'] ?? $name);
+                            $amenityIcon = match (true) {
+                                str_contains($amenityKey, 'wifi'), str_contains($amenityKey, 'wi-fi') => 'wifi',
+                                str_contains($amenityKey, 'food'), str_contains($amenityKey, 'drink') => 'food',
+                                str_contains($amenityKey, 'shop') => 'shopping',
+                                str_contains($amenityKey, 'restroom'), str_contains($amenityKey, 'toilet') => 'restroom',
+                                str_contains($amenityKey, 'accessible') => 'accessible',
+                                str_contains($amenityKey, 'parking') => 'parking',
+                                default => null,
+                            };
+                        @endphp
+                        <span class="amenity-tag">
+                            @if ($amenityIcon)
+                                <img src="{{ asset('branding/interface/icon-'.$amenityIcon.'.svg') }}" alt="" width="24" height="24">
+                            @endif
+                            {{ $name }}
+                        </span>
+                    @empty
+                        No amenities published
+                    @endforelse
+                </dd></div>
             </dl>
             <div class="public-actions">
                 <a class="button" target="_blank" rel="noopener" href="{{ $directionsUrl }}">Directions</a>

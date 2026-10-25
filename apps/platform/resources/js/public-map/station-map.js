@@ -1,8 +1,9 @@
 import { MapProviderFactory, parseMapConfiguration } from '../maps/map-provider-factory';
 import { directionsUrl } from '../maps/directions-launcher';
+import { connectorIcon, statusBadge } from '../maps/interface-assets';
 import { shouldFetchStations, stationSearchParameters } from './search-parameters';
 
-const statusLabel = (status) => ({ available: 'Available', busy: 'In use', faulted: 'Needs attention', offline: 'Offline', stale: 'Stale data', unknown: 'Unknown' }[status] || 'Unknown');
+const statusLabel = (status) => ({ available: 'available', busy: 'in use', faulted: 'needs attention', offline: 'offline', unavailable: 'unavailable', unknown: 'unknown' }[status] || 'unknown');
 const powerLabel = (watts) => watts ? `${Math.round(Number(watts) / 1000)} kW max` : 'Power not published';
 
 class StationFinder {
@@ -138,12 +139,17 @@ class StationFinder {
             button.addEventListener('click', () => this.select(station.id, true));
             const top = document.createElement('div'); top.className = 'station-card__top';
             const heading = document.createElement('h3'); heading.textContent = station.site_name;
-            const chip = document.createElement('span'); chip.className = `status-chip status-chip--${station.availability}`; chip.textContent = statusLabel(station.availability);
-            top.append(heading, chip);
+            top.append(heading, statusBadge(station.is_stale ? 'stale' : station.availability));
+            if (station.is_stale && station.availability !== 'stale') {
+                const lastStatus = document.createElement('small');
+                lastStatus.className = 'status-last-reported';
+                lastStatus.textContent = `Last reported ${statusLabel(station.availability)}`;
+                top.append(lastStatus);
+            }
             const address = document.createElement('p'); address.textContent = station.address_line_1 || 'Address details pending';
             const details = document.createElement('p'); details.textContent = `${station.operator_name} · ${powerLabel(station.maximum_power_w)} · ${station.open_now ? 'Open now' : 'Hours unavailable or closed'}`;
             const tags = document.createElement('div'); tags.className = 'connector-tags';
-            station.connectors.forEach((connector) => { const tag = document.createElement('span'); tag.textContent = `${connector.name} · ${connector.current_type} · ${powerLabel(connector.maximum_power_w)}`; tags.append(tag); });
+            station.connectors.forEach((connector) => { const tag = document.createElement('span'); const icon = connectorIcon(connector.standard); if (icon) { const image = document.createElement('img'); image.src = icon; image.alt = ''; image.width = 24; image.height = 24; tag.append(image); } tag.append(document.createTextNode(`${connector.name} · ${connector.current_type} · ${powerLabel(connector.maximum_power_w)}`)); tags.append(tag); });
             button.append(top, address, details, tags); item.append(button); this.list.append(item);
         });
     }
@@ -172,7 +178,7 @@ class StationFinder {
         this.list.querySelectorAll('[data-station-id]').forEach((button) => button.setAttribute('aria-current', String(button.dataset.stationId === id)));
         this.drawerContent.replaceChildren();
         const title = document.createElement('h2'); title.id = 'station-drawer-title'; title.textContent = station.site_name;
-        const status = document.createElement('span'); status.className = `status-chip status-chip--${station.availability}`; status.textContent = statusLabel(station.availability);
+        const status = statusBadge(station.is_stale ? 'stale' : station.availability);
         const address = document.createElement('p'); address.textContent = station.address_line_1 || 'Address details pending';
         const meta = document.createElement('div'); meta.className = 'drawer-meta';
         [station.operator_name, powerLabel(station.maximum_power_w), station.open_now ? 'Reported open now' : 'Hours unavailable or currently closed', station.is_stale ? 'Status data is stale' : 'Status freshness checked'].forEach((value) => { const row = document.createElement('span'); row.textContent = value; meta.append(row); });

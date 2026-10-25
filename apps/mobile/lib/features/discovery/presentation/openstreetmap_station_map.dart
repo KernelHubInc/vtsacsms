@@ -84,6 +84,9 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
           selected: widget.discovery.selectedStationId == station.id,
         ),
     ];
+    final brandsById = {
+      for (final marker in markers) marker.id: marker.branded,
+    };
     final mapMarkers = markers.map(_marker).toList(growable: false);
 
     return Semantics(
@@ -132,28 +135,39 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
                 MarkerClusterLayerWidget(
                   options: MarkerClusterLayerOptions(
                     markers: mapMarkers,
+                    size: const Size(56, 56),
                     maxClusterRadius: 52,
                     maxZoom: configuration.maximumZoom,
                     disableClusteringAtZoom: configuration.maximumZoom.floor(),
                     markerChildBehavior: true,
-                    builder: (context, clusteredMarkers) => DecoratedBox(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF071B2D),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black26, blurRadius: 8),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${clusteredMarkers.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
+                    builder: (context, clusteredMarkers) {
+                      final branded = clusteredMarkers.every((marker) {
+                        final key = marker.key;
+                        return key is ValueKey<String> &&
+                            (brandsById[key.value] ?? false);
+                      });
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: branded
+                              ? const Color(0xFF12366B)
+                              : const Color(0xFF667891),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 8),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${clusteredMarkers.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 )
               else
@@ -235,19 +249,23 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
   Marker _marker(StationMapMarker marker) => Marker(
     key: ValueKey(marker.id),
     point: LatLng(marker.position.latitude, marker.position.longitude),
-    width: marker.selected ? 50 : 44,
-    height: marker.selected ? 50 : 44,
+    width: 56,
+    height: 64,
+    alignment: const Alignment(
+      0,
+      0.84375,
+    ), // The SVG pin tip is 59px from the top.
     child: Semantics(
       button: true,
       label: '${marker.title}, ${marker.status.name}',
       child: GestureDetector(
         key: ValueKey('openstreetmap-marker-${marker.id}'),
         onTap: () => widget.discovery.select(marker.id),
-        child: Icon(
-          Icons.location_pin,
-          size: marker.selected ? 48 : 42,
-          color: _markerColor(marker.status),
-          shadows: const [Shadow(color: Colors.black38, blurRadius: 5)],
+        child: Image.asset(
+          'assets/interface/${stationMarkerAsset(marker)}.png',
+          width: 56,
+          height: 64,
+          alignment: Alignment.bottomCenter,
         ),
       ),
     ),
@@ -290,13 +308,4 @@ class _OpenStreetMapStationMapState extends State<OpenStreetMapStationMap>
     if (_disposed) return;
     _map.move(LatLng(latitude, longitude), _map.camera.zoom);
   }
-
-  Color _markerColor(StationMarkerStatus status) => switch (status) {
-    StationMarkerStatus.available => const Color(0xFF08785A),
-    StationMarkerStatus.busy => const Color(0xFF8A5200),
-    StationMarkerStatus.faulted => const Color(0xFFB4233F),
-    StationMarkerStatus.offline => const Color(0xFF697187),
-    StationMarkerStatus.stale => const Color(0xFFE39121),
-    StationMarkerStatus.unknown => const Color(0xFF1459A6),
-  };
 }

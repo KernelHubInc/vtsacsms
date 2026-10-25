@@ -1,6 +1,49 @@
 @import 'tailwindcss';
 @import './tokens.css';
 @import './public-redesign.css';
+@import './interface-assets.css';
+
+.station-card__top {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.status-last-reported {
+    flex-basis: 100%;
+    color: #61748a;
+    font-size: .72rem;
+}
+
+.connector-tags span {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+.connector-tags img,
+.amenity-tag img {
+    display: block;
+    width: 24px;
+    height: 24px;
+    flex: none;
+}
+
+.station-detail__amenities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+
+.amenity-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .25rem .5rem;
+    border-radius: .5rem;
+    background: #edf2f6;
+    color: #102b49;
+    font-size: .78rem;
+}
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
