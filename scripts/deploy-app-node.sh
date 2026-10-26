@@ -52,6 +52,7 @@ require_setting() {
 
 if [[ "$environment" == "staging" ]]; then
     require_setting COMPOSE_PROJECT_NAME vtsa-csms-staging
+    require_setting COMPOSE_PROFILES ''
     require_setting APP_HTTP_PORT 8081
     require_setting OCPP_PUBLIC_PORT 9001
     require_setting DB_DATABASE vtsa_staging
@@ -185,7 +186,7 @@ if ! "${compose[@]}" exec -T platform php artisan optimize; then
     rollback
     fail "Laravel optimization failed."
 fi
-if [[ "$environment" == staging ]] || grep -Fqx 'APP_NODE_ROLE=primary' "$env_file"; then
+if grep -Fqx 'APP_NODE_ROLE=primary' "$env_file"; then
     "${compose[@]}" exec -T platform php artisan queue:restart
 fi
 

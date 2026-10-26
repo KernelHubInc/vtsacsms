@@ -167,8 +167,10 @@ COMPOSE_PROFILES=worker,scheduler
 APP_NODE_ROLE=primary
 ```
 
-On App Server 2, use this in its production file. The separate staging stack
-retains its own worker until staging jobs have been moved to another node:
+On App Server 2, use this in its production file. Its separate staging stack
+also has `COMPOSE_PROFILES=`: App Server 2 runs no queue worker or scheduler.
+Staging jobs remain unprocessed until a separate staging worker is provisioned
+on App Server 1 or another authorized host.
 
 ```dotenv
 COMPOSE_PROFILES=

@@ -2,7 +2,9 @@
 
 The production load balancer serves App01 and App02. Staging runs on App02.
 Only App01 runs production queue workers and the scheduler. The release command
-preserves that division; it does not start jobs on App02.
+preserves that division; it does not start jobs on App02. App02's staging
+profile is web-only too; staging queue work needs a separate worker on App01
+or another authorized host.
 
 ## One-time access setup
 
