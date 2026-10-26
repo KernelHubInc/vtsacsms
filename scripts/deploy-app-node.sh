@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 repo_dir="${VTSA_REPO_DIR:-/opt/vtsa-csms}"
 repository_read_key="${VTSA_REPOSITORY_READ_KEY:-/root/.ssh/vtsa_repository_read}"
-compose_file="$repo_dir/infra/cluster/compose.app.yaml"
 environment="${1:-}"
 release_tag="${2:-}"
 migrate="${3:-}"
@@ -16,6 +15,11 @@ fail() {
 [[ "$environment" == "staging" || "$environment" == "production" ]] || \
     fail "Usage: vtsa-deploy-app staging|production sha-<40-character-commit> [--migrate]"
 env_file="${VTSA_APP_ENV_FILE:-/etc/vtsa-csms/$environment.env}"
+if [[ "$environment" == "production" && -z "${VTSA_REPO_DIR:-}" && -f "$env_file" ]] && \
+    grep -Fqx 'APP_NODE_ROLE=web' "$env_file"; then
+    repo_dir=/opt/vtsa-csms-production
+fi
+compose_file="$repo_dir/infra/cluster/compose.app.yaml"
 state_dir="/var/lib/vtsa-csms/$environment"
 backup_dir="/var/backups/vtsa-csms/$environment"
 state_file="$state_dir/current-app-image-tag"
@@ -58,7 +62,15 @@ if [[ "$environment" == "staging" ]]; then
     other_env_file="/etc/vtsa-csms/production.env"
 else
     require_setting COMPOSE_PROJECT_NAME vtsa-csms-production
-    require_setting APP_HTTP_PORT 80
+    if grep -Fqx 'APP_NODE_ROLE=web' "$env_file"; then
+        require_setting APP_HTTP_BIND_ADDRESS 127.0.0.1
+        require_setting APP_HTTP_PORT 8083
+        require_setting COMPOSE_PROFILES ''
+    else
+        require_setting APP_NODE_ROLE primary
+        require_setting APP_HTTP_PORT 80
+        require_setting COMPOSE_PROFILES worker,scheduler
+    fi
     require_setting OCPP_PUBLIC_PORT 9000
     require_setting DB_DATABASE vtsa_production
     require_setting DB_USERNAME vtsa_production
@@ -110,19 +122,30 @@ if [[ -f "$other_env_file" ]]; then
 fi
 
 commit="${release_tag#sha-}"
+release_branch=main
+[[ "$environment" == "staging" ]] && release_branch=test_env
 previous_tag="$(cat "$state_file" 2>/dev/null || true)"
 export IMAGE_TAG="$release_tag"
 compose=(docker compose --env-file "$env_file" -f "$compose_file")
+services=()
+if [[ "$environment" == "production" ]]; then
+    services=(platform web)
+    if grep -Fqx 'APP_NODE_ROLE=primary' "$env_file"; then
+        services+=(worker scheduler)
+    fi
+fi
 
 cd "$repo_dir"
 git -c core.sshCommand="ssh -i $repository_read_key -o IdentitiesOnly=yes -o BatchMode=yes" \
-    fetch --quiet --prune origin main
+    fetch --quiet --prune origin "$release_branch"
 git cat-file -e "$commit^{commit}" 2>/dev/null || fail "Commit $commit was not fetched from origin."
+git merge-base --is-ancestor "$commit" FETCH_HEAD || \
+    fail "Commit $commit is not on origin/$release_branch."
 git checkout --quiet --detach "$commit"
 "${compose[@]}" config --quiet
 
 printf 'Pulling %s release %s...\n' "$environment" "$release_tag"
-"${compose[@]}" pull
+"${compose[@]}" pull "${services[@]}"
 
 if [[ "$migrate" == "--migrate" ]]; then
     mkdir -p "$backup_dir"
@@ -148,12 +171,12 @@ rollback() {
         export IMAGE_TAG="$previous_tag"
         git checkout --quiet --detach "${previous_tag#sha-}"
         docker compose --env-file "$env_file" -f "$repo_dir/infra/cluster/compose.app.yaml" \
-            up --detach --remove-orphans --wait --wait-timeout 180 || true
+            up --detach --remove-orphans --wait --wait-timeout 180 "${services[@]}" || true
     fi
 }
 
 printf 'Replacing this %s node while its peer remains online...\n' "$environment"
-if ! "${compose[@]}" up --detach --remove-orphans --wait --wait-timeout 180; then
+if ! "${compose[@]}" up --detach --remove-orphans --wait --wait-timeout 180 "${services[@]}"; then
     rollback
     fail "Containers did not become healthy."
 fi
@@ -162,7 +185,9 @@ if ! "${compose[@]}" exec -T platform php artisan optimize; then
     rollback
     fail "Laravel optimization failed."
 fi
-"${compose[@]}" exec -T platform php artisan queue:restart
+if [[ "$environment" == staging ]] || grep -Fqx 'APP_NODE_ROLE=primary' "$env_file"; then
+    "${compose[@]}" exec -T platform php artisan queue:restart
+fi
 
 ready=false
 for ((attempt = 1; attempt <= 30; attempt++)); do

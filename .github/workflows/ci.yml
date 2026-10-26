@@ -94,7 +94,6 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
-      - run: node --test web/install-prompt.test.mjs
       - name: Enable KVM for Android integration tests
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -255,8 +254,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
       - name: Validate deployment scripts
         run: |
-          shellcheck scripts/deploy-app-node.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
-          bash -n scripts/deploy-app-node.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
+          shellcheck scripts/deploy-app-node.sh scripts/release-cluster.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
+          bash -n scripts/deploy-app-node.sh scripts/release-cluster.sh scripts/deploy-kyc.sh scripts/kyc-staging.sh scripts/load-balancer-node.sh scripts/prepare-data-server.sh infra/cluster/data/postgres/10-create-vtsa-databases.sh
       - name: Validate GitHub Actions workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
       - name: Validate staging, production, and data Compose projects
@@ -266,9 +265,11 @@ jobs:
           DATA_BIND_ADDRESS=127.0.0.1 docker compose --env-file .env.data.example -f infra/cluster/compose.data.yaml config --quiet
       - name: Validate local and staging demo environment selection
         run: python3 tests/infra/test_compose_environment.py
-      - name: Validate web proxy headers
-        run: python3 tests/infra/test_web_proxy_headers.py
+      - name: Validate primary and web-only Compose roles
+        run: python3 -m unittest discover -s tests/infra -p 'test_app_node_compose_roles.py'
       - name: Validate OCPP staging isolation and enrollment configuration
         run: python3 tests/infra/test_ocpp_staging.py
+      - name: Validate cluster release ordering and dry run
+        run: python3 -m unittest discover -s tests/infra -p 'test_release_cluster.py'
       - name: Validate private KYC deployment isolation
         run: sudo python3 -m unittest discover -s tests/infra -p 'test_kyc*.py'

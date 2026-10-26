@@ -1,0 +1,8 @@
+[Unit]
+Description=Check both Power Solutions production application nodes
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vtsa-check-production-upstreams

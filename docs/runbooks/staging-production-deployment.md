@@ -1,5 +1,12 @@
 # Staging and production deployment on two application servers
 
+> The GitHub Actions rolling-deploy section below describes the earlier
+> two-staging-node topology. For the current App02-only staging environment,
+> App01/App02 production pair, and manual promotion command, use
+> [Release promotion from `test_env` to production](release-promotion.md).
+> Do not enable the older `STAGING_DEPLOY_ENABLED` or
+> `PRODUCTION_DEPLOY_ENABLED` variables against the current topology.
+
 This runbook installs independent staging and production stacks on both application servers. A successful `main` CI run builds one immutable image set, deploys it to staging first, then offers the identical commit to the approval-gated production environment. Each environment is deployed one node at a time while Nginx removes that node from its environment-specific pool.
 
 ## Deployment topology
@@ -156,14 +163,47 @@ Set `APP_KEY=base64:GENERATED_VALUE`. Do not generate a different key on the sec
 On App Server 1, keep this in both files:
 
 ```dotenv
-COMPOSE_PROFILES=scheduler
+COMPOSE_PROFILES=worker,scheduler
+APP_NODE_ROLE=primary
 ```
 
-On App Server 2, use this in both files:
+On App Server 2, use this in its production file. The separate staging stack
+retains its own worker until staging jobs have been moved to another node:
 
 ```dotenv
 COMPOSE_PROFILES=
+APP_NODE_ROLE=web
+APP_HTTP_BIND_ADDRESS=127.0.0.1
+APP_HTTP_PORT=8083
 ```
+
+The production worker and scheduler run on App Server 1 only. The App Server 2
+production stack runs `platform` and `web` with the same production `APP_KEY`,
+PostgreSQL database, Redis server/password/DBs/prefix, and session cookie as
+App Server 1. Keep staging's database, Redis port/prefix, and Compose project
+separate. On App Server 2, install `infra/cluster/nginx/app02-production-upstream.conf`
+so only the load balancer can reach the production virtual host on port `80`;
+its upstream is the localhost-bound production container on port `8083`.
+Do not add App Server 2 to the production load-balancer upstream until its
+`/health/ready` check succeeds from the load balancer. Never route production
+requests to App Server 2's staging listener.
+
+For this HTTP-only launch, configure the production Nginx upstream with
+`APP1_IP:80` and `APP2_IP:80`, `max_fails` and `fail_timeout`, and the
+`proxy_next_upstream` settings in `infra/cluster/nginx-proxy-headers.conf`.
+Open-source Nginx marks an upstream failed after a failed proxied request; it
+does not continuously probe idle nodes. Install
+`scripts/check-production-upstreams.sh` on the load balancer with the
+`vtsa-production-upstreams-check.service` and `.timer` units in
+`infra/cluster/systemd/`. The timer probes both nodes every minute and records
+the result in `journalctl -u vtsa-production-upstreams-check.service`; connect
+failed unit alerts to your monitoring channel when one is available. The
+current `sha-0b05b06` production image checks PostgreSQL in `/health/ready`;
+verify Redis separately on both nodes until the Redis-aware readiness change
+is built and deployed. Verify each
+node separately before testing that requests through the public hostname are
+served by both, then test one-node failover and restore the full pool. Keep
+OCPP disabled until its separate gateway routing is reviewed.
 
 No `CHANGE_ME` value may remain. Permit only the root-owned deployment entry point:
 
