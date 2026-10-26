@@ -157,7 +157,7 @@ git checkout --quiet --detach "$commit"
 "${compose[@]}" config --quiet
 
 printf 'Pulling %s release %s...\n' "$environment" "$release_tag"
-"${compose[@]}" pull "${services[@]}"
+"${compose[@]}" pull --policy missing "${services[@]}"
 
 if [[ "$migrate" == "--migrate" ]]; then
     mkdir -p "$backup_dir"

@@ -48,6 +48,10 @@ the legacy checkout as part of an application release.
 1. Push to `test_env`. The CI workflow tests it and, only after every check
    passes, publishes immutable `sha-<40-character-commit>` images. Check that
    the **CI** run, including all **Publish release image** jobs, passed.
+   App servers need read access to the private container registry. An image
+   already present under the exact release tag is reused. For an offline
+   rollout, build from the reviewed commit or load its verified image archive,
+   compare image IDs on both nodes, and retain those IDs in the release record.
 2. On the load balancer console, run:
 
    ```bash
