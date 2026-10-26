@@ -49,7 +49,7 @@
     <header class="site-header">
         <div class="site-header__inner">
             <a class="brand" href="{{ route('home') }}" aria-label="Power Solutions home">
-                <x-brand.logo />
+                <x-brand.logo inverse />
             </a>
             <nav class="desktop-nav" aria-label="Primary navigation">
                 <a href="{{ route('public.ev-charging-network') }}">Network</a>
@@ -58,9 +58,9 @@
                 <a href="{{ route('public.for-operators-and-site-hosts') }}">Partners</a>
                 <a href="{{ route('public.news-and-resources') }}">Resources</a>
             </nav>
-            <a class="button button--small" href="{{ route('public.charging-map') }}">Find a charger</a>
+            <a class="button button--small" href="{{ route('public.charging-map') }}">Find a charger <span aria-hidden="true">↗</span></a>
             <details class="mobile-menu">
-                <summary aria-label="Open navigation">Menu</summary>
+                <summary aria-label="Open navigation"><span aria-hidden="true">☰</span><span class="sr-only">Menu</span></summary>
                 <nav aria-label="Mobile navigation">
                     <a href="{{ route('public.ev-charging-network') }}">Network</a><a href="{{ route('public.charging-map') }}">Charging map</a>
                     <a href="{{ route('public.for-ev-drivers') }}">For drivers</a><a href="{{ route('public.for-operators-and-site-hosts') }}">For partners</a>

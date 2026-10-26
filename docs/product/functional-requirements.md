@@ -211,6 +211,8 @@
 - **FR-RPT-003:** Authorized users MUST be able to filter, paginate, and export approved reports within row/column permissions and resource limits.
 - **FR-RPT-004:** Reports MUST disclose eventual-consistency/freshness and distinguish estimated, provisional, final, and corrected facts.
 - **FR-RPT-005:** Large exports MUST run asynchronously, expire, be encrypted/access-controlled, and be audited.
+- **FR-RPT-006:** Portal PDF and CSV exports MUST apply the intersection of reporting and underlying data permissions at the user's authorized sites. Payment reconciliation additionally requires payment access; downloads MUST be limited to the requester and invalidated when that site scope changes.
+- **FR-RPT-007:** PDF summaries MUST disclose any detail-row cap and offer the full CSV. Both formats MUST show report dates and units clearly, and an empty result MUST remain understandable.
 
 ## 20. CMS
 

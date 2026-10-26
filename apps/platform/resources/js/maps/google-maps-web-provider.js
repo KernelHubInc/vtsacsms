@@ -1,5 +1,5 @@
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { MapProviderError, stationMarker, validCoordinate } from './map-provider';
+import { MapProviderError, markerAsset, stationMarker, validCoordinate } from './map-provider';
 
 let googleLoaderPromise;
 
@@ -111,47 +111,62 @@ export class GoogleMapsWebProvider {
             const existing = this.markers.get(id);
             if (existing) {
                 existing.instance.setPosition({ lat: marker.latitude, lng: marker.longitude });
-                existing.instance.setIcon(this.icon(marker.status, id === this.selectedId));
+                existing.instance.setIcon(this.icon(marker, id === this.selectedId));
                 existing.instance.setTitle(`${marker.title}: ${marker.status}`);
+                existing.instance.powerSolutionsBranded = marker.branded;
                 existing.data = marker;
                 continue;
             }
             const instance = new this.maps.Marker({
                 position: { lat: marker.latitude, lng: marker.longitude },
                 title: `${marker.title}: ${marker.status}`,
-                icon: this.icon(marker.status, id === this.selectedId),
+                icon: this.icon(marker, id === this.selectedId),
             });
+            instance.powerSolutionsBranded = marker.branded;
             const listener = instance.addListener('click', () => this.handlers.onMarkerSelect?.(id));
             this.listeners.push(listener);
             this.markers.set(id, { instance, data: marker });
         }
         this.clusterer?.clearMarkers();
         this.clusterer = this.configuration.clusteringEnabled
-            ? new MarkerClusterer({ map: this.map, markers: [...this.markers.values()].map(({ instance }) => instance) })
+            ? new MarkerClusterer({
+                map: this.map,
+                markers: [...this.markers.values()].map(({ instance }) => instance),
+                renderer: {
+                    render: ({ count, position, markers }) => new this.maps.Marker({
+                        position,
+                        icon: {
+                            path: this.maps.SymbolPath.CIRCLE,
+                            fillColor: markers.every((marker) => marker.powerSolutionsBranded) ? '#12366b' : '#667891',
+                            fillOpacity: 1,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 3,
+                            scale: 28,
+                        },
+                        label: { text: String(count), color: '#ffffff', fontWeight: '700', fontSize: '14px' },
+                    }),
+                },
+            })
             : null;
         if (!this.clusterer) this.markers.forEach(({ instance }) => instance.setMap(this.map));
     }
 
-    icon(status, selected) {
-        const colors = { available: '#1a9b65', busy: '#e39121', faulted: '#d54654', offline: '#77838b', stale: '#77838b', unknown: '#77838b' };
+    icon(marker, selected) {
+        const size = selected && marker.status !== 'available' ? [62, 71] : [56, 64];
         return {
-            path: 'M12 2C6.5 2 2 6.5 2 12c0 8 10 18 10 18s10-10 10-18C22 6.5 17.5 2 12 2zm0 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8z',
-            fillColor: colors[status] || colors.unknown,
-            fillOpacity: 1,
-            strokeColor: selected ? '#111827' : '#ffffff',
-            strokeWeight: selected ? 4 : 2,
-            scale: selected ? 1.45 : 1.25,
-            anchor: new this.maps.Point(12, 30),
+            url: markerAsset(marker, selected),
+            scaledSize: new this.maps.Size(...size),
+            anchor: new this.maps.Point(size[0] / 2, size[1] * 59 / 64),
         };
     }
 
     selectMarker(id, { focus = false } = {}) {
         const previous = this.markers.get(this.selectedId);
-        if (previous) previous.instance.setIcon(this.icon(previous.data.status, false));
+        if (previous) previous.instance.setIcon(this.icon(previous.data, false));
         this.selectedId = id;
         const selected = this.markers.get(id);
         if (!selected) return;
-        selected.instance.setIcon(this.icon(selected.data.status, true));
+        selected.instance.setIcon(this.icon(selected.data, true));
         if (focus) this.setCenter(selected.data.latitude, selected.data.longitude, Math.max(this.map.getZoom(), 15));
     }
 

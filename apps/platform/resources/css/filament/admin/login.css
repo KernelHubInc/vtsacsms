@@ -1,0 +1,398 @@
+.fi-simple-layout:has(.ps-admin-login) {
+    background: #f4f7f8;
+}
+
+.fi-simple-layout:has(.ps-admin-login) .fi-simple-main-ctn {
+    display: block;
+}
+
+.fi-simple-layout:has(.ps-admin-login) .fi-simple-main {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    --tw-ring-shadow: none;
+}
+
+.ps-admin-login {
+    display: grid;
+    grid-template-columns: minmax(0, 47.222%) minmax(0, 1fr);
+    min-height: 100dvh;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    color: #182d49;
+    background: #f4f7f8;
+}
+
+.ps-admin-login-brand {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 32px;
+    min-height: 100dvh;
+    padding: 48px 56px 32px;
+    color: #f4f7fb;
+    background: #0b2448;
+}
+
+.ps-admin-login-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    line-height: 1.15;
+}
+
+.ps-admin-login-identity img {
+    flex: none;
+    width: 40px;
+    height: 40px;
+}
+
+.ps-admin-login-identity div {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.ps-admin-login-identity strong {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.ps-admin-login-identity span {
+    color: #c9e1ee;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.ps-admin-login-story {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    width: 100%;
+}
+
+.ps-admin-login-message {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.ps-admin-login-accent {
+    width: 32px;
+    height: 3px;
+    background: #57ddd2;
+}
+
+.ps-admin-login-message h2 {
+    margin: 0;
+    color: #f4f7fb;
+    font-size: clamp(36px, 3.75vw, 54px);
+    font-weight: 500;
+    letter-spacing: -.035em;
+    line-height: 1.08;
+}
+
+.ps-admin-login-message p {
+    margin: 0;
+    color: #c9e1ee;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.ps-admin-login-photo {
+    width: 100%;
+    height: 312px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.ps-admin-login-signature {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #c9e1ee;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+.ps-admin-login-signature::after {
+    flex: 1;
+    height: 1px;
+    background: #34617b;
+    content: '';
+}
+
+.ps-admin-login-brand-copyright,
+.ps-admin-login-panel-copyright,
+.ps-admin-login-mobile-copyright {
+    margin: 0;
+    font-size: 11px;
+}
+
+.ps-admin-login-brand-copyright {
+    color: #c9e1ee;
+}
+
+.ps-admin-login-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    min-width: 0;
+    min-height: 100dvh;
+    padding: 48px 72px 32px;
+}
+
+.ps-admin-login-website {
+    display: inline-flex;
+    align-self: flex-end;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-height: 40px;
+    color: #62788b;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.ps-admin-login-website:hover {
+    color: #182d49;
+    text-decoration: underline;
+}
+
+.ps-admin-login-website img {
+    width: 14px;
+    height: 14px;
+}
+
+.ps-admin-login-main {
+    width: min(100%, 400px);
+}
+
+.ps-admin-login-intro {
+    margin-bottom: 32px;
+}
+
+.ps-admin-login-intro h1 {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 500;
+    letter-spacing: -.035em;
+    line-height: 1.15;
+}
+
+.ps-admin-login-intro p {
+    margin: 12px 0 0;
+    color: #62788b;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.ps-admin-login-form .fi-sc-form {
+    gap: 24px;
+}
+
+.ps-admin-login-form .fi-fo-field-label {
+    color: #182d49;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ps-admin-login-form .fi-fo-field-label-content {
+    color: #182d49;
+}
+
+.ps-admin-login-form .fi-fo-field-label-required-mark {
+    color: #62788b;
+}
+
+.ps-admin-login-form .fi-fo-field:has(.fi-checkbox-input) .fi-fo-field-label {
+    font-weight: 400;
+}
+
+.ps-admin-login-form .fi-input-wrp {
+    min-height: 56px;
+    border: 1px solid #cddbe5;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: none;
+}
+
+.ps-admin-login-form .fi-input-wrp input {
+    min-height: 54px;
+    color: #182d49;
+    font-size: 15px;
+}
+
+.ps-admin-login-form .fi-input-wrp input::placeholder {
+    color: #62788b;
+    opacity: 1;
+}
+
+.ps-admin-login-form .fi-input-wrp:focus-within,
+.ps-admin-login :is(a, button, input):focus-visible {
+    outline: 2px solid #2589be;
+    outline-offset: 2px;
+}
+
+.ps-admin-login-form .fi-checkbox-input {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #cddbe5;
+    border-radius: 3px;
+    background: white;
+}
+
+.ps-admin-login-form .fi-input-wrp button[aria-label="Show password"],
+.ps-admin-login-form .fi-input-wrp button[aria-label="Hide password"] {
+    width: 44px;
+    height: 44px;
+    border-radius: 4px;
+    background: url('../../../../public/branding/admin-login/eye.svg') center / 20px 20px no-repeat;
+}
+
+.ps-admin-login-form .fi-input-wrp button[aria-label="Show password"] svg,
+.ps-admin-login-form .fi-input-wrp button[aria-label="Hide password"] svg {
+    display: none;
+}
+
+.ps-admin-login-form .fi-btn {
+    min-height: 56px;
+    border-radius: 6px;
+    background: #57ddd2;
+    color: #0b2448;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.ps-admin-login-form .fi-btn:hover {
+    background: #45cfc7;
+}
+
+.ps-admin-login-form .fi-btn::after {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-left: 12px;
+    background: url('../../../../public/branding/admin-login/arrow-right.svg') center / 18px 18px no-repeat;
+    content: '';
+}
+
+.ps-admin-login-access {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #cddbe5;
+    color: #62788b;
+    font-size: 12px;
+}
+
+.ps-admin-login-access img {
+    width: 14px;
+    height: 16px;
+}
+
+.ps-admin-login-panel-copyright {
+    color: #62788b;
+}
+
+.ps-admin-login-mobile-copyright {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .ps-admin-login {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ps-admin-login-brand {
+        flex: none;
+        gap: 32px;
+        min-height: 0;
+        padding: 32px 24px 28px;
+    }
+
+    .ps-admin-login-story {
+        gap: 0;
+    }
+
+    .ps-admin-login-message {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .ps-admin-login-accent {
+        flex: none;
+        width: 3px;
+        height: 24px;
+    }
+
+    .ps-admin-login-message h2 {
+        font-size: 18px;
+        letter-spacing: -.02em;
+        line-height: 1.25;
+    }
+
+    .ps-admin-login-message h2 br,
+    .ps-admin-login-message p,
+    .ps-admin-login-photo,
+    .ps-admin-login-signature,
+    .ps-admin-login-brand-copyright,
+    .ps-admin-login-panel-copyright {
+        display: none;
+    }
+
+    .ps-admin-login-panel {
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 0;
+        min-height: calc(100dvh - 156px);
+        padding: 36px 24px 32px;
+    }
+
+    .ps-admin-login-main {
+        width: min(100%, 400px);
+        margin-inline: auto;
+    }
+
+    .ps-admin-login-intro h1 {
+        font-size: 34px;
+    }
+
+    .ps-admin-login-website {
+        align-self: flex-start;
+        justify-content: flex-start;
+        order: 1;
+        min-height: 0;
+        margin-top: 44px;
+    }
+
+    .ps-admin-login-mobile-copyright {
+        display: block;
+        order: 2;
+        margin-top: 20px;
+        color: #62788b;
+    }
+}
+
+@media (max-width: 390px) {
+    .ps-admin-login-message h2 {
+        font-size: clamp(16px, 4.6vw, 18px);
+    }
+}

@@ -5,7 +5,6 @@
 @section('content')
 <section class="map-intro"><div class="public-shell"><h1>{{ $page->hero_heading }}</h1><p>{{ $page->hero_copy }}</p></div></section>
 <section class="station-finder" data-station-map data-endpoint="{{ route('api.v1.public.stations.index') }}" data-map-config='@json($mapConfig)'>
-    <div class="demo-data-ribbon">Demo environment · Fictional test locations · Not real chargers</div>
     <div data-provider-warning hidden class="map-provider-warning" role="status">Google Maps is not ready, so OpenStreetMap is active.</div>
     <div class="station-finder__filters">
         <details class="station-filter-panel" data-filter-panel open>

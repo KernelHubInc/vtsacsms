@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Modules\CMS\Application\PublicContentRepository;
 use App\Modules\CMS\Domain\Models\CmsRedirect;
 use Database\Seeders\PublicCmsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,7 +27,8 @@ final class PublicWebsiteTest extends TestCase
     {
         foreach (['/', '/network', '/charging-map', '/drivers', '/operators-and-site-hosts', '/installation-and-maintenance', '/mobile-app', '/news-and-resources', '/partner-program', '/frequently-asked-questions', '/contact', '/support', '/privacy-policy', '/terms-of-service', '/charging-terms', '/refund-policy'] as $path) {
             $this->get($path)->assertOk()->assertSee('<main id="main-content"', false)
-                ->assertDontSee('class="eyebrow"', false);
+                ->assertDontSee('class="eyebrow"', false)
+                ->assertDontSee('Demo');
         }
     }
 
@@ -41,7 +43,9 @@ final class PublicWebsiteTest extends TestCase
             ->assertSee('data-station-drawer hidden role="dialog"', false)
             ->assertSee('data-map-unavailable', false)
             ->assertSee('Connector')->assertSee('Minimum power')->assertSee('Availability')
-            ->assertDontSee('AIza');
+            ->assertDontSee('AIza')
+            ->assertDontSee('Demo environment')
+            ->assertDontSee('data-demo-data', false);
     }
 
     public function test_refund_placeholder_is_noindex_and_cannot_look_approved(): void
@@ -66,7 +70,67 @@ final class PublicWebsiteTest extends TestCase
         Cache::clear();
         DB::enableQueryLog();
         $response = $this->get('/')->assertOk();
-        $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
+        // The live map adds a schema check and the platform map-settings lookup.
+        $this->assertLessThanOrEqual(10, count(DB::getQueryLog()));
         $this->assertLessThan(180_000, strlen((string) $response->getContent()));
+    }
+
+    public function test_homepage_uses_responsive_design_and_searches_the_live_map(): void
+    {
+        $this->get('/')->assertOk()
+            ->assertSee('One connected network, built place by place.')
+            ->assertSee('branding/home/hero-desktop.png')
+            ->assertSee('branding/home/hero-mobile.png')
+            ->assertSee('action="'.route('public.charging-map').'"', false)
+            ->assertSee('name="query"', false)
+            ->assertSee('name="connector"', false)
+            ->assertSee('name="availability"', false)
+            ->assertSee('All statuses')
+            ->assertSee('Published stations stay on the map when offline.')
+            ->assertSee('data-home-map', false)
+            ->assertSee('data-map-canvas', false)
+            ->assertSee('data-station-list', false)
+            ->assertSee('data-station-drawer', false)
+            ->assertSee('A clearer view of charging.')
+            ->assertSee('Good questions.')
+            ->assertDontSee('site-footer__wordmark')
+            ->assertDontSee('3 example stations')
+            ->assertDontSee('Map illustration');
+
+        foreach (['hero', 'driver', 'destination-1', 'destination-2', 'destination-3'] as $scene) {
+            foreach (['desktop', 'mobile'] as $size) {
+                $this->assertGreaterThan(0, filesize(public_path("branding/home/{$scene}-{$size}.png")));
+            }
+        }
+    }
+
+    public function test_station_detail_shows_a_compact_status_without_demo_copy(): void
+    {
+        $station = [
+            'site_name' => 'Sample charging site',
+            'address_line_1' => 'Sample address',
+            'city_name' => null,
+            'availability' => 'unknown',
+            'is_stale' => false,
+            'connectors' => [],
+            'operator_name' => 'Sample operator',
+            'site_type' => 'workplace',
+            'open_now' => false,
+            'amenities' => [],
+        ];
+
+        $html = view('public.station', [
+            'page' => app(PublicContentRepository::class)->page('charging-map'),
+            'station' => $station,
+            'siteStations' => collect([$station]),
+            'mapConfig' => [],
+            'directionsUrl' => 'https://example.com/directions',
+        ])->render();
+
+        $this->assertStringContainsString('<h2>Availability</h2>', $html);
+        $this->assertStringContainsString('branding/interface/status-unknown.svg', $html);
+        $this->assertStringNotContainsString('Demo · Test data', $html);
+        $this->assertStringNotContainsString('fictional location', $html);
+        $this->assertStringNotContainsString('Milestone 1 page', $html);
     }
 }

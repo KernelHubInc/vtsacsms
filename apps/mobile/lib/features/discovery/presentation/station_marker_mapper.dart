@@ -6,6 +6,10 @@ StationMapMarker stationMapMarker(Station station, {required bool selected}) =>
       id: station.id,
       position: MapPosition(station.latitude, station.longitude),
       title: station.name,
+      branded: const {
+        'power solutions',
+        'evcs power solutions',
+      }.contains(station.operatorName.trim().toLowerCase()),
       status: station.isStale
           ? StationMarkerStatus.stale
           : switch (station.availability) {
@@ -19,3 +23,11 @@ StationMapMarker stationMapMarker(Station station, {required bool selected}) =>
             },
       selected: selected,
     );
+
+String stationMarkerAsset(StationMapMarker marker) {
+  if (!marker.branded) return 'pin-other-operator';
+  if (marker.selected && marker.status == StationMarkerStatus.available) {
+    return 'pin-selected';
+  }
+  return 'pin-${marker.status.name}';
+}

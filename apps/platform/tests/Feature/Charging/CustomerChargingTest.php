@@ -20,11 +20,17 @@ use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\PrepaidChargingMonitor;
 use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
+use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Domain\Models\InboundOcppEvent;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
+use App\Modules\Notifications\Application\ChargingReceiptPdf;
+use App\Modules\Notifications\Application\ChargingSummaryDelivery;
+use App\Modules\Notifications\Application\ChargingSummaryQueue;
+use App\Modules\Notifications\Domain\Models\ChargingEmailDelivery;
+use App\Modules\Notifications\Mail\ChargingSummaryMail;
 use App\Modules\Organizations\Application\ChargingAccounts;
 use App\Modules\Organizations\Domain\ChargingAccountRole;
 use App\Modules\Organizations\Domain\Models\Membership;
@@ -35,6 +41,7 @@ use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +62,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
 
     public function test_customer_start_reserves_once_and_final_energy_settles_once(): void
     {
+        Mail::fake();
         $actor = $this->createUser();
         $tenant = $this->createTenant('mobile-charging');
         $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
@@ -79,13 +87,98 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             $session->refresh();
             self::assertSame('completed', $session->state->value);
             self::assertSame(75, $session->final_cost_minor);
+            $this->assertDatabaseCount('charging_email_deliveries', 0);
             app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
             app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            $this->assertDatabaseCount('charging_email_deliveries', 1);
+            ChargingEmailDelivery::query()->where('session_id', $session->getKey())->delete();
+            $this->assertDatabaseCount('charging_email_deliveries', 0);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            $this->assertDatabaseCount('charging_email_deliveries', 1);
+            Mail::assertNothingSent();
+            $actor->forceFill(['email_verified_at' => null])->save();
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            Mail::assertNothingSent();
+            $this->assertDatabaseHas('charging_email_deliveries', ['session_id' => $session->getKey(), 'attempt_count' => 1, 'sent_at' => null]);
+            $actor->forceFill(['email_verified_at' => now('UTC')])->save();
+            $this->travel(61)->seconds();
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            Mail::assertSent(ChargingSummaryMail::class, function (ChargingSummaryMail $mail) use ($actor, $session): bool {
+                return $mail->hasTo($actor->email)
+                    && $mail->summary['session_id'] === (string) $session->getKey()
+                    && $mail->summary['amount_minor'] === 75
+                    && $mail->summary['energy_wh'] === 750
+                    && $mail->summary['payment_method'] === 'Personal prepaid wallet'
+                    && str_contains($mail->render(), 'PHP 0.75')
+                    && str_contains($mail->render(), 'not an official tax receipt')
+                    && count($mail->attachments()) === 1
+                    && $mail->attachments()[0]->as === 'power-solutions-charging-'.$session->getKey().'.pdf'
+                    && $mail->attachments()[0]->mime === 'application/pdf';
+            });
+            Mail::assertSentCount(1);
             $balance = app(PrepaidWallet::class)->summary($actor->public_id, 'live');
             self::assertSame(25, $balance['available_minor']);
             self::assertSame(0, $balance['reserved_minor']);
             self::assertSame('captured', $service->present($session)['payment_state']);
             $this->assertDatabaseCount('charging_customer_sessions', 1);
+        });
+    }
+
+    public function test_charging_receipt_email_and_pdf_show_the_same_confirmed_charge(): void
+    {
+        $summary = [
+            'session_id' => '01M5TESTRECEIPT0000000000',
+            'station' => 'Lumina Subic',
+            'connector' => 'Type 2',
+            'started_at' => '2026-10-24T02:00:00Z',
+            'stopped_at' => '2026-10-24T02:15:30Z',
+            'energy_wh' => 3443,
+            'duration_seconds' => 930,
+            'amount_minor' => 51,
+            'currency' => 'PHP',
+            'payment_method' => 'Personal prepaid wallet',
+        ];
+
+        $receipt = app(ChargingReceiptPdf::class);
+        $details = $receipt->details($summary);
+        self::assertSame('PHP 0.51', $details['amount']);
+        self::assertSame('3.443 kWh', $details['energy']);
+        self::assertSame('24 Oct 2026, 10:00 AM PHT', $details['started']);
+
+        $mail = new ChargingSummaryMail($summary);
+        self::assertSame('Your Power Solutions charging receipt', $mail->envelope()->subject);
+        self::assertCount(1, $mail->attachments());
+        self::assertSame('application/pdf', $mail->attachments()[0]->mime);
+        self::assertStringContainsString('PHP 0.51', $mail->render());
+        self::assertStringContainsString($summary['session_id'], $mail->render());
+        self::assertStringStartsWith('%PDF-', $receipt->render($summary));
+    }
+
+    public function test_charging_email_queue_is_tenant_scoped(): void
+    {
+        Mail::fake();
+        $actor = $this->createUser();
+        $first = $this->createTenant('charging-email-first');
+        $second = $this->createTenant('charging-email-second');
+
+        $this->withinTenant($first, $actor, function () use ($actor): void {
+            $session = ChargingSession::factory()->create();
+            app(ChargingSummaryQueue::class)->record((string) $session->getKey(), $actor->public_id, [
+                'amount_minor' => 75,
+            ]);
+            self::assertSame(1, ChargingEmailDelivery::query()->count());
+        });
+
+        $this->withinTenant($second, $actor, function (): void {
+            self::assertSame(0, ChargingEmailDelivery::query()->count());
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            Mail::assertNothingSent();
+        });
+
+        $this->withinTenant($first, $actor, function (): void {
+            self::assertSame(1, ChargingEmailDelivery::query()->count());
         });
     }
 
@@ -127,6 +220,56 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             ], $receivedAt);
             self::assertSame(1, $session->refresh()->duration_seconds);
             self::assertSame(1, $session->energy_wh);
+        });
+    }
+
+    public function test_five_hundred_peso_budget_is_reserved_and_requests_stop_before_limit(): void
+    {
+        config(['mobile_charging.maximum_reservation_minor' => 50_000]);
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('five-hundred-budget');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 49_900);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            self::assertSame(50_000, $quote['quote']['estimated_preauthorization']['amount_minor']);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'five-hundred-start');
+            self::assertSame(50_000, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', [
+                'connector_id' => 1, 'protocol_transaction_id' => 93, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted',
+            ]);
+            $session->refresh()->forceFill(['energy_wh' => 499_900, 'estimated_cost_minor' => 49_990])->save();
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            self::assertSame('stopping', $session->refresh()->state->value);
+            self::assertSame(1, ChargerCommand::query()->where('session_id', $session->getKey())->where('type', 'remote_stop')->count());
+            self::assertNull(CustomerChargingSession::query()->where('session_id', $session->getKey())->firstOrFail()->settled_at);
+        });
+    }
+
+    public function test_over_budget_final_charge_stays_in_review_without_debit_or_email(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('over-budget-review');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'over-budget-start');
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', [
+                'connector_id' => 1, 'protocol_transaction_id' => 94, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted',
+            ]);
+            $this->travel(1200)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'stop_transaction', [
+                'protocol_transaction_id' => 94, 'meter_stop_wh' => 2500, 'reason' => 'Remote', 'samples' => [],
+            ]);
+            self::assertSame(150, $session->refresh()->final_cost_minor);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            $owner = CustomerChargingSession::query()->where('session_id', $session->getKey())->firstOrFail();
+            self::assertSame('requires_action', $owner->payment_state);
+            self::assertNull($owner->settled_at);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            $this->assertDatabaseCount('charging_email_deliveries', 0);
         });
     }
 

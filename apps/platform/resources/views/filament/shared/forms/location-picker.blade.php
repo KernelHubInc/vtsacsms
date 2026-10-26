@@ -12,9 +12,9 @@
         </div>
         <span data-location-provider class="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm dark:bg-gray-900 dark:text-gray-300">Loading map…</span>
     </div>
-    <div wire:ignore class="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10">
+    <div wire:ignore class="relative isolate overflow-hidden rounded-xl border border-gray-200 bg-gray-200 dark:border-white/10">
         <div data-map-canvas class="h-80 w-full" aria-label="Interactive site coordinate picker"></div>
-        <div data-map-error hidden role="alert" class="absolute inset-x-3 bottom-3 rounded-xl border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800 shadow">
+        <div data-map-error hidden role="alert" class="absolute inset-x-3 bottom-3 z-[1100] rounded-xl border border-warning-200 bg-warning-50 p-3 text-xs text-warning-800 shadow">
             The interactive picker is unavailable. Enter validated coordinates in the manual fields above.
         </div>
     </div>

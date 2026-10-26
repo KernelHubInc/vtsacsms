@@ -1,7 +1,9 @@
 {
   "name": "Power Solutions",
   "short_name": "Power Solutions",
+  "id": "./",
   "start_url": ".",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F5F8FB",
   "theme_color": "#12366B",

@@ -32,6 +32,7 @@ class _GoogleStationMapState extends State<GoogleStationMap>
   GoogleMapController? _map;
   Timer? _idleDebounce;
   String? _lastFocusedId;
+  final Map<String, BitmapDescriptor> _stationIcons = {};
 
   static const _clusterId = ClusterManagerId('stations');
 
@@ -39,6 +40,35 @@ class _GoogleStationMapState extends State<GoogleStationMap>
   void initState() {
     super.initState();
     widget.discovery.addListener(_synchronizeSelection);
+    unawaited(_loadStationIcons());
+  }
+
+  Future<void> _loadStationIcons() async {
+    const names = [
+      'pin-available',
+      'pin-busy',
+      'pin-faulted',
+      'pin-offline',
+      'pin-stale',
+      'pin-unknown',
+      'pin-selected',
+      'pin-other-operator',
+    ];
+    final icons = <String, BitmapDescriptor>{};
+    try {
+      for (final name in names) {
+        icons[name] = await BitmapDescriptor.asset(
+          const ImageConfiguration(devicePixelRatio: 3),
+          'assets/interface/$name.png',
+          width: 56,
+          height: 64,
+        );
+      }
+    } catch (_) {
+      return; // Keep Google's built-in pin if an asset cannot be decoded.
+    }
+    if (!mounted) return;
+    setState(() => _stationIcons.addAll(icons));
   }
 
   @override
@@ -117,14 +147,8 @@ class _GoogleStationMapState extends State<GoogleStationMap>
                 ? _clusterId
                 : null,
             consumeTapEvents: true,
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              _markerHue(
-                stationMapMarker(
-                  station,
-                  selected: widget.discovery.selectedStationId == station.id,
-                ).status,
-              ),
-            ),
+            icon: _iconFor(station),
+            anchor: const Offset(0.5, 0.92),
             zIndexInt: widget.discovery.selectedStationId == station.id ? 2 : 1,
             onTap: () => widget.discovery.select(station.id),
           ),
@@ -175,15 +199,13 @@ class _GoogleStationMapState extends State<GoogleStationMap>
     );
   }
 
-  double _markerHue(StationMarkerStatus status) {
-    return switch (status) {
-      StationMarkerStatus.available => BitmapDescriptor.hueGreen,
-      StationMarkerStatus.busy => BitmapDescriptor.hueViolet,
-      StationMarkerStatus.faulted => BitmapDescriptor.hueRed,
-      StationMarkerStatus.offline => BitmapDescriptor.hueRose,
-      StationMarkerStatus.stale => BitmapDescriptor.hueOrange,
-      StationMarkerStatus.unknown => BitmapDescriptor.hueAzure,
-    };
+  BitmapDescriptor _iconFor(Station station) {
+    final marker = stationMapMarker(
+      station,
+      selected: widget.discovery.selectedStationId == station.id,
+    );
+    return _stationIcons[stationMarkerAsset(marker)] ??
+        BitmapDescriptor.defaultMarker;
   }
 }
 

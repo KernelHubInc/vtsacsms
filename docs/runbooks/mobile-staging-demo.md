@@ -1,5 +1,25 @@
 # Mobile staging demo: registration and email verification
 
+## Browser app at /mobile
+
+The staging Flutter web build is served at `https://staging.evcspowersolutions.com/mobile/`. Build from a clean `test_env` checkout so unrelated working-tree changes do not enter the release:
+
+```powershell
+cd apps/mobile
+flutter pub get
+flutter analyze
+flutter test
+flutter build web --release --base-href /mobile/ --no-web-resources-cdn --dart-define-from-file=dart_defines.staging-demo.json
+```
+
+The staging Nginx server includes `infra/nginx/mobile-staging-location.conf` and serves `/var/www/staging-mobile/current/`. Upload `build/web` to a new release directory, verify `index.html` contains `<base href="/mobile/">`, then atomically switch `current` to that directory. Run `nginx -t` before reloading and check `/mobile`, `/mobile/`, `/mobile/flutter_bootstrap.js`, and the browser login screen. The `/mobile` URL redirects to `/mobile/`. Roll back by switching `current` to the previous release and reloading Nginx; no database migration is needed.
+
+The web build uses the same staging API origin as Android. Browser geolocation and camera access require HTTPS and the user's permission. PIN/biometric quick unlock and Android push delivery remain native-only; manual charger code entry remains available if a browser cannot scan QR codes. Treat a browser charging session as real staging activity, not a simulation.
+
+The `/mobile/` web app offers installation when a supporting browser reports it is eligible. The in-page offer appears automatically, but the visitor must tap **Install app** before the browser can show its native confirmation; the site cannot silently install itself. On iPhone and iPad, the offer explains **Share → Add to Home Screen** because the native install-prompt API is unavailable. A dismissed offer stays hidden for seven days on that browser, and installed/standalone launches do not show it. The manifest uses relative scope and start URL so the same build works under `/mobile/` and local previews. Run `node --test web/install-prompt.test.mjs` from `apps/mobile` before release, then verify the prompt on a real supported phone and the manual path on an iPhone. This web install is separate from the Android APK and signed iOS IPA.
+
+Published on 2026-10-23 from clean source commit `304176c6`. The compressed build SHA-256 is `364ea90b2b3a8e8c5946d335bb804fd721b5eec9ce074953f79df23be269c33f`. Nginx configuration validation passed. `/mobile` redirects to `/mobile/`; the page and Flutter bootstrap asset return HTTP 200. The live browser rendered sign-in, a local browser preview opened registration, and the same-origin public station API returned HTTP 200. Authenticated browser charging, wallet payment, camera scanning, and physical location permission were not exercised in this release check.
+
 ## Download links for every mobile release
 
 Every requested mobile release must return both links after verification:
@@ -8,6 +28,14 @@ Every requested mobile release must return both links after verification:
 - Latest demo APK: `https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk`
 
 The demo URL points to the latest verified versioned APK and requires cache revalidation. Both downloads use the same staging build and backend; the demo link is not a separate simulated app.
+
+## Explore map starts near the driver — 1.0.26 / Android build 27
+
+Published on 2026-10-23 from commit `883ec5a1`. The [versioned APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Staging-Lumina-1.0.26.apk) and [latest demo APK](https://staging.evcspowersolutions.com/demo/Power-Solutions-Demo.apk) returned HTTP 200 with an 80,093,014-byte content length. The uploaded SHA-256 matched the clean local release build: `fa33a3d9338b48dac0b8e0fa81c00fdf31f1ad243b8629f1b46be1d57301dce1`. Android package `com.vtsa.vtsa_mobile` uses version code 27 and the same signing certificate as 1.0.25.
+
+Explore now requests foreground location when it opens, centers the map on the returned position, and loads nearby stations. If permission is declined or GPS is unavailable, it retains the configured map center and loads the existing default area. The **Show my location** control remains available for a later retry. The iOS permission explanation now describes this startup behavior; an iOS build was not produced on Windows.
+
+The clean release checkout passed Flutter analysis, all 211 mobile tests, the Android release build, APK signature verification, and the GPS startup/recenter regression test. The full repository push checks also passed. A physical-phone check of permission prompts and GPS accuracy is still needed; no Android device was connected to the build host.
 
 ## Wallet cleanup — 1.0.25 / Android build 26
 

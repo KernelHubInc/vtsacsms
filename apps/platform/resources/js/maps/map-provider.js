@@ -19,11 +19,21 @@ export const normalizeMarkerStatus = (status) => (
     ['available', 'busy', 'faulted', 'offline', 'stale'].includes(status) ? status : 'unknown'
 );
 
+export const isPowerSolutionsOperator = (name) =>
+    ['power solutions', 'evcs power solutions'].includes(String(name || '').trim().toLowerCase());
+
+export const markerAsset = ({ status, branded }, selected = false) => {
+    if (!branded) return '/branding/interface/pin-other-operator.svg';
+    if (selected && status === 'available') return '/branding/interface/pin-selected.svg';
+    return `/branding/interface/pin-${normalizeMarkerStatus(status)}.svg`;
+};
+
 export const stationMarker = (station) => ({
     id: String(station.id),
     latitude: Number(station.latitude),
     longitude: Number(station.longitude),
     title: String(station.site_name || station.name || 'Charging station'),
-    status: normalizeMarkerStatus(station.availability || station.status),
+    status: station.is_stale === true ? 'stale' : normalizeMarkerStatus(station.availability || station.status),
+    branded: isPowerSolutionsOperator(station.operator_name),
     source: station,
 });

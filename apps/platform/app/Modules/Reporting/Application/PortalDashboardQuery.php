@@ -140,7 +140,7 @@ final readonly class PortalDashboardQuery
 
     /**
      * @return list<array{
-     *   id:string,site_name:string,address:string,latitude:float,longitude:float,status:string,
+     *   id:string,site_name:string,operator_name:string,address:string,latitude:float,longitude:float,status:string,
      *   chargers:int,connectors:int,faults:int,offline:int,stale:int,active_sessions:int
      * }>
      */
@@ -151,12 +151,16 @@ final readonly class PortalDashboardQuery
 
         /** @var list<array<string, int|float|string>> $markers */
         $markers = Cache::remember($key, now()->addSeconds(5), function () use ($siteIds): array {
-            $sites = DB::table('sites')
-                ->whereIn('id', $siteIds)
-                ->whereNotNull('latitude')
-                ->whereNotNull('longitude')
-                ->orderBy('name')
-                ->get(['id', 'name', 'address_line_1', 'latitude', 'longitude']);
+            $sites = DB::table('sites as site')
+                ->join('organizations as operator', static function ($join): void {
+                    $join->on('operator.id', '=', 'site.operator_organization_id')
+                        ->on('operator.tenant_id', '=', 'site.tenant_id');
+                })
+                ->whereIn('site.id', $siteIds)
+                ->whereNotNull('site.latitude')
+                ->whereNotNull('site.longitude')
+                ->orderBy('site.name')
+                ->get(['site.id', 'site.name', 'site.address_line_1', 'site.latitude', 'site.longitude', 'operator.name as operator_name']);
             $assetCounts = DB::table('charging_stations as station')
                 ->leftJoin('evses as evse', 'evse.charging_station_id', '=', 'station.id')
                 ->leftJoin('connectors as connector', 'connector.evse_id', '=', 'evse.id')
@@ -199,6 +203,7 @@ final readonly class PortalDashboardQuery
                 return [
                     'id' => (string) $site->id,
                     'site_name' => (string) $site->name,
+                    'operator_name' => (string) $site->operator_name,
                     'address' => (string) ($site->address_line_1 ?? ''),
                     'latitude' => (float) $site->latitude,
                     'longitude' => (float) $site->longitude,
@@ -215,7 +220,7 @@ final readonly class PortalDashboardQuery
         });
 
         /** @var list<array{
-         *   id:string,site_name:string,address:string,latitude:float,longitude:float,status:string,
+         *   id:string,site_name:string,operator_name:string,address:string,latitude:float,longitude:float,status:string,
          *   chargers:int,connectors:int,faults:int,offline:int,stale:int,active_sessions:int
          * }> $markers
          */

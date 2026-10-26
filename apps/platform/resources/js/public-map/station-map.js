@@ -1,7 +1,9 @@
 import { MapProviderFactory, parseMapConfiguration } from '../maps/map-provider-factory';
 import { directionsUrl } from '../maps/directions-launcher';
+import { connectorIcon, statusBadge } from '../maps/interface-assets';
+import { shouldFetchStations, stationSearchParameters } from './search-parameters';
 
-const statusLabel = (status) => ({ available: 'Available', busy: 'In use', faulted: 'Needs attention', offline: 'Offline', stale: 'Stale data', unknown: 'Unknown' }[status] || 'Unknown');
+const statusLabel = (status) => ({ available: 'available', busy: 'in use', faulted: 'needs attention', offline: 'offline', unavailable: 'unavailable', unknown: 'unknown' }[status] || 'unknown');
 const powerLabel = (watts) => watts ? `${Math.round(Number(watts) / 1000)} kW max` : 'Power not published';
 
 class StationFinder {
@@ -21,24 +23,35 @@ class StationFinder {
         this.abortController = null;
         this.disposers = [];
         this.configuration = parseMapConfiguration(root);
+        this.isHomeMap = root.hasAttribute('data-home-map');
+        this.lastFittedKey = null;
+        this.lastRequestKey = null;
     }
 
     async start() {
+        const initial = new URLSearchParams(window.location.search);
+        for (const name of ['query', 'connector', 'availability']) {
+            const field = this.form.elements.namedItem(name);
+            const value = initial.get(name)?.slice(0, 120);
+            if (!field || !value) continue;
+            if (field instanceof HTMLSelectElement && ![...field.options].some((option) => option.value === value)) continue;
+            field.value = value;
+        }
         const bind = (target, event, listener) => {
             target.addEventListener(event, listener);
             this.disposers.push(() => target.removeEventListener(event, listener));
         };
-        bind(this.form, 'submit', (event) => { event.preventDefault(); this.fetchStations(); });
+        bind(this.form, 'submit', (event) => { event.preventDefault(); this.fetchStations(true); });
         bind(this.form, 'change', () => this.fetchStations());
         if (this.filterPanel) {
-            if (window.matchMedia('(max-width: 900px)').matches) {
+            if (window.matchMedia('(max-width: 900px)').matches && !initial.has('query') && !initial.has('connector') && !initial.has('availability')) {
                 this.filterPanel.open = false;
             }
             bind(this.filterPanel, 'toggle', () => window.requestAnimationFrame(() => this.adapter?.resize()));
         }
         bind(this.root.querySelector('[data-drawer-close]'), 'click', () => { this.drawer.hidden = true; });
         bind(this.root.querySelector('[data-use-location]'), 'click', () => this.useLocation());
-        bind(window, 'online', () => this.fetchStations());
+        bind(window, 'online', () => this.fetchStations(true));
         bind(window, 'offline', () => this.showState('You are offline. Previously loaded station details may be stale.', 'offline'));
         bind(window, 'resize', () => this.adapter?.resize());
         if ('ResizeObserver' in window) {
@@ -54,7 +67,7 @@ class StationFinder {
                     onViewportChanged: (bounds) => {
                         if (!bounds) return;
                         this.bounds = bounds;
-                        this.fetchStations();
+                        if (!this.isHomeMap) this.fetchStations();
                     },
                     onMarkerSelect: (id) => this.select(id, true),
                     onError: (error) => this.mapError(error),
@@ -63,6 +76,7 @@ class StationFinder {
             );
             this.adapter = result.instance;
             this.root.dataset.resolvedProvider = result.provider;
+            if (!this.isHomeMap) this.bounds = this.adapter.getVisibleBounds();
             if (result.fallbackActive) {
                 this.root.querySelector('[data-provider-warning]')?.removeAttribute('hidden');
             }
@@ -73,26 +87,29 @@ class StationFinder {
     }
 
     parameters() {
-        const params = new URLSearchParams(new FormData(this.form));
-        params.set('limit', '250');
-        if (this.bounds) Object.entries(this.bounds).forEach(([key, value]) => params.set(key, String(value)));
-        return params;
+        return stationSearchParameters(new FormData(this.form), this.isHomeMap ? null : this.bounds);
     }
 
-    async fetchStations() {
+    async fetchStations(force = false) {
+        const params = this.parameters();
+        const key = params.toString();
+        if (!shouldFetchStations(this.lastRequestKey, key, force)) return;
+        this.lastRequestKey = key;
         this.abortController?.abort();
         this.abortController = new AbortController();
-        this.showState('Loading stations…', 'loading');
+        if (!this.stations.length) this.showState('Loading stations…', 'loading');
         try {
-            const response = await fetch(`${this.endpoint}?${this.parameters()}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal });
+            const response = await fetch(`${this.endpoint}?${params}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal });
             if (!response.ok) throw new Error('Station search is temporarily unavailable.');
             const payload = await response.json();
             this.stations = payload.data;
             this.render();
             this.populateOperators();
             this.adapter?.setMarkers(this.stations);
+            this.fitHomeResults();
         } catch (error) {
             if (error.name === 'AbortError') return;
+            this.lastRequestKey = null;
             this.showState(navigator.onLine ? 'We could not refresh stations. Try again shortly.' : 'You are offline. Station information cannot be refreshed.', 'error');
         }
     }
@@ -107,7 +124,9 @@ class StationFinder {
         this.list.replaceChildren();
         this.count.textContent = this.stations.length;
         if (!this.stations.length) {
-            this.showState('No public stations match this view. Move the map or clear a filter.', 'empty');
+            this.showState(this.isHomeMap
+                ? 'No published stations match these filters. Try another search or connector.'
+                : 'No public stations match this view. Move the map or clear a filter.', 'empty');
             return;
         }
         this.state.hidden = true;
@@ -120,23 +139,37 @@ class StationFinder {
             button.addEventListener('click', () => this.select(station.id, true));
             const top = document.createElement('div'); top.className = 'station-card__top';
             const heading = document.createElement('h3'); heading.textContent = station.site_name;
-            const chip = document.createElement('span'); chip.className = `status-chip status-chip--${station.availability}`; chip.textContent = statusLabel(station.availability);
-            top.append(heading, chip);
+            top.append(heading, statusBadge(station.is_stale ? 'stale' : station.availability));
+            if (station.is_stale && station.availability !== 'stale') {
+                const lastStatus = document.createElement('small');
+                lastStatus.className = 'status-last-reported';
+                lastStatus.textContent = `Last reported ${statusLabel(station.availability)}`;
+                top.append(lastStatus);
+            }
             const address = document.createElement('p'); address.textContent = station.address_line_1 || 'Address details pending';
             const details = document.createElement('p'); details.textContent = `${station.operator_name} · ${powerLabel(station.maximum_power_w)} · ${station.open_now ? 'Open now' : 'Hours unavailable or closed'}`;
             const tags = document.createElement('div'); tags.className = 'connector-tags';
-            station.connectors.forEach((connector) => { const tag = document.createElement('span'); tag.textContent = `${connector.name} · ${connector.current_type} · ${powerLabel(connector.maximum_power_w)}`; tags.append(tag); });
+            station.connectors.forEach((connector) => { const tag = document.createElement('span'); const icon = connectorIcon(connector.standard); if (icon) { const image = document.createElement('img'); image.src = icon; image.alt = ''; image.width = 24; image.height = 24; tag.append(image); } tag.append(document.createTextNode(`${connector.name} · ${connector.current_type} · ${powerLabel(connector.maximum_power_w)}`)); tags.append(tag); });
             button.append(top, address, details, tags); item.append(button); this.list.append(item);
         });
     }
 
     populateOperators() {
         const select = this.form.querySelector('[data-operator-filter]');
+        if (!select) return;
         const selected = select.value;
         const known = new Map([...select.options].map((option) => [option.value, option.textContent]));
         this.stations.forEach((station) => known.set(station.operator_id, station.operator_name));
         select.replaceChildren();
         known.forEach((name, id) => { const option = document.createElement('option'); option.value = id; option.textContent = name; option.selected = id === selected; select.append(option); });
+    }
+
+    fitHomeResults() {
+        if (!this.isHomeMap || !this.adapter || !this.stations.length) return;
+        const key = new URLSearchParams(new FormData(this.form)).toString();
+        if (key === this.lastFittedKey) return;
+        this.lastFittedKey = key;
+        this.adapter.fitBounds(this.stations.map((station) => [Number(station.latitude), Number(station.longitude)]));
     }
 
     select(id, focusMap) {
@@ -145,15 +178,14 @@ class StationFinder {
         this.list.querySelectorAll('[data-station-id]').forEach((button) => button.setAttribute('aria-current', String(button.dataset.stationId === id)));
         this.drawerContent.replaceChildren();
         const title = document.createElement('h2'); title.id = 'station-drawer-title'; title.textContent = station.site_name;
-        const status = document.createElement('span'); status.className = `status-chip status-chip--${station.availability}`; status.textContent = statusLabel(station.availability);
+        const status = statusBadge(station.is_stale ? 'stale' : station.availability);
         const address = document.createElement('p'); address.textContent = station.address_line_1 || 'Address details pending';
         const meta = document.createElement('div'); meta.className = 'drawer-meta';
         [station.operator_name, powerLabel(station.maximum_power_w), station.open_now ? 'Reported open now' : 'Hours unavailable or currently closed', station.is_stale ? 'Status data is stale' : 'Status freshness checked'].forEach((value) => { const row = document.createElement('span'); row.textContent = value; meta.append(row); });
         const directions = document.createElement('a'); directions.className = 'button'; directions.target = '_blank'; directions.rel = 'noopener'; directions.textContent = 'Get directions'; directions.href = directionsUrl(this.configuration.directionsUrlTemplate, station);
         const detail = document.createElement('a'); detail.className = 'button button--secondary'; detail.textContent = 'Station details'; detail.href = `/stations/${encodeURIComponent(station.public_slug)}`;
         const actions = document.createElement('div'); actions.className = 'station-drawer__actions'; actions.append(directions, detail);
-        const demo = document.createElement('p'); demo.className = 'demo-data-label'; demo.textContent = 'Demo · Test data · Not a real charging location';
-        this.drawerContent.append(demo, title, status, address, meta, actions);
+        this.drawerContent.append(title, status, address, meta, actions);
         this.drawer.hidden = false;
         this.drawer.scrollTop = 0;
         this.adapter?.selectMarker(id, { focus: focusMap });
@@ -169,6 +201,7 @@ class StationFinder {
     }
 
     async fetchUrl(params) {
+        this.lastRequestKey = null;
         this.abortController?.abort(); this.abortController = new AbortController(); this.showState('Finding nearby stations…', 'loading');
         try { const response = await fetch(`${this.endpoint}?${params}`, { headers: { Accept: 'application/json' }, signal: this.abortController.signal }); if (!response.ok) throw new Error(); const payload = await response.json(); this.stations = payload.data; this.render(); this.populateOperators(); this.adapter?.setMarkers(this.stations); }
         catch (error) { if (error.name !== 'AbortError') this.showState('Nearby stations could not be loaded.', 'error'); }

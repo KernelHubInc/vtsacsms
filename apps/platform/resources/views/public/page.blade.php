@@ -2,10 +2,11 @@
 
 @section('content')
 <section class="public-hero {{ $page->template === 'home' ? 'public-hero--home' : '' }}">
-    <div class="public-hero__glow" aria-hidden="true"></div>
     <div class="public-shell public-hero__grid">
         <div class="public-hero__copy">
             <h1>{{ $page->hero_heading ?: $page->title }}</h1>
+        </div>
+        <div class="public-hero__side">
             @if ($page->hero_copy)<p class="lede">{{ $page->hero_copy }}</p>@endif
             @if ($page->legal_review_required)
                 <div class="legal-review" role="note"><strong>Legal review required</strong><span>This placeholder is not approved policy and must not be treated as binding terms.</span></div>
@@ -15,7 +16,6 @@
                 @if ($page->secondary_action_url && (str_starts_with($page->secondary_action_url, '/') || str_starts_with($page->secondary_action_url, 'https://')))<a class="button button--quiet" href="{{ $page->secondary_action_url }}">{{ $page->secondary_action_label }}</a>@endif
             </div>
         </div>
-        <div class="network-orbit" aria-hidden="true"><span class="orbit orbit--one"></span><span class="orbit orbit--two"></span><span class="orbit-pin orbit-pin--one"></span><span class="orbit-pin orbit-pin--two"></span><div class="charge-pulse"><span>83%</span><small>NETWORK SIGNAL</small></div></div>
     </div>
 </section>
 

@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, test_env]
 
 permissions:
   contents: read
@@ -94,6 +94,7 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
+      - run: node --test web/install-prompt.test.mjs
       - name: Enable KVM for Android integration tests
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -265,6 +266,8 @@ jobs:
           DATA_BIND_ADDRESS=127.0.0.1 docker compose --env-file .env.data.example -f infra/cluster/compose.data.yaml config --quiet
       - name: Validate local and staging demo environment selection
         run: python3 tests/infra/test_compose_environment.py
+      - name: Validate web proxy headers
+        run: python3 tests/infra/test_web_proxy_headers.py
       - name: Validate OCPP staging isolation and enrollment configuration
         run: python3 tests/infra/test_ocpp_staging.py
       - name: Validate private KYC deployment isolation

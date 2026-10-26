@@ -28,7 +28,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save a QR Ph payment code to Photos so you can import it into your bank or e-wallet app.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Power Solutions uses your location only when you ask to find your position on the charging map.</string>
+	<string>Power Solutions uses your location to center the charging map near you and find nearby stations while the app is open.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

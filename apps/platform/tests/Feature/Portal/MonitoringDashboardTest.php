@@ -76,6 +76,7 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
                 ChargingSession::factory()->create(['state' => 'completed', 'requested_at' => now()->subDays(40), 'stopped_at' => '2026-10-15 17:00:00', 'energy_wh' => 1500, 'final_cost_minor' => $amount, 'currency' => $currency]);
             }
             ChargingSession::factory()->create(['state' => 'starting', 'requested_at' => now()->subMinutes(10), 'energy_wh' => 9000]);
+            ChargingSession::factory()->create(['state' => 'charging', 'started_at' => now()->subMinutes(15), 'energy_wh' => 750]);
             ChargingSession::factory()->create(['state' => 'completed', 'stopped_at' => now()->subDays(8), 'energy_wh' => 9000]);
             foreach (['live' => 100, 'simulated' => 900] as $book => $amount) {
                 $account = PrepaidAccount::query()->create(['subject_id' => $user->public_id, 'currency' => 'PHP', 'book' => $book]);
@@ -84,10 +85,13 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
             $data = app(MonitoringDashboardQuery::class)->read($user);
             self::assertSame(3000, $data['energy_wh']);
             self::assertSame(2, $data['completed_sessions']);
+            self::assertSame(3000, array_sum(array_column($data['top_sites'], 'energy_wh')));
+            self::assertCount(1, $data['live_sessions']);
+            self::assertSame(750, $data['live_sessions'][0]['energy_wh']);
             self::assertSame(['PHP' => 125, 'USD' => 250], array_column($data['charges'], 'amount_minor', 'currency'));
             self::assertSame([['currency' => 'PHP', 'amount_minor' => 100]], $data['topups']);
             self::assertSame(1, $data['waiting']);
-            self::assertSame(0, $data['session_states']['charging'] ?? 0);
+            self::assertSame(1, $data['session_states']['charging'] ?? 0);
             self::assertSame(3000, array_column($data['trend'], 'energy_wh', 'day')['2026-10-16']);
             self::assertSame(0, array_column($data['trend'], 'energy_wh', 'day')['2026-10-15']);
             DB::table('role_permissions')->where('tenant_id', $tenant->getKey())->where('permission_key', PermissionKey::PaymentView->value)->delete();
@@ -125,8 +129,8 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
 
             return $site;
         });
-        $this->actingAs($user)->get('/admin')->assertOk()->assertSee('Charging network')->assertSee('Confirmed wallet top-ups')
-            ->assertSee('Connector status')->assertSee('Needs attention')->assertDontSee('ps-eyebrow');
+        $this->actingAs($user)->get('/admin')->assertOk()->assertSee('Operations overview')->assertSee('Confirmed wallet top-ups')
+            ->assertSee('Connector status')->assertSee('Needs attention')->assertSee('Station management')->assertDontSee('ps-eyebrow');
         $this->withinTenant($tenant, $user, function () use ($site): void {
             Livewire::test(Dashboard::class)->set('site', $site)->set('days', 30)->set('search', 'nothing-matches')
                 ->assertSee('No stations match your filters')->assertSee('Last 30 days')->call('nextStations')->assertSee('page 1 of 1');
@@ -137,6 +141,29 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
         });
         $this->withinTenant($tenant, $user, function () use ($user): void {
             self::assertSame(1, app(MonitoringDashboardQuery::class)->read($user)['station_count']);
+        });
+    }
+
+    public function test_retired_demo_locations_are_absent_from_operational_dashboard(): void
+    {
+        $user = $this->createUser();
+        $tenant = $this->createTenant('monitoring-retired-sites');
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $this->assignDirectly($tenant, $this->createMembership($tenant, $user), $this->createRole($tenant, 'reporter', [PermissionKey::ReportingView, PermissionKey::LocationView, PermissionKey::AssetView, PermissionKey::ChargingSessionView]));
+            $active = $this->connector()->evse->station->site;
+            $active->update(['name' => 'LUMINA SUBIC', 'lifecycle_status' => 'active']);
+            $retired = $this->connector()->evse->station->site;
+            $retired->update(['name' => 'Bayside Exchange', 'is_active' => false, 'lifecycle_status' => 'retired']);
+
+            $data = app(MonitoringDashboardQuery::class)->read($user);
+            self::assertSame(['LUMINA SUBIC'], array_column($data['sites'], 'name'));
+            self::assertSame(1, $data['station_count']);
+            try {
+                app(MonitoringDashboardQuery::class)->read($user, siteId: (string) $retired->getKey());
+                self::fail('A retired location must not be selectable on the operational dashboard.');
+            } catch (HttpException $exception) {
+                self::assertSame(403, $exception->getStatusCode());
+            }
         });
     }
 

@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
-import { MapProviderError, stationMarker, validCoordinate } from './map-provider';
+import { MapProviderError, markerAsset, stationMarker, validCoordinate } from './map-provider';
 
 export class OpenStreetMapWebProvider {
     constructor(element, configuration, handlers = {}) {
@@ -43,7 +43,19 @@ export class OpenStreetMapWebProvider {
                 detectRetina: Boolean(this.configuration.tileRetina),
             }).addTo(this.map);
             this.markerLayer = this.configuration.clusteringEnabled
-                ? L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 52 })
+                ? L.markerClusterGroup({
+                    showCoverageOnHover: false,
+                    maxClusterRadius: 52,
+                    iconCreateFunction: (cluster) => {
+                        const branded = cluster.getAllChildMarkers().every((marker) => marker.options.branded);
+                        return L.divIcon({
+                            className: 'vtsa-leaflet-marker',
+                            html: `<span class="network-cluster${branded ? ' network-cluster--branded' : ''}"><strong>${cluster.getChildCount()}</strong></span>`,
+                            iconSize: [56, 56],
+                            iconAnchor: [28, 28],
+                        });
+                    },
+                })
                 : L.layerGroup();
             this.map.addLayer(this.markerLayer);
             this.bindEvents();
@@ -97,15 +109,16 @@ export class OpenStreetMapWebProvider {
             const existing = this.markers.get(id);
             if (existing) {
                 existing.instance.setLatLng([marker.latitude, marker.longitude]);
-                existing.instance.setIcon(this.icon(marker.status, id === this.selectedId));
+                existing.instance.setIcon(this.icon(marker, id === this.selectedId));
                 existing.instance.options.title = `${marker.title}: ${marker.status}`;
                 existing.data = marker;
                 continue;
             }
             const instance = L.marker([marker.latitude, marker.longitude], {
                 title: `${marker.title}: ${marker.status}`,
-                icon: this.icon(marker.status, id === this.selectedId),
+                icon: this.icon(marker, id === this.selectedId),
                 keyboard: true,
+                branded: marker.branded,
             });
             instance.on('click', () => this.handlers.onMarkerSelect?.(id));
             this.markers.set(id, { instance, data: marker });
@@ -113,22 +126,22 @@ export class OpenStreetMapWebProvider {
         }
     }
 
-    icon(status, selected) {
+    icon(marker, selected) {
         return L.divIcon({
             className: 'vtsa-leaflet-marker',
-            html: `<span class="map-marker map-marker--${status}${selected ? ' map-marker--selected' : ''}"><span aria-hidden="true">⚡</span></span>`,
-            iconSize: [40, 48],
-            iconAnchor: [20, 44],
+            html: `<span class="network-pin${selected ? ' network-pin--selected' : ''}"><img src="${markerAsset(marker, selected)}" alt="" width="56" height="64"></span>`,
+            iconSize: [56, 64],
+            iconAnchor: [28, 59],
         });
     }
 
     selectMarker(id, { focus = false } = {}) {
         const previous = this.markers.get(this.selectedId);
-        if (previous) previous.instance.setIcon(this.icon(previous.data.status, false));
+        if (previous) previous.instance.setIcon(this.icon(previous.data, false));
         this.selectedId = id;
         const selected = this.markers.get(id);
         if (!selected) return;
-        selected.instance.setIcon(this.icon(selected.data.status, true));
+        selected.instance.setIcon(this.icon(selected.data, true));
         if (focus) this.setCenter(selected.data.latitude, selected.data.longitude, Math.max(this.map.getZoom(), 15));
     }
 

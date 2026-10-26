@@ -1,5 +1,15 @@
 # Mobile prepaid charging: staging
 
+## Wallet limit, automatic stop and email confirmation
+
+The amount shown as the estimated preauthorization is the session's reserved budget, not the wallet's entire balance. The backend computes the minimum of the available wallet balance, any account/vehicle spending cap and `MOBILE_CHARGING_MAXIMUM_RESERVATION_MINOR`. Staging is currently configured for 100 centavos (PHP 1) per session. To rehearse a PHP 500 budget, set the staging-only maximum to 50,000 centavos, recreate the web service and confirm the fresh quote displays that budget. Do not change a published tariff to reach the limit without an operator-approved price test.
+
+While charging, the prepaid monitor uses fresh meter readings, the tariff snapshot, connector maximum power and a 90-second stop buffer to request a remote stop before the budget is exhausted. Keep the independent monitor running every ten seconds. Remote stop is a request to the charger, not a hardware cutoff; stale telemetry, network loss or charger refusal can cause the final amount to exceed the hold. Only the charger's final transaction evidence and a complete finalized CDR allow settlement. An over-budget or incomplete result remains `requires_action`, retains the hold and needs an operator review; the wallet cannot be debited beyond its reservation.
+
+Once a completed customer session is captured, Notifications records one tenant/session-scoped email request for the initiating driver's currently verified address. The independent `notifications:send-charging-summaries` runner sends due requests at least once a minute, retrying transient failures with backoff. The branded email and attached A4 PDF share the session reference, station, connector, Philippine-time start/stop times, delivered kWh, duration, final PHP charge and payment method. They confirm the charging payment but are not a tax invoice or official tax receipt; statutory document issuance remains gated by FR-BIL-002. PDF generation is in-memory at send time, so no copy containing driver transaction details is left on the server's public filesystem.
+
+Deploy the additive `charging_email_deliveries` migration and keep a dedicated email runner separate from the charging monitor so SMTP delays cannot block budget-stop checks. Configure and verify the real SMTP mailer and sender address; `MAIL_MAILER=log` does not deliver externally. Inspect attempts by tenant and session without logging addresses or message contents. An already-captured session with no email row can be reconciled individually to queue the missing confirmation; do not bulk-send old sessions. A lost provider acknowledgment may rarely cause a duplicate email after the five-minute claim lease expires; use the session reference to investigate.
+
 ## Pricing in admin or operator
 
 1. Open **Charging network > Tariffs**. The role needs tariff view, manage and publish permissions.

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MapProviderFactoryCore, assertMapProviderContract } from '../map-provider-factory-core.js';
-import { stationMarker, validCoordinate } from '../map-provider.js';
+import { markerAsset, stationMarker, validCoordinate } from '../map-provider.js';
+import { amenityIcon, connectorIcon } from '../interface-assets.js';
 
 class ContractAdapter {
     constructor(element, configuration) {
@@ -76,4 +77,31 @@ test('station markers preserve exact WGS84 coordinates and stable IDs', () => {
     assert.equal(marker.title, '<unsafe>');
     assert.equal(validCoordinate(marker.latitude, marker.longitude), true);
     assert.equal(validCoordinate(91, marker.longitude), false);
+});
+
+test('an offline published station remains a map marker', () => {
+    const marker = stationMarker({ id: '01OFFLINE', latitude: 14.6, longitude: 120.9, availability: 'offline' });
+
+    assert.equal(marker.status, 'offline');
+    assert.equal(validCoordinate(marker.latitude, marker.longitude), true);
+});
+
+test('Figma pin keeps status separate from operator identity and selection', () => {
+    const owned = stationMarker({ id: 'A', latitude: 14.6, longitude: 120.9, availability: 'offline', operator_name: 'Power Solutions' });
+    const other = stationMarker({ id: 'B', latitude: 14.6, longitude: 120.9, availability: 'available', operator_name: 'Another operator' });
+
+    assert.equal(markerAsset(owned), '/branding/interface/pin-offline.svg');
+    assert.equal(markerAsset(owned, true), '/branding/interface/pin-offline.svg');
+    assert.equal(markerAsset({ ...owned, status: 'available' }, true), '/branding/interface/pin-selected.svg');
+    assert.equal(markerAsset(other), '/branding/interface/pin-other-operator.svg');
+    assert.equal(stationMarker({ ...owned.source, is_stale: true }).status, 'stale');
+});
+
+test('connector and amenity symbols are only used for recognized labels', () => {
+    assert.equal(connectorIcon('CCS Combo 2'), '/branding/interface/icon-ccs2.svg');
+    assert.equal(connectorIcon('Type 2'), '/branding/interface/icon-type2.svg');
+    assert.equal(connectorIcon('vendor-specific'), null);
+    assert.equal(amenityIcon('Accessible parking'), '/branding/interface/icon-accessible.svg');
+    assert.equal(amenityIcon('Wi-Fi'), '/branding/interface/icon-wifi.svg');
+    assert.equal(amenityIcon('Unknown amenity'), null);
 });

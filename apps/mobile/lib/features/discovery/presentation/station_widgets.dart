@@ -50,6 +50,57 @@ String availabilityLabel(Station station) {
   };
 }
 
+String? connectorAsset(String standard) {
+  final value = standard.toLowerCase();
+  if (value.contains('ccs')) return 'icon-ccs2';
+  if (value.contains('chademo')) return 'icon-chademo';
+  if (value.contains('type 2') || value.contains('type2')) return 'icon-type2';
+  return null;
+}
+
+String? amenityAsset(String name) {
+  final value = name.toLowerCase();
+  if (value.contains('wifi') || value.contains('wi-fi')) return 'icon-wifi';
+  if (value.contains('food') || value.contains('drink')) return 'icon-food';
+  if (value.contains('shop')) return 'icon-shopping';
+  if (value.contains('restroom') || value.contains('toilet')) {
+    return 'icon-restroom';
+  }
+  if (value.contains('accessible')) return 'icon-accessible';
+  if (value.contains('parking')) return 'icon-parking';
+  return null;
+}
+
+class StationStatusBadge extends StatelessWidget {
+  const StationStatusBadge({required this.station, super.key});
+
+  final Station station;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = availabilityLabel(station);
+    final asset = switch (label) {
+      'Available' => 'available',
+      'In use' => 'busy',
+      'Offline' => 'offline',
+      _ => null,
+    };
+    if (asset == null) {
+      return VtsaStatusChip(label: label, state: operationalStateFor(station));
+    }
+    return Semantics(
+      label: 'Status: $label',
+      child: Image.asset(
+        'assets/interface/status-$asset.png',
+        width: 164,
+        height: 40,
+        alignment: Alignment.centerLeft,
+        excludeFromSemantics: true,
+      ),
+    );
+  }
+}
+
 class DriverStationCard extends StatelessWidget {
   const DriverStationCard({
     required this.station,
@@ -78,11 +129,11 @@ class DriverStationCard extends StatelessWidget {
                 color: context.vtsaColors.brandSoft,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                'EV',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+              child: Image.asset(
+                'assets/interface/icon-charger.png',
+                width: 24,
+                height: 24,
+                excludeFromSemantics: true,
               ),
             ),
             const SizedBox(width: 12),
@@ -109,10 +160,7 @@ class DriverStationCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 6),
-                  VtsaStatusChip(
-                    label: availabilityLabel(station),
-                    state: operationalStateFor(station),
-                  ),
+                  StationStatusBadge(station: station),
                 ],
               ),
             ),
@@ -208,10 +256,7 @@ class StationCard extends StatelessWidget {
                 spacing: VtsaSpacing.xs,
                 runSpacing: VtsaSpacing.xs,
                 children: [
-                  VtsaStatusChip(
-                    label: availabilityLabel(station),
-                    state: operationalStateFor(station),
-                  ),
+                  StationStatusBadge(station: station),
                   _FactChip(
                     icon: station.connectionStatus == 'online'
                         ? Icons.cloud_done_outlined
@@ -285,11 +330,19 @@ class ConnectorCompatibilityTile extends StatelessWidget {
     final compatible = vehicle == null || vehicle!.connectorStandards.isEmpty
         ? null
         : vehicle!.supports(connector.standard);
+    final iconAsset = connectorAsset(connector.standard);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
         backgroundColor: context.vtsaColors.brandSoft,
-        child: const Icon(Icons.ev_station_outlined),
+        child: iconAsset == null
+            ? const Icon(Icons.ev_station_outlined)
+            : Image.asset(
+                'assets/interface/$iconAsset.png',
+                width: 24,
+                height: 24,
+                excludeFromSemantics: true,
+              ),
       ),
       title: Text(connector.name),
       subtitle: Text(

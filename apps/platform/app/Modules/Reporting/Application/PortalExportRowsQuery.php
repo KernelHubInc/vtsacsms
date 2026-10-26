@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Reporting\Application;
 
 use App\Models\User;
-use App\Modules\Charging\Application\AccessibleChargingSessionsQuery;
 use App\Modules\Charging\Domain\Models\ChargingSession;
-use App\Modules\Locations\Application\AccessibleSitesQuery;
 use Generator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -15,8 +13,7 @@ use Illuminate\Support\Facades\DB;
 final readonly class PortalExportRowsQuery
 {
     public function __construct(
-        private AccessibleSitesQuery $sites,
-        private AccessibleChargingSessionsQuery $sessions,
+        private PortalReportAccess $access,
     ) {}
 
     /**
@@ -57,9 +54,8 @@ final readonly class PortalExportRowsQuery
     /** @param array<string, scalar|null> $filters @return Generator<int, list<scalar|null>> */
     private function sessionRows(User $user, array $filters): Generator
     {
-        $accessibleIds = $this->sessions->for($user)->select('id');
         $query = DB::table('charging_sessions')
-            ->whereIn('id', $accessibleIds)
+            ->whereIn('site_id', $this->access->siteIds($user, 'sessions'))
             ->orderBy('id')
             ->select([
                 'id', 'site_id', 'charging_station_id', 'evse_id', 'connector_id', 'state',
@@ -84,9 +80,8 @@ final readonly class PortalExportRowsQuery
     /** @return Generator<int, list<scalar|null>> */
     private function assetRows(User $user): Generator
     {
-        $accessibleIds = $this->sites->for($user)->select('id');
         $query = DB::table('sites')
-            ->whereIn('sites.id', $accessibleIds)
+            ->whereIn('sites.id', $this->access->siteIds($user, 'assets'))
             ->leftJoin('charging_stations', 'charging_stations.site_id', '=', 'sites.id')
             ->groupBy([
                 'sites.id', 'sites.code', 'sites.name', 'sites.lifecycle_status', 'sites.timezone',
@@ -112,7 +107,9 @@ final readonly class PortalExportRowsQuery
     /** @param array<string, scalar|null> $filters @return Generator<int, list<scalar|null>> */
     private function financeRows(User $user, array $filters): Generator
     {
-        $sessionIds = $this->sessions->for($user)->select('id');
+        $sessionIds = DB::table('charging_sessions')
+            ->whereIn('site_id', $this->access->siteIds($user, 'finance'))
+            ->select('id');
         $query = DB::table('payment_intents')
             ->where('billable_type', ChargingSession::class)
             ->whereIn('billable_id', $sessionIds)

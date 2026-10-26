@@ -17,6 +17,9 @@ final class ChargingTariffSeeder extends Seeder
 {
     public function run(CurrentTenant $currentTenant): void
     {
+        if (! app()->environment(['local', 'development', 'testing', 'demo', 'staging'])) {
+            return;
+        }
         $currency = mb_strtoupper(trim((string) config('app.seed_demo_currency')));
         if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
             return;

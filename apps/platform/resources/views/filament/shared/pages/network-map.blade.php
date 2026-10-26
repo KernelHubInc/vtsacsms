@@ -41,9 +41,9 @@
                 <div data-map-empty hidden class="p-8 text-center text-sm text-gray-500">No sites match these filters.</div>
                 <div data-map-list class="max-h-[32rem] divide-y divide-gray-100 overflow-y-auto dark:divide-white/5"></div>
             </section>
-            <section class="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-gray-950" aria-label="Charging network map">
+            <section class="relative isolate overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-gray-950" aria-label="Charging network map">
                 <div data-map-canvas class="h-full min-h-[36rem] w-full"></div>
-                <aside data-map-drawer hidden class="absolute bottom-4 left-4 right-4 rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 lg:left-auto lg:w-96">
+                <aside data-map-drawer hidden class="absolute bottom-4 left-4 right-4 z-[1100] rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900 lg:left-auto lg:w-96">
                     <button data-map-close type="button" class="float-right rounded-lg p-1 text-gray-500 hover:bg-gray-100" aria-label="Close site details">✕</button>
                     <h2 data-drawer-name class="pr-8 text-lg font-semibold"></h2>
                     <p data-drawer-address class="mt-1 text-sm text-gray-500"></p>

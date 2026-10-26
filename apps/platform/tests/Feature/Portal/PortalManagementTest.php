@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Portal;
 
+use App\Filament\Operator\Pages\Reports;
 use App\Filament\Operator\Resources\PaymentIntents\PaymentIntentResource;
 use App\Modules\Assets\Domain\Models\ChargingCurrentType;
 use App\Modules\Assets\Domain\Models\ChargingStation;
@@ -12,7 +13,6 @@ use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Locations\Domain\SiteLifecycleStatus;
-use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\Models\Organization;
 use App\Modules\Organizations\Domain\OrganizationType;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -23,6 +23,7 @@ use App\Modules\Payments\Domain\Models\PaymentProviderConfig;
 use App\Modules\Reporting\Application\PortalDashboardQuery;
 use App\Modules\Reporting\Application\PortalExportRowsQuery;
 use App\Modules\Reporting\Application\PortalExportService;
+use App\Modules\Reporting\Application\PortalReportAccess;
 use App\Modules\Reporting\Domain\Models\PortalExport;
 use App\Modules\Reporting\Jobs\GeneratePortalExport;
 use App\Modules\Tenancy\Application\Queue\UseTenantContext;
@@ -30,6 +31,7 @@ use App\Modules\Tenancy\Domain\Models\Tenant;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\TenantSecurityTestCase;
 
 final class PortalManagementTest extends TenantSecurityTestCase
@@ -91,6 +93,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
         $this->withinTenant($tenant, $user, function () use ($user, $siteA, $siteB, $assignment): void {
             $first = app(PortalDashboardQuery::class)->map($user);
             $this->assertSame([(string) $siteA->getKey()], array_column($first, 'id'));
+            $this->assertNotEmpty($first[0]['operator_name']);
 
             $assignment->update(['scope_id' => $siteB->getKey()]);
             $second = app(PortalDashboardQuery::class)->map($user);
@@ -102,6 +105,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
     public function test_export_is_queued_with_tenant_context_and_rechecks_site_scope_when_generated(): void
     {
         Queue::fake();
+        config()->set('filesystems.report_disk', 'local');
         Storage::fake('local');
         $user = $this->createUser();
         $tenant = $this->createTenant('portal-export');
@@ -131,7 +135,8 @@ final class PortalManagementTest extends TenantSecurityTestCase
         Queue::assertPushed(GeneratePortalExport::class, function (GeneratePortalExport $pushed) use ($tenant, &$job): bool {
             $job = $pushed;
 
-            return $pushed->tenantJobEnvelope()->tenantId === (string) $tenant->getKey();
+            return $pushed->tenantJobEnvelope()->tenantId === (string) $tenant->getKey()
+                && $pushed->queue === 'reports';
         });
         /** @var PortalExport $export */
         $export = PortalExport::withoutGlobalScopes()->firstOrFail();
@@ -140,7 +145,7 @@ final class PortalManagementTest extends TenantSecurityTestCase
         }
         app(UseTenantContext::class)->handle($job, fn () => $job->handle(
             app(PortalExportRowsQuery::class),
-            app(AuthorizationService::class),
+            app(PortalReportAccess::class),
         ));
 
         $export->refresh();
@@ -154,6 +159,84 @@ final class PortalManagementTest extends TenantSecurityTestCase
             'action' => 'reporting.portal_export.queued',
             'target_id' => $export->getKey(),
         ]);
+    }
+
+    public function test_pdf_export_is_private_and_contains_only_the_requesters_current_sites(): void
+    {
+        Queue::fake();
+        config()->set('filesystems.report_disk', 's3');
+        Storage::fake('s3');
+        $user = $this->createUser();
+        $tenant = $this->createTenant('portal-pdf-export');
+
+        [$siteA, $siteB, $assignment] = $this->withinTenant($tenant, $user, function () use ($tenant, $user): array {
+            $operator = $this->operator($tenant);
+            $siteA = $this->site($tenant, $operator, 'PDF-A', 14.55, 121.02);
+            $siteB = $this->site($tenant, $operator, 'PDF-B', 14.60, 121.08);
+            $membership = $this->createMembership($tenant, $user);
+            $view = $this->createRole($tenant, 'pdf-site-view', [PermissionKey::LocationView, PermissionKey::ReportingView]);
+            $export = $this->createRole($tenant, 'pdf-site-export', [PermissionKey::ReportingExport]);
+            $this->assignDirectly($tenant, $membership, $view, new ResourceScope(ScopeType::Site, (string) $siteA->getKey()));
+            $assignment = $this->assignDirectly($tenant, $membership, $export, new ResourceScope(ScopeType::Site, (string) $siteA->getKey()));
+            app(PortalExportService::class)->queue($user, 'assets', [], 'pdf');
+
+            return [$siteA, $siteB, $assignment];
+        });
+
+        $job = null;
+        Queue::assertPushed(GeneratePortalExport::class, function (GeneratePortalExport $pushed) use (&$job): bool {
+            $job = $pushed;
+
+            return true;
+        });
+        self::assertInstanceOf(GeneratePortalExport::class, $job);
+        app(UseTenantContext::class)->handle($job, fn () => $job->handle(
+            app(PortalExportRowsQuery::class),
+            app(PortalReportAccess::class),
+        ));
+
+        $export = PortalExport::withoutGlobalScopes()->firstOrFail();
+        self::assertSame('completed', $export->status);
+        self::assertSame('s3', $export->disk);
+        self::assertSame(1, $export->row_count);
+        self::assertStringEndsWith('.pdf', (string) $export->path);
+        self::assertStringStartsWith('%PDF-', Storage::disk('s3')->get((string) $export->path));
+        $this->actingAs($user);
+        $this->withinTenant($tenant, $user, function () use ($user, $siteA, $siteB, $assignment): void {
+            $export = PortalExport::query()->firstOrFail();
+            self::assertSame(app(PortalReportAccess::class)->scopeFingerprint($user, 'assets'), $export->filters['_scope_hash']);
+            self::assertSame([(string) $siteA->getKey()], app(PortalReportAccess::class)->siteIds($user, 'assets'));
+            self::assertNotContains((string) $siteB->getKey(), app(PortalReportAccess::class)->siteIds($user, 'assets'));
+
+            $page = new Reports;
+            self::assertSame('application/pdf', $page->downloadExport((string) $export->getKey())->headers->get('Content-Type'));
+            $assignment->update(['scope_id' => $siteB->getKey()]);
+            try {
+                $page->downloadExport((string) $export->getKey());
+                self::fail('An export must be blocked after its site scope changes.');
+            } catch (HttpException $exception) {
+                self::assertSame(403, $exception->getStatusCode());
+            }
+        });
+    }
+
+    public function test_finance_export_requires_payment_access_even_when_reporting_is_allowed(): void
+    {
+        Queue::fake();
+        $user = $this->createUser();
+        $tenant = $this->createTenant('portal-finance-permission');
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $membership = $this->createMembership($tenant, $user);
+            $role = $this->createRole($tenant, 'no-payment-exporter', [
+                PermissionKey::ReportingView, PermissionKey::ReportingExport, PermissionKey::ChargingSessionView,
+            ]);
+            $this->assignDirectly($tenant, $membership, $role);
+
+            self::assertFalse(app(PortalReportAccess::class)->canExport($user, 'finance'));
+            $this->expectException(\DomainException::class);
+            app(PortalExportService::class)->queue($user, 'finance', [], 'pdf');
+        });
+        Queue::assertNothingPushed();
     }
 
     public function test_panel_operational_pages_require_authentication(): void
@@ -198,10 +281,10 @@ final class PortalManagementTest extends TenantSecurityTestCase
             ->assertDontSee($siteB->name);
         $this->actingAs($user)->get('/operator/reports')
             ->assertOk()
-            ->assertSee('Tenant-safe CSV exports');
+            ->assertSee('Download a report');
         $this->actingAs($user)->get('/operator')
             ->assertOk()
-            ->assertSee('Network availability');
+            ->assertSee('Operations overview');
     }
 
     public function test_authenticated_platform_admin_can_open_master_data_and_health_surfaces(): void

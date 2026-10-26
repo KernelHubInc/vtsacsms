@@ -1,0 +1,9 @@
+# Public website responsive redesign
+
+The [desktop and mobile homepage frames](https://www.figma.com/design/BQ1kbuaFccEE6I28OWg08t/Untitled?node-id=0-1) guide the public site's layout. The implementation keeps the repository's Power Solutions logo, navy/blue/turquoise tokens, Laravel CMS, public routes, and real charging-map behavior.
+
+The homepage follows the design's editorial sequence: opening statement and photography; network context; station discovery; practical station signals; driver journey; destination photography; partner information; FAQs; and a closing invitation. Shared navigation and footer styling carry the visual language to other public pages. Secondary page heroes use the same two-column rhythm instead of the former orbit illustration.
+
+The Figma station examples are illustrative. The website does not publish them as stations. The homepage now uses the same public map provider, published-station API, status labels, station drawer, and location control as the full charging map. Search, connector, and status filters update the homepage map directly; without JavaScript, the form submits to the full map. All statuses is the default: published active stations remain visible while offline, including stations whose connector setup is pending. Offline markers are neutral and labeled, never represented as available. The homepage loads up to 250 matching published stations across the network and fits them into view. The full map retains its advanced filters and viewport-based browsing. Published CMS hero copy, feature items, FAQs, partner logos, testimonials, app links, and articles remain dynamic.
+
+Responsive layout uses a single column for the hero below 900 px and phone-specific photography below 640 px. The station search, navigation, cards, FAQ controls, and footer remain keyboard usable. The large photos are local, versioned assets exported from the supplied Figma file; no runtime Figma asset URLs are used.

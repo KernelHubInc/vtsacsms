@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
@@ -72,16 +74,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         ? maps.googleReady
         : maps.tileConfigurationValid;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.dependencies.discovery.stations.isEmpty) {
-        widget.dependencies.discovery.loadBounds(
-          const GeoBounds(
-            west: 120.85,
-            south: 14.45,
-            east: 121.15,
-            north: 14.78,
-          ),
-        );
-      }
+      unawaited(_locateUser(initial: true));
     });
   }
 
@@ -410,19 +403,24 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     );
   }
 
-  Future<void> _locateUser({bool nearest = false}) async {
+  Future<void> _locateUser({bool nearest = false, bool initial = false}) async {
+    if (!mounted) return;
     setState(() => _locating = true);
     try {
       final position = await widget.dependencies.location.currentPosition();
       if (!mounted) return;
       if (position == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Location is unavailable or permission was not granted.',
+        if (initial) {
+          await _loadDefaultArea();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location is unavailable or permission was not granted.',
+              ),
             ),
-          ),
-        );
+          );
+        }
         return;
       }
       setState(() {
@@ -430,7 +428,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         _userPosition = MapPosition(position.latitude, position.longitude);
         if (nearest) _showMap = false;
       });
-      if (nearest) {
+      if (nearest || initial) {
         await widget.dependencies.discovery.loadNearby(
           latitude: position.latitude,
           longitude: position.longitude,
@@ -439,15 +437,26 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       }
     } on Exception {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your location could not be retrieved right now.'),
-          ),
-        );
+        if (initial) {
+          await _loadDefaultArea();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Your location could not be retrieved right now.'),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  Future<void> _loadDefaultArea() async {
+    if (widget.dependencies.discovery.stations.isNotEmpty) return;
+    await widget.dependencies.discovery.loadBounds(
+      const GeoBounds(west: 120.85, south: 14.45, east: 121.15, north: 14.78),
+    );
   }
 
   Future<void> _showFilters(BuildContext context) async {

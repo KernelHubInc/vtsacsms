@@ -1,4 +1,4 @@
-FROM php:8.4-cli-alpine AS php-base
+FROM php:8.4.27-cli-alpine3.24 AS php-base
 
 ENV APP_ENV=local \
     COMPOSER_ALLOW_SUPERUSER=1
@@ -19,7 +19,7 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 FROM php-base AS php-dependencies
 
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,target=/tmp/composer-cache \
+RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
     composer install --no-interaction --prefer-dist --no-scripts --no-progress
 
@@ -50,7 +50,7 @@ HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
 
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public", "server.php"]
 
-FROM php:8.4-fpm-alpine AS production-base
+FROM php:8.4.27-fpm-alpine3.24 AS production-base
 
 ENV APP_ENV=production \
     APP_DEBUG=false \
@@ -72,7 +72,7 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 FROM production-base AS production-dependencies
 
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,target=/tmp/composer-cache \
+RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
     composer install --no-interaction --prefer-dist --no-dev --no-scripts --no-progress
 

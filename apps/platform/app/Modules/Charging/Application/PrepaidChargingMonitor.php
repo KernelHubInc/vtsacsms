@@ -14,6 +14,7 @@ use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Domain\Models\InboundOcppEvent;
 use App\Modules\Charging\Domain\Models\MeterReading;
 use App\Modules\Charging\Domain\Models\StationConnection;
+use App\Modules\Notifications\Application\ChargingSummaryQueue;
 use App\Modules\Tariffs\Application\RatingInput;
 use App\Modules\Tariffs\Application\TariffEngine;
 use Carbon\CarbonImmutable;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class PrepaidChargingMonitor
 {
-    public function __construct(private PrepaidWallet $wallet) {}
+    public function __construct(private PrepaidWallet $wallet, private ChargingSummaryQueue $summaries) {}
 
     public function reconcile(string $sessionId): void
     {
@@ -29,6 +30,16 @@ final readonly class PrepaidChargingMonitor
             $session = ChargingSession::query()->whereKey($sessionId)->lockForUpdate()->firstOrFail();
             $owner = CustomerChargingSession::query()->where('session_id', $sessionId)->lockForUpdate()->firstOrFail();
             if ($owner->settled_at !== null) {
+                if ($owner->payment_state === 'captured' && $session->state->value === 'completed'
+                    && $session->finalization_outcome === 'complete') {
+                    $cdr = ChargeDetailRecord::query()->where('session_id', $sessionId)->where('state', 'finalized')->latest('version')->first();
+                    if ($cdr !== null && $cdr->currency === 'PHP' && $cdr->total_minor !== null
+                        && (int) $cdr->total_minor === (int) $session->final_cost_minor
+                        && (int) $cdr->total_minor <= $owner->budget_minor) {
+                        $this->recordSummary($session, $owner, $cdr);
+                    }
+                }
+
                 return;
             }
             if ($this->cancelConfirmedIdleStart($session)) {
@@ -54,6 +65,7 @@ final readonly class PrepaidChargingMonitor
                 }
                 $this->wallet->settle((string) $owner->subject_id, 'live', $sessionId, (int) $cdr->total_minor, $owner->payer_account_id);
                 $owner->forceFill(['payment_state' => 'captured', 'settled_at' => now('UTC')])->save();
+                $this->recordSummary($session, $owner, $cdr);
 
                 return;
             }
@@ -114,6 +126,23 @@ final readonly class PrepaidChargingMonitor
             // This service identity acts under the driver's recorded spending-limit consent.
             app(RemoteStopService::class)->request($session, 'budget-stop-'.$sessionId.'-'.$attempts, true);
         });
+    }
+
+    private function recordSummary(ChargingSession $session, CustomerChargingSession $owner, ChargeDetailRecord $cdr): void
+    {
+        $owner->loadMissing('quote');
+        $target = $owner->quote->disclosure['target'] ?? [];
+        $this->summaries->record((string) $session->getKey(), (string) $owner->subject_id, [
+            'station' => (string) ($target['station_name'] ?? $session->charge_point_identity),
+            'connector' => (string) ($target['connector_name'] ?? $session->connector_id),
+            'started_at' => $session->started_at?->utc()->toISOString(),
+            'stopped_at' => $session->stopped_at?->utc()->toISOString(),
+            'energy_wh' => (int) $cdr->energy_wh,
+            'duration_seconds' => (int) $cdr->duration_seconds,
+            'amount_minor' => (int) $cdr->total_minor,
+            'currency' => (string) $cdr->currency,
+            'payment_method' => (string) ($owner->quote->disclosure['attribution']['payer'] ?? 'Prepaid wallet'),
+        ]);
     }
 
     private function cancelConfirmedIdleStart(ChargingSession $session): bool
