@@ -28,6 +28,8 @@ ssh_options=(-i "$key" -o BatchMode=yes -o IdentitiesOnly=yes
     -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts"
     -o ConnectTimeout=8)
 
+# The caller builds the remote command locally; SSH executes it on the selected node.
+# shellcheck disable=SC2029
 remote() { ssh "${ssh_options[@]}" "root@$1" "${@:2}"; }
 read_branch() {
     local result
