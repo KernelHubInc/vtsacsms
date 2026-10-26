@@ -19,7 +19,7 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 FROM php-base AS php-dependencies
 
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,target=/tmp/composer-cache \
+RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
     composer install --no-interaction --prefer-dist --no-scripts --no-progress
 
@@ -72,7 +72,7 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 FROM production-base AS production-dependencies
 
 COPY composer.json composer.lock ./
-RUN --mount=type=cache,target=/tmp/composer-cache \
+RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
     composer install --no-interaction --prefer-dist --no-dev --no-scripts --no-progress
 
