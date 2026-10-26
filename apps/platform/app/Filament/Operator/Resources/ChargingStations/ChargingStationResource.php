@@ -29,6 +29,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -133,6 +134,15 @@ final class ChargingStationResource extends Resource
             IconColumn::make('is_public')->boolean(),
         ])
             ->filters([
+                TernaryFilter::make('historical_records')
+                    ->label('Retired stations')
+                    ->trueLabel('Include retired')
+                    ->falseLabel('Current only')
+                    ->default(false)
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query,
+                        false: fn (Builder $query): Builder => $query->where('charging_stations.lifecycle_status', '!=', AssetLifecycleStatus::Retired->value),
+                    ),
                 SelectFilter::make('lifecycle_status')
                     ->options(collect(AssetLifecycleStatus::cases())->mapWithKeys(
                         fn (AssetLifecycleStatus $status): array => [

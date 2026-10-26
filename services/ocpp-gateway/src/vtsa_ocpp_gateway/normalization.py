@@ -15,10 +15,11 @@ def normalize_v16_meter_values(values: list[Any]) -> list[JsonObject]:
         for sampled in meter_value.get("sampled_value", []):
             if not isinstance(sampled, dict):
                 continue
+            default_unit = "Percent" if sampled.get("measurand") == "SoC" else "Wh"
             samples.append(
                 _normalize_sample(
                     value=sampled.get("value"),
-                    unit=sampled.get("unit") or "Wh",
+                    unit=sampled.get("unit") or default_unit,
                     measurand=sampled.get("measurand") or "Energy.Active.Import.Register",
                     timestamp=timestamp,
                     context=sampled.get("context"),
@@ -38,7 +39,8 @@ def normalize_v201_meter_values(values: list[Any]) -> list[JsonObject]:
             if not isinstance(sampled, dict):
                 continue
             unit_measure = sampled.get("unit_of_measure") or {}
-            unit = unit_measure.get("unit") or "Wh"
+            default_unit = "Percent" if sampled.get("measurand") == "SoC" else "Wh"
+            unit = unit_measure.get("unit") or default_unit
             multiplier = unit_measure.get("multiplier") or 0
             value = sampled.get("value")
             try:

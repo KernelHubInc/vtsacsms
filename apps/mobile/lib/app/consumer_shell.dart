@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/notices/driver_notice_banner.dart';
 import 'package:vtsa_mobile/l10n/app_localizations.dart';
 
 class ConsumerShell extends StatelessWidget {
@@ -51,9 +52,13 @@ class ConsumerShell extends StatelessWidget {
       _ => 0,
     };
     return AnimatedBuilder(
-      animation: dependencies.charging,
+      animation: Listenable.merge([
+        dependencies.charging,
+        if (dependencies.notices != null) dependencies.notices!,
+      ]),
       builder: (context, _) {
         final charging = dependencies.charging;
+        final banner = dependencies.notices?.openingBanner;
         final showActive =
             charging.session != null &&
             charging.phase != ChargingFlowPhase.idle &&
@@ -70,7 +75,23 @@ class ConsumerShell extends StatelessWidget {
             activeSession: showActive
                 ? _ActiveSessionBanner(dependencies: dependencies)
                 : null,
-            child: child,
+            child: Column(
+              children: [
+                if (banner != null)
+                  DriverNoticeBanner(
+                    notice: banner,
+                    onDismiss: () =>
+                        dependencies.notices?.dismissBanner(banner.id),
+                  ),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: banner != null,
+                    child: child,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },

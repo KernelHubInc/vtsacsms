@@ -57,6 +57,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $aggregate_version
  * @property-read CustomerChargingSession|null $customer
  * @property-read MeterReading|null $latestPower
+ * @property-read MeterReading|null $latestStateOfCharge
  */
 final class ChargingSession extends Model
 {
@@ -77,6 +78,15 @@ final class ChargingSession extends Model
         return $this->hasOne(MeterReading::class, 'session_id')->ofMany(
             ['sampled_at' => 'max', 'id' => 'max'],
             fn ($query) => $query->where('measurand', 'Power.Active.Import')->where('unit', 'W')->whereNull('phase'),
+        );
+    }
+
+    /** @return HasOne<MeterReading, $this> */
+    public function latestStateOfCharge(): HasOne
+    {
+        return $this->hasOne(MeterReading::class, 'session_id')->ofMany(
+            ['sampled_at' => 'max', 'id' => 'max'],
+            fn ($query) => $query->where('measurand', 'SoC')->where('unit', 'Percent')->whereNull('phase'),
         );
     }
 

@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Database\Seeders\PublicCmsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Redis;
+use RuntimeException;
 use Tests\TestCase;
 
 final class InfrastructureTest extends TestCase
@@ -48,6 +50,41 @@ final class InfrastructureTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'ready')
             ->assertJsonPath('checks.database', 'ok');
+    }
+
+    public function test_readiness_rejects_a_node_when_shared_redis_is_unavailable(): void
+    {
+        config()->set('queue.default', 'redis');
+        Redis::shouldReceive('connection')
+            ->once()
+            ->with('default')
+            ->andThrow(new RuntimeException('Redis unavailable'));
+
+        $this->getJson('/health/ready')
+            ->assertStatus(503)
+            ->assertJsonPath('status', 'unavailable')
+            ->assertJsonPath('checks.database', 'ok')
+            ->assertJsonPath('checks.redis', 'unavailable');
+    }
+
+    public function test_readiness_checks_the_redis_cache_connection(): void
+    {
+        config()->set('cache.default', 'redis');
+        Redis::shouldReceive('connection')
+            ->once()
+            ->with('cache')
+            ->andReturn(new class
+            {
+                public function ping(): bool
+                {
+                    return true;
+                }
+            });
+
+        $this->getJson('/health/ready')
+            ->assertOk()
+            ->assertJsonPath('checks.database', 'ok')
+            ->assertJsonPath('checks.redis', 'ok');
     }
 
     public function test_valid_request_and_correlation_ids_are_propagated(): void

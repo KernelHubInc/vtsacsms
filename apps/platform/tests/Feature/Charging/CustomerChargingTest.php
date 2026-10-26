@@ -223,6 +223,58 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_optional_charger_state_of_charge_is_reported_without_affecting_billing(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('charger-soc');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'soc-start-01');
+            self::assertNull($service->present($session)['battery_percentage']);
+
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', [
+                'connector_id' => 1, 'protocol_transaction_id' => 94, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted',
+            ]);
+            $this->event((string) $tenant->getKey(), $connector, 'meter_values', [
+                'connector_id' => 1, 'protocol_transaction_id' => 94,
+                'samples' => [
+                    ['timestamp' => now('UTC')->addSecond()->toISOString(), 'measurand' => 'SoC', 'unit' => 'Percent', 'value' => 64],
+                    ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 1250],
+                ],
+            ]);
+
+            $projection = $service->present($session->refresh());
+            self::assertSame(64, $projection['battery_percentage']);
+            self::assertNotNull($projection['battery_reported_at']);
+            self::assertSame(250, $projection['energy_wh']);
+            self::assertNotContains('invalid_meter_value', $session->anomaly_flags);
+            self::assertNotContains('out_of_order_meter', $session->anomaly_flags);
+
+            $this->travel(10)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'meter_values', [
+                'connector_id' => 1, 'protocol_transaction_id' => 94,
+                'samples' => [
+                    ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'SoC', 'unit' => '%', 'value' => 65.6],
+                    ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 1300],
+                ],
+            ]);
+            self::assertSame(66, $service->present($session->refresh())['battery_percentage']);
+
+            $this->travel(10)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'stop_transaction', [
+                'protocol_transaction_id' => 94, 'meter_stop_wh' => 1300, 'reason' => 'Remote', 'samples' => [],
+            ]);
+            $final = $service->present($session->refresh());
+            self::assertSame('completed', $final['state']);
+            self::assertNotNull($final['started_at']);
+            self::assertNotNull($final['stopped_at']);
+            self::assertSame(66, $final['battery_percentage']);
+            self::assertSame(300, $final['energy_wh']);
+        });
+    }
+
     public function test_five_hundred_peso_budget_is_reserved_and_requests_stop_before_limit(): void
     {
         config(['mobile_charging.maximum_reservation_minor' => 50_000]);

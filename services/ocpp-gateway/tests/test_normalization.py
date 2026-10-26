@@ -51,3 +51,13 @@ def test_invalid_meter_value_is_retained_as_text_for_downstream_rejection() -> N
     )
 
     assert samples[0]["value"] == "not-a-number"
+
+
+def test_state_of_charge_defaults_to_percent_for_both_protocols() -> None:
+    sample = {"measurand": "SoC", "value": "64"}
+
+    v16 = normalize_v16_meter_values([{"sampled_value": [sample]}])
+    v201 = normalize_v201_meter_values([{"sampled_value": [sample]}])
+
+    assert v16[0]["unit"] == "Percent"
+    assert v201[0]["unit"] == "Percent"

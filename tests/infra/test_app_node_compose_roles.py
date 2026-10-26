@@ -38,6 +38,20 @@ class AppNodeComposeRolesTest(unittest.TestCase):
         )
         self.assertEqual(set(result.stdout.splitlines()), {"platform", "web"})
 
+    def test_staging_can_share_the_existing_gateway_network(self):
+        env = os.environ.copy()
+        env["APP_NETWORK_NAME"] = "vtsa-csms-staging_default"
+        env["APP_NETWORK_EXTERNAL"] = "true"
+        result = subprocess.run(
+            ["docker", "compose", "--env-file", str(STAGING_ENV_FILE),
+             "-f", str(COMPOSE), "config", "--format", "json"],
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=30,
+            check=True,
+        )
+        self.assertEqual(json.loads(result.stdout)["networks"]["application"], {
+            "name": "vtsa-csms-staging_default", "ipam": {}, "external": True,
+        })
+
     def test_web_node_does_not_run_jobs_or_gateway_consumers(self):
         self.assertEqual(services(""), {"platform", "web"})
 

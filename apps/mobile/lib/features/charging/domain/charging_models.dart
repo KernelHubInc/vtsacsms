@@ -300,6 +300,8 @@ final class ChargingSession {
     this.startedAt,
     this.stoppedAt,
     this.currentPowerW,
+    this.batteryPercentage,
+    this.batteryReportedAt,
     this.estimatedCost,
     this.finalCost,
     this.startDeadlineAt,
@@ -332,6 +334,10 @@ final class ChargingSession {
       durationSeconds: json['duration_seconds']! as int,
       energyFlowSeconds: json['energy_flow_seconds'] as int? ?? 0,
       currentPowerW: json['current_power_w'] as int?,
+      batteryPercentage: json['battery_percentage'] as int?,
+      batteryReportedAt: json['battery_reported_at'] == null
+          ? null
+          : DateTime.parse(json['battery_reported_at']! as String).toUtc(),
       estimatedCost: money('estimated_cost_minor'),
       finalCost: money('final_cost_minor'),
       requestedAt: DateTime.parse(json['requested_at']! as String).toUtc(),
@@ -378,6 +384,8 @@ final class ChargingSession {
   final int durationSeconds;
   final int energyFlowSeconds;
   final int? currentPowerW;
+  final int? batteryPercentage;
+  final DateTime? batteryReportedAt;
   final Money? estimatedCost;
   final Money? finalCost;
   final DateTime requestedAt;

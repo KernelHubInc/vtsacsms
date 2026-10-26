@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vtsa_mobile/app/bootstrap_controller.dart';
@@ -30,6 +33,8 @@ import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.d
 import 'package:vtsa_mobile/features/favorites/domain/favorites_repository.dart';
 import 'package:vtsa_mobile/features/kyc/data/api_kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
+import 'package:vtsa_mobile/features/notices/driver_notices.dart';
+import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
 import 'package:vtsa_mobile/features/vehicles/application/vehicles_controller.dart';
 import 'package:vtsa_mobile/features/vehicles/data/api_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
@@ -56,6 +61,8 @@ final class AppDependencies {
     this.kycRepository,
     this.walletRepository,
     this.accounts,
+    this.notices,
+    this.noticePush = const NoopNoticePushRegistration(),
   });
 
   factory AppDependencies.fromParts({
@@ -75,12 +82,17 @@ final class AppDependencies {
     KycRepository? kycRepository,
     WalletRepository? walletRepository,
     ChargingAccountsController? accounts,
+    DriverNoticeRepository? noticeRepository,
+    NoticePushRegistration noticePush = const NoopNoticePushRegistration(),
   }) {
     late final AuthController auth;
     String ownerId() =>
         auth.user?.id.isNotEmpty == true ? auth.user!.id : 'guest';
     auth = AuthController(repository: authRepository, tokens: tokenStore);
     final network = NetworkState(connectivity);
+    final notices = noticeRepository == null
+        ? null
+        : DriverNoticesController(noticeRepository);
     const push = NoopPushRegistrationService();
     final charging = ChargingController(
       repository: chargingRepository,
@@ -97,7 +109,9 @@ final class AppDependencies {
     var lastVerified = false;
     auth.addListener(() {
       if (auth.status == AuthStatus.guest) {
+        unawaited(noticePush.unregister());
         accounts?.clear();
+        notices?.clear();
         final previous = lastOwner;
         lastOwner = null;
         lastVerified = false;
@@ -116,7 +130,13 @@ final class AppDependencies {
         if ((changed || !lastVerified) && verified && accounts != null) {
           unawaited(accounts.load());
         }
+        if ((changed || !lastVerified) && verified) {
+          if (notices != null) unawaited(notices.refresh());
+          unawaited(noticePush.register());
+        }
         lastVerified = verified;
+      } else if (auth.status == AuthStatus.locked) {
+        lastVerified = false;
       }
     });
 
@@ -147,6 +167,8 @@ final class AppDependencies {
       kycRepository: kycRepository,
       walletRepository: walletRepository,
       accounts: accounts,
+      notices: notices,
+      noticePush: noticePush,
     );
     String? selectedAccount;
     String? selectedPermissions;
@@ -189,11 +211,28 @@ final class AppDependencies {
       baseUrl: localEnvironment.apiBaseUrl,
       tokenStore: tokens,
     );
+    late final AppDependencies dependencies;
+    NoticePushRegistration noticePush = const NoopNoticePushRegistration();
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        localEnvironment.name == AppEnvironmentName.staging) {
+      try {
+        await Firebase.initializeApp();
+        noticePush = FirebaseNoticePushRegistration(
+          client: client,
+          messaging: FirebaseMessaging.instance,
+          onNotice: () async {
+            await dependencies.notices?.refresh();
+          },
+        );
+      } on Object {
+        // A Firebase outage must not block sign-in, charging, or wallet access.
+      }
+    }
     final environment = localEnvironment.withMaps(
       await MapConfigurationRepository(client).resolve(localEnvironment.maps),
     );
 
-    late final AppDependencies dependencies;
     final accounts = ChargingAccountsController(
       ApiChargingAccountRepository(client),
       ownerId: () => dependencies.auth.user?.id ?? 'guest',
@@ -226,6 +265,8 @@ final class AppDependencies {
         accountId: () => accounts.accountId,
       ),
       accounts: accounts,
+      noticeRepository: ApiDriverNoticeRepository(client),
+      noticePush: noticePush,
       directions: ExternalDirectionsService(),
       location: GeolocatorDeviceLocationService(),
     );
@@ -251,6 +292,8 @@ final class AppDependencies {
   final KycRepository? kycRepository;
   final WalletRepository? walletRepository;
   final ChargingAccountsController? accounts;
+  final DriverNoticesController? notices;
+  final NoticePushRegistration noticePush;
 
   Future<void> initialize() async {
     await Future.wait([
@@ -265,6 +308,8 @@ final class AppDependencies {
       await Future.wait([
         vehicles.load(),
         pushRegistration.register(),
+        noticePush.register(),
+        if (notices != null) notices!.refresh(),
         if (featureFlags.remoteCharging || featureFlags.simulatedCharging)
           charging.restoreAuthoritativeSession(),
       ]);
@@ -273,6 +318,8 @@ final class AppDependencies {
 
   void dispose() {
     accounts?.dispose();
+    notices?.dispose();
+    noticePush.dispose();
     bootstrap.dispose();
     auth.dispose();
     charging.dispose();

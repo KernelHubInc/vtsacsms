@@ -18,6 +18,7 @@ import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
+import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
@@ -218,6 +219,8 @@ ChargingSession sampleChargingSession({
   int energyWh = 0,
   int durationSeconds = 0,
   int? currentPowerW,
+  int? batteryPercentage,
+  DateTime? batteryReportedAt,
   int aggregateVersion = 1,
   DateTime? startDeadlineAt,
   Money? finalCost,
@@ -236,6 +239,8 @@ ChargingSession sampleChargingSession({
   energyWh: energyWh,
   durationSeconds: durationSeconds,
   currentPowerW: currentPowerW,
+  batteryPercentage: batteryPercentage,
+  batteryReportedAt: batteryReportedAt,
   estimatedCost: const Money(minorUnits: 2500, currency: 'PHP'),
   finalCost: finalCost,
   requestedAt: DateTime.utc(2026, 7, 26, 3),
@@ -427,6 +432,7 @@ buildTestDependencies({
   TokenStore? tokenStore,
   MapConfiguration? maps,
   DeviceLocationService location = const UnavailableDeviceLocationService(),
+  NoticePushRegistration noticePush = const NoopNoticePushRegistration(),
 }) async {
   SharedPreferences.setMockInitialValues({
     'onboarding_complete_v1': onboardingComplete,
@@ -482,6 +488,7 @@ buildTestDependencies({
     kycRepository: kycRepository,
     walletRepository: walletRepository,
     accounts: accounts,
+    noticePush: noticePush,
     featureFlags: const FeatureFlags(
       ocpp: false,
       remoteCharging: false,

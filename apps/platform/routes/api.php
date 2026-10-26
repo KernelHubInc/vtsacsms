@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ChargingSessionController;
 use App\Http\Controllers\Api\V1\ChargingStationController;
 use App\Http\Controllers\Api\V1\CustomerChargingController;
 use App\Http\Controllers\Api\V1\DeviceController;
+use App\Http\Controllers\Api\V1\DriverNoticeController;
 use App\Http\Controllers\Api\V1\DriverVehicleController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\V1\MaintenanceController;
 use App\Http\Controllers\Api\V1\MembershipLifecycleController;
 use App\Http\Controllers\Api\V1\MobileAuthController;
 use App\Http\Controllers\Api\V1\MobileVerificationController;
+use App\Http\Controllers\Api\V1\NotificationDeviceController;
 use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
 use App\Http\Controllers\Api\V1\PublicStationSearchController;
@@ -121,6 +123,12 @@ Route::prefix('v1')->middleware([
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
 
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
+        Route::get('/mobile/notices', DriverNoticeController::class)
+            ->middleware('throttle:60,1')->name('api.v1.mobile.notices.index');
+        Route::put('/mobile/notification-device', [NotificationDeviceController::class, 'store'])
+            ->middleware('throttle:30,1')->name('api.v1.mobile.notification-device.store');
+        Route::delete('/mobile/notification-device', [NotificationDeviceController::class, 'destroy'])
+            ->middleware('throttle:30,1')->name('api.v1.mobile.notification-device.destroy');
         Route::prefix('mobile')->middleware('throttle:60,1')->group(function (): void {
             $charging = CustomerChargingController::class;
             Route::post('/charging/prepare', [$charging, 'prepare']);

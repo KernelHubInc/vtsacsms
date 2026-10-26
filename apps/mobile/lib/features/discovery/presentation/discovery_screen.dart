@@ -85,6 +85,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       widget.dependencies.favorites,
       widget.dependencies.network,
       widget.dependencies.vehicles,
+      if (widget.dependencies.notices != null) widget.dependencies.notices!,
     ]),
     builder: (context, _) {
       final discovery = widget.dependencies.discovery;
@@ -105,7 +106,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 600),
                           child: RefreshIndicator(
-                            onRefresh: discovery.refresh,
+                            onRefresh: () async {
+                              await discovery.refresh();
+                              await widget.dependencies.notices?.refresh();
+                            },
                             child: ListView(
                               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                               children: [
@@ -120,6 +124,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                               Theme.of(context).brightness ==
                                               Brightness.dark,
                                         ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Updates',
+                                      onPressed: () => context.push('/updates'),
+                                      icon: const Icon(
+                                        Icons.notifications_outlined,
                                       ),
                                     ),
                                     IconButton(

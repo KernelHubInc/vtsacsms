@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-repo_dir="${VTSA_REPO_DIR:-/opt/vtsa-csms}"
 repository_read_key="${VTSA_REPOSITORY_READ_KEY:-/root/.ssh/vtsa_repository_read}"
 environment="${1:-}"
 release_tag="${2:-}"
 migrate="${3:-}"
+repo_dir="${VTSA_REPO_DIR:-/opt/vtsa-csms}"
+if [[ -z "${VTSA_REPO_DIR:-}" && "$environment" == "staging" && \
+    -d /opt/vtsa-csms-release/.git ]]; then
+    repo_dir=/opt/vtsa-csms-release
+fi
 
 fail() {
     printf 'ERROR: %s\n' "$1" >&2
@@ -60,6 +64,13 @@ if [[ "$environment" == "staging" ]]; then
     require_setting REDIS_PORT 6380
     require_setting REDIS_PREFIX vtsa:staging:
     require_setting MINIO_BUCKET vtsa-staging
+    if docker ps --format '{{.Names}}' | grep -q '^vtsa-csms-staging-redis-'; then
+        require_setting APP_NETWORK_EXTERNAL true
+        staging_network="$(sed -n 's/^APP_NETWORK_NAME=//p' "$env_file" | head -n 1)"
+        [[ -n "$staging_network" ]] || fail 'Set APP_NETWORK_NAME to the existing staging network.'
+        docker network inspect "$staging_network" >/dev/null 2>&1 || \
+            fail "Existing staging network $staging_network is missing."
+    fi
     other_env_file="/etc/vtsa-csms/production.env"
 else
     require_setting COMPOSE_PROJECT_NAME vtsa-csms-production
@@ -172,12 +183,16 @@ rollback() {
         export IMAGE_TAG="$previous_tag"
         git checkout --quiet --detach "${previous_tag#sha-}"
         docker compose --env-file "$env_file" -f "$repo_dir/infra/cluster/compose.app.yaml" \
-            up --detach --remove-orphans --wait --wait-timeout 180 "${services[@]}" || true
+            up --detach "${orphan_option[@]}" --wait --wait-timeout 180 "${services[@]}" || true
     fi
 }
 
 printf 'Replacing this %s node while its peer remains online...\n' "$environment"
-if ! "${compose[@]}" up --detach --remove-orphans --wait --wait-timeout 180 "${services[@]}"; then
+orphan_option=()
+if [[ "$environment" == "production" ]]; then
+    orphan_option=(--remove-orphans)
+fi
+if ! "${compose[@]}" up --detach "${orphan_option[@]}" --wait --wait-timeout 180 "${services[@]}"; then
     rollback
     fail "Containers did not become healthy."
 fi

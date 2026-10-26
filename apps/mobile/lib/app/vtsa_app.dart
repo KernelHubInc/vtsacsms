@@ -22,6 +22,7 @@ class VtsaApp extends StatefulWidget {
 class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
   late final GoRouter _router;
   bool _obscured = false;
+  Timer? _noticeRefreshTimer;
 
   @override
   void initState() {
@@ -31,11 +32,13 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
     widget.dependencies.discovery.startAutoRefresh(
       canRefresh: () => widget.dependencies.network.isOnline,
     );
+    _startNoticeRefresh();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _noticeRefreshTimer?.cancel();
     _router.dispose();
     widget.dependencies.dispose();
     super.dispose();
@@ -49,14 +52,22 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
       widget.dependencies.auth.lock();
     }
     if (state == AppLifecycleState.resumed) {
+      _startNoticeRefresh();
+      if (widget.dependencies.auth.status == AuthStatus.authenticated &&
+          !widget.dependencies.auth.needsEmailVerification) {
+        unawaited(widget.dependencies.noticePush.register());
+      }
       widget.dependencies.discovery.startAutoRefresh(
         canRefresh: () => widget.dependencies.network.isOnline,
       );
       if (widget.dependencies.network.isOnline) {
         unawaited(widget.dependencies.discovery.refresh());
+        final notices = widget.dependencies.notices;
+        if (notices != null) unawaited(notices.refresh());
       }
     } else {
       widget.dependencies.discovery.stopAutoRefresh();
+      _noticeRefreshTimer?.cancel();
     }
     if (state == AppLifecycleState.resumed &&
         widget.dependencies.auth.status == AuthStatus.authenticated &&
@@ -65,6 +76,19 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
             widget.dependencies.featureFlags.simulatedCharging)) {
       unawaited(widget.dependencies.charging.onResumed());
     }
+  }
+
+  void _startNoticeRefresh() {
+    _noticeRefreshTimer?.cancel();
+    _noticeRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final notices = widget.dependencies.notices;
+      if (notices != null &&
+          widget.dependencies.network.isOnline &&
+          widget.dependencies.auth.status == AuthStatus.authenticated &&
+          !widget.dependencies.auth.needsEmailVerification) {
+        unawaited(notices.refresh());
+      }
+    });
   }
 
   @override

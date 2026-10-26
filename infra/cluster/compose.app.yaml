@@ -209,3 +209,5 @@ services:
 
 networks:
   application:
+    name: ${APP_NETWORK_NAME:-${COMPOSE_PROJECT_NAME:-vtsa-csms-app}_application}
+    external: ${APP_NETWORK_EXTERNAL:-false}

@@ -32,6 +32,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -124,6 +125,15 @@ final class SiteResource extends Resource
             TextColumn::make('timezone'),
         ])
             ->filters([
+                TernaryFilter::make('historical_records')
+                    ->label('Retired sites')
+                    ->trueLabel('Include retired')
+                    ->falseLabel('Current only')
+                    ->default(false)
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query,
+                        false: fn (Builder $query): Builder => $query->where('sites.lifecycle_status', '!=', SiteLifecycleStatus::Retired->value),
+                    ),
                 SelectFilter::make('lifecycle_status')
                     ->options(collect(SiteLifecycleStatus::cases())->mapWithKeys(
                         fn (SiteLifecycleStatus $status): array => [

@@ -562,6 +562,23 @@
             ],
             "minimum": 0
           },
+          "battery_percentage": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Last valid charger-reported SoC for this session; null when the charger has not reported it. This is not inferred from delivered energy."
+          },
+          "battery_reported_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Charger sample time for battery_percentage, when available."
+          },
           "currency": {
             "type": [
               "string",
@@ -668,6 +685,8 @@
           "duration_seconds",
           "energy_flow_seconds",
           "current_power_w",
+          "battery_percentage",
+          "battery_reported_at",
           "currency",
           "estimated_cost_minor",
           "final_cost_minor",

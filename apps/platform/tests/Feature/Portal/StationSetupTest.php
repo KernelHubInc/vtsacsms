@@ -10,6 +10,7 @@ use App\Filament\Operator\Resources\Connectors\Pages\ListConnectors;
 use App\Filament\Operator\Resources\Evses\Pages\ListEvses;
 use App\Filament\Operator\Resources\OperatingHours\Pages\ListOperatingHours;
 use App\Filament\Operator\Resources\Sites\Pages\EditSite;
+use App\Filament\Operator\Resources\Sites\Pages\ListSites;
 use App\Modules\Assets\Application\ProvisionChargingEquipment;
 use App\Modules\Assets\Domain\Models\ChargingCurrentType;
 use App\Modules\Assets\Domain\Models\ChargingStation;
@@ -20,6 +21,7 @@ use App\Modules\Assets\Domain\Models\OcppVersion;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Locations\Application\ConfigureSiteAccess;
+use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Locations\Domain\Models\SiteOperatingHour;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Organizations\Domain\ResourceScope;
@@ -36,6 +38,27 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class StationSetupTest extends TenantSecurityTestCase
 {
+    public function test_operational_lists_hide_retired_sites_and_stations_until_history_is_requested(): void
+    {
+        $this->manager(function (): void {
+            $site = Site::factory()->create(['lifecycle_status' => 'active']);
+            $retiredSite = Site::factory()->create(['lifecycle_status' => 'retired', 'is_active' => false]);
+            $station = ChargingStation::factory()->create(['site_id' => $site->getKey(), 'lifecycle_status' => 'active']);
+            $retiredStation = ChargingStation::factory()->create(['site_id' => $retiredSite->getKey(), 'lifecycle_status' => 'retired']);
+
+            Livewire::test(ListSites::class)
+                ->assertCanSeeTableRecords([$site])
+                ->assertCanNotSeeTableRecords([$retiredSite])
+                ->filterTable('historical_records', true)
+                ->assertCanSeeTableRecords([$site, $retiredSite]);
+            Livewire::test(ListChargingStations::class)
+                ->assertCanSeeTableRecords([$station])
+                ->assertCanNotSeeTableRecords([$retiredStation])
+                ->filterTable('historical_records', true)
+                ->assertCanSeeTableRecords([$station, $retiredStation]);
+        });
+    }
+
     public function test_setup_guide_is_available_before_creation_and_explains_missing_live_status(): void
     {
         $this->manager(function ($user): void {

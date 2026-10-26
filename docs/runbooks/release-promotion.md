@@ -2,9 +2,10 @@
 
 The production load balancer serves App01 and App02. Staging runs on App02.
 Only App01 runs production queue workers and the scheduler. The release command
-preserves that division; it does not start jobs on App02. App02's staging
-profile is web-only too; staging queue work needs a separate worker on App01
-or another authorized host.
+preserves that division; it does not start production jobs on App02. App02's
+new staging profile is web-only. Its older staging charger and reporting
+consumers are separate existing containers and must remain available until a
+separate, verified worker transition is complete.
 
 ## One-time access setup
 
@@ -27,6 +28,20 @@ Install the checked-in `scripts/release-cluster.sh` as
 `/usr/local/sbin/vtsa-deploy-app` on App01 and App02 to the checked-in version
 before the first `test_env` release: staging fetches `test_env`, production
 fetches `main`, and each rejects a commit outside its branch.
+
+On the existing App02 staging host, confirm the legacy staging Docker network
+with `docker network ls` and set `APP_NETWORK_NAME` to its exact name and
+`APP_NETWORK_EXTERNAL=true` in the private staging environment file. This
+connects the new web pair to the existing Redis and OCPP consumers. The staging
+deployer deliberately does not remove orphan containers; verify the old staging
+consumers and Redis are still running after the first rollout. Do not set these
+network overrides in the production environment files.
+
+Keep App02's existing `/opt/vtsa-csms` checkout untouched: it contains local
+staging gateway configuration and other uncommitted operational edits. Create
+the clean `/opt/vtsa-csms-release` checkout for the image deployment. The
+staging deploy helper selects that checkout when present. Do not stash or reset
+the legacy checkout as part of an application release.
 
 ## Normal release
 
