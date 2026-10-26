@@ -2341,6 +2341,13 @@ export interface components {
             duration_seconds: number;
             energy_flow_seconds: number;
             current_power_w: number | null;
+            /** @description Last valid charger-reported SoC for this session; null when the charger has not reported it. This is not inferred from delivered energy. */
+            battery_percentage: number | null;
+            /**
+             * Format: date-time
+             * @description Charger sample time for battery_percentage, when available.
+             */
+            battery_reported_at: string | null;
             currency: string | null;
             estimated_cost_minor: number | null;
             final_cost_minor: number | null;

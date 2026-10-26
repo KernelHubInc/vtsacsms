@@ -66,11 +66,23 @@ void main() {
         downloadUrl: Uri.parse('https://example.test/receipt'),
       ),
     );
-    await fixture.dependencies.charging.refresh();
+    for (
+      var attempt = 0;
+      attempt < 10 &&
+          fixture.dependencies.charging.phase != ChargingFlowPhase.completed;
+      attempt++
+    ) {
+      await fixture.dependencies.charging.refresh();
+      await tester.pump();
+    }
     await tester.pumpAndSettle();
 
+    expect(fixture.dependencies.charging.phase, ChargingFlowPhase.completed);
+    await tester.scrollUntilVisible(find.text('Session complete'), -300);
     expect(find.text('Session complete'), findsOneWidget);
-    expect(find.text('6.60 kWh'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Open receipt'), 300);
     expect(find.text('Open receipt'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('6.60 kWh'), 300);
+    expect(find.text('6.60 kWh'), findsOneWidget);
   });
 }
