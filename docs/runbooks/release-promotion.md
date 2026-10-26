@@ -30,9 +30,9 @@ fetches `main`, and each rejects a commit outside its branch.
 
 ## Normal release
 
-1. Push to `test_env`. CI tests it and, if successful, publishes immutable
-   `sha-<40-character-commit>` images. Check that the **CI** and **Publish
-   release images** GitHub Actions runs passed.
+1. Push to `test_env`. The CI workflow tests it and, only after every check
+   passes, publishes immutable `sha-<40-character-commit>` images. Check that
+   the **CI** run, including all **Publish release image** jobs, passed.
 2. On the load balancer console, run:
 
    ```bash
