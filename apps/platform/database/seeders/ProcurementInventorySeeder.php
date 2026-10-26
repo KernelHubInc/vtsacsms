@@ -27,6 +27,9 @@ final class ProcurementInventorySeeder extends Seeder
 {
     public function run(CurrentTenant $currentTenant): void
     {
+        if (! app()->environment(['local', 'development', 'testing', 'demo', 'staging'])) {
+            return;
+        }
         Tenant::query()->orderBy('id')->each(function (Tenant $tenant) use ($currentTenant): void {
             $currentTenant->run(new TenantContext(
                 (string) $tenant->getKey(),

@@ -21,12 +21,14 @@ final class FinancialFoundationSeeder extends Seeder
     {
         Tenant::query()->orderBy('id')->each(function (Tenant $tenant) use ($currentTenant): void {
             $currentTenant->run(new TenantContext((string) $tenant->getKey(), ActorType::Platform, null, (string) Str::ulid()), function () use ($tenant): void {
-                PaymentProviderConfig::query()->firstOrCreate(['provider' => 'fake', 'configuration_version' => 1], [
-                    'environment' => 'local', 'api_version' => 'v1', 'capabilities' => [
-                        'authorization' => true, 'incremental_authorization' => true, 'capture' => true,
-                        'refund' => true, 'reconciliation_export' => true, 'settlement' => true,
-                    ], 'is_active' => true,
-                ]);
+                if (app()->environment(['local', 'development', 'testing', 'demo', 'staging'])) {
+                    PaymentProviderConfig::query()->firstOrCreate(['provider' => 'fake', 'configuration_version' => 1], [
+                        'environment' => 'local', 'api_version' => 'v1', 'capabilities' => [
+                            'authorization' => true, 'incremental_authorization' => true, 'capture' => true,
+                            'refund' => true, 'reconciliation_export' => true, 'settlement' => true,
+                        ], 'is_active' => true,
+                    ]);
+                }
                 $role = Role::query()->updateOrCreate(['tenant_id' => $tenant->getKey(), 'key' => 'finance-reviewer'],
                     ['name' => 'Finance reviewer', 'is_system' => true]);
                 DB::table('role_permissions')->where('tenant_id', $tenant->getKey())->where('role_id', $role->getKey())->delete();
