@@ -105,7 +105,8 @@ class KycDeploymentTest(unittest.TestCase):
         for environment in ("staging", "production"):
             process_env = {key: value for key, value in os.environ.items()
                            if not key.startswith(("KYC_", "COMPOSE_"))}
-            process_env.update(KYC_ASSURANCE_PROFILE="optical_v1", KYC_AUTOMATIC_VERIFICATION_ENABLED="true")
+            process_env.update(COMPOSE_PROFILES="worker,scheduler", KYC_ASSURANCE_PROFILE="optical_v1",
+                               KYC_AUTOMATIC_VERIFICATION_ENABLED="true")
             result = subprocess.run(["docker", "compose", "--env-file", str(ROOT / f".env.app.{environment}.example"),
                                      "-f", str(ROOT / "infra/cluster/compose.app.yaml"), "config", "--format", "json"],
                                     env=process_env, capture_output=True, text=True, timeout=30)
