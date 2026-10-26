@@ -73,6 +73,9 @@ class AppNodeComposeRolesTest(unittest.TestCase):
             cwd=ROOT, env=env, capture_output=True, text=True, timeout=30, check=True,
         )
         configured = json.loads(result.stdout)["services"]
+        self.assertIn("--queue=charging,default,reports", configured["worker"]["command"])
+        self.assertIn("--timeout=120", configured["worker"]["command"])
+        self.assertEqual(configured["worker"]["environment"]["REDIS_QUEUE_RETRY_AFTER"], "180")
         for name in ("worker", "scheduler", "ocpp-event-consumer",
                      "ocpp-authorization-consumer"):
             self.assertTrue(configured[name]["healthcheck"]["disable"], name)

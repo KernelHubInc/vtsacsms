@@ -41,6 +41,7 @@ x-platform-environment: &platform-environment
   DB_SSLMODE: ${DB_SSLMODE:-require}
   CACHE_STORE: redis
   QUEUE_CONNECTION: redis
+  REDIS_QUEUE_RETRY_AFTER: "180"
   SESSION_DRIVER: redis
   SESSION_SECURE_COOKIE: "${SESSION_SECURE_COOKIE:-true}"
   SESSION_SAME_SITE: lax
@@ -128,7 +129,7 @@ services:
     profiles: [worker]
     healthcheck:
       disable: true
-    command: ["php", "artisan", "queue:work", "--sleep=1", "--tries=3", "--timeout=90", "--max-time=3600"]
+    command: ["php", "artisan", "queue:work", "--queue=charging,default,reports", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
     depends_on:
       platform:
         condition: service_healthy

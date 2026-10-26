@@ -77,6 +77,12 @@ App02 without jobs, and verifies both nodes again. App01 remains the sole
 production worker/scheduler host. The load balancer's existing passive
 failover handles a node restart; this script does not mutate Nginx upstreams.
 
+The primary worker listens to `charging`, `default`, and `reports`, in that
+priority order. Its 120-second timeout is shorter than Redis's 180-second
+retry interval so an unfinished job is not reserved twice before the first
+worker is terminated. Reports and ordinary jobs share this worker initially;
+monitor queue latency before enabling live charging at scale.
+
 Do not run a second release concurrently. The load balancer script uses a
 shared `flock` lock. If a step fails, stop and inspect the node; the app-node
 script attempts to restore its previous image on health failure. Database
