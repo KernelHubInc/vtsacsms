@@ -18,7 +18,7 @@
         .note { color: #5f7185; line-height: 1.5; margin: 6px 0 12px; }
         table.data { border-collapse: collapse; width: 100%; table-layout: fixed; }
         .data th { background: #0c2645; color: white; text-align: left; font-size: 7.5px; padding: 8px 6px; }
-        .data td { border-bottom: 1px solid #dbe7ed; padding: 7px 6px; vertical-align: top; overflow-wrap: break-word; }
+        .data td { border-bottom: 1px solid #dbe7ed; padding: 7px 6px; vertical-align: top; overflow-wrap: break-word; white-space: pre-line; }
         .data tr:nth-child(even) td { background: #f5f9fb; }
         .empty { border: 1px solid #dbe7ed; padding: 20px; color: #60738a; }
         .footer { position: fixed; bottom: -18px; left: 0; right: 0; border-top: 1px solid #dbe7ed; padding-top: 6px; color: #60738a; font-size: 7px; }
@@ -27,7 +27,7 @@
 <body>
     <div class="brand">POWER SOLUTIONS</div>
     <h1>{{ $title }}</h1>
-    <div class="meta">Generated {{ $generatedAt }} · Authorized locations only
+    <div class="meta">Generated {{ $generatedAt }} · Authorized records only
         @if ($title !== 'Sites and charging stations' && (! empty($filters['from']) || ! empty($filters['to'])))
             · Dates: {{ $filters['from'] ?? 'earliest' }} to {{ $filters['to'] ?? 'latest' }} (end exclusive, UTC)
         @endif
@@ -35,13 +35,21 @@
     <div class="rule"></div>
     <table class="metrics"><tr>
         <td><div class="metric-label">Records in scope</div><div class="metric-value">{{ number_format($count) }}</div></td>
-        @if ($title === 'Charging sessions')
+        @if ($hasEnergy)
             <td><div class="metric-label">Energy delivered</div><div class="metric-value">{{ $energyKwh }} kWh</div></td>
         @endif
         @foreach ($money as $currency => $minor)
-            <td><div class="metric-label">{{ $title === 'Payment reconciliation' ? 'Captured' : 'Final charges' }} · {{ $currency }}</div><div class="metric-value">{{ $currency }} {{ (new \App\Modules\Reporting\Application\PortalPdfReport)->minor($minor) }}</div></td>
+            <td><div class="metric-label">{{ $title === 'Payment reconciliation' ? 'Captured' : ($vehicleReport ? 'Known final charges' : 'Final charges') }} · {{ $currency }}</div><div class="metric-value">{{ $currency }} {{ (new \App\Modules\Reporting\Application\PortalPdfReport)->minor($minor) }}</div></td>
         @endforeach
     </tr></table>
+    @if ($vehicleReport)
+        <p class="note">Brand, model and owner reflect the current vehicle register. Missing or deleted vehicles remain unassigned/unknown; no vehicle is inferred. Usage summaries include completed sessions only. Known final charges exclude unpriced sessions and are not proof of payment. Vehicle counts exclude sessions without a recorded vehicle ID.</p>
+        @foreach ($filters as $key => $value)
+            @if (! str_starts_with($key, '_') && ! in_array($key, ['from', 'to'], true))
+                <span class="note">{{ str($key)->replace('_', ' ')->ucfirst() }}: {{ $value }} · </span>
+            @endif
+        @endforeach
+    @endif
     <h2>Record details</h2>
     @if ($count > $limit)
         <p class="note">Showing the first {{ number_format($limit) }} of {{ number_format($count) }} records. Download CSV for complete row-level details.</p>

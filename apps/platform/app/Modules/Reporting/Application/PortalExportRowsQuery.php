@@ -22,6 +22,10 @@ final readonly class PortalExportRowsQuery
      */
     public function for(string $type, User $user, array $filters = []): array
     {
+        if (PortalReportAccess::isVehicleReport($type)) {
+            return app(VehicleReportQuery::class)->for($type, $user, $filters);
+        }
+
         return match ($type) {
             'sessions' => [
                 'headers' => [

@@ -26,10 +26,14 @@ final class DriverVehiclesTest extends TenantSecurityTestCase
         $token = $login($user, $tenant);
         $id = (string) Str::ulid();
         $second = (string) Str::ulid();
-        $payload = ['nickname' => 'Test car', 'plate_pending' => false, 'plate_number' => 'abc 1234', 'connector_standards' => ['Type 2'], 'is_default' => false];
+        $payload = ['nickname' => 'Test car', 'plate_pending' => false, 'plate_number' => 'abc 1234', 'connector_standards' => ['Type 2'], 'is_default' => false,
+            'manufacturer' => "  byd\t", 'model' => "  seal\u{00A0}  5 dm-i  "];
         $this->withToken($token)->putJson('/api/v1/vehicles/'.$id, $payload)->assertOk()
-            ->assertJsonPath('data.plate_number', 'ABC 1234')->assertJsonPath('data.is_default', true);
+            ->assertJsonPath('data.plate_number', 'ABC 1234')->assertJsonPath('data.is_default', true)
+            ->assertJsonPath('data.manufacturer', 'BYD')->assertJsonPath('data.model', 'SEAL 5 DM-I');
         $this->putJson('/api/v1/vehicles/'.$id, $payload)->assertOk();
+        $this->putJson('/api/v1/vehicles/'.$id, array_replace($payload, ['model' => '  Dolphin  ']))->assertOk()->assertJsonPath('data.model', 'DOLPHIN');
+        $this->putJson('/api/v1/vehicles/'.$id, array_replace($payload, ['manufacturer' => str_repeat('ß', 41)]))->assertUnprocessable();
         $this->assertDatabaseCount('driver_vehicles', 1);
         $this->assertNotSame('ABC 1234', DB::table('driver_vehicles')->value('plate_number'));
         $this->putJson('/api/v1/vehicles/'.$second, ['nickname' => 'Pending car', 'plate_pending' => true, 'connector_standards' => [], 'is_default' => true])->assertOk();

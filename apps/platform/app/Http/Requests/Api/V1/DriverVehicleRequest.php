@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Modules\Assets\Domain\VehicleText;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,6 +17,11 @@ final class DriverVehicleRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        foreach (['manufacturer', 'model'] as $field) {
+            if (is_string($this->input($field))) {
+                $this->merge([$field => VehicleText::normalize($this->input($field))]);
+            }
+        }
         if (is_string($this->input('plate_number'))) {
             $this->merge(['plate_number' => strtoupper(trim($this->input('plate_number')))]);
         }

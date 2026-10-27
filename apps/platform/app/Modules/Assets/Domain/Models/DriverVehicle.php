@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Domain\Models;
 
+use App\Modules\Assets\Domain\VehicleText;
 use App\Modules\Tenancy\Infrastructure\Eloquent\BelongsToTenant;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 
@@ -13,6 +15,18 @@ final class DriverVehicle extends Model
     use BelongsToTenant, HasUlids;
 
     protected $guarded = [];
+
+    /** @return Attribute<string, string|null> */
+    protected function manufacturer(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): string => VehicleText::normalize($value));
+    }
+
+    /** @return Attribute<string, string|null> */
+    protected function model(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): string => VehicleText::normalize($value));
+    }
 
     protected function casts(): array
     {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Shared\Pages;
 
 use App\Models\User;
+use App\Modules\Charging\Domain\ChargingSessionState;
+use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Reporting\Application\PortalExportService;
@@ -34,6 +36,9 @@ abstract class PortalReports extends Page
 
     public ?string $to = null;
 
+    /** @var array<string, string> */
+    public array $vehicleFilters = [];
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -54,7 +59,8 @@ abstract class PortalReports extends Page
             app(PortalExportService::class)->queue($user, $type, array_filter([
                 'from' => $this->from,
                 'to' => $this->to,
-            ]), $format);
+                ...$this->vehicleFilters,
+            ], fn ($value): bool => $value !== null && $value !== ''), $format);
         } catch (DomainException $exception) {
             Notification::make()->title('Report not queued')->body($exception->getMessage())->danger()->send();
 
@@ -98,6 +104,10 @@ abstract class PortalReports extends Page
         $access = app(PortalReportAccess::class);
 
         return [
+            'vehicleStates' => ChargingSessionState::cases(),
+            'vehicleSites' => $access->canExport($user, 'vehicles')
+                ? Site::query()->whereIn('id', $access->siteIds($user, 'vehicles'))->orderBy('name')->pluck('name', 'id')->all()
+                : [],
             'availableReports' => array_filter(
                 PortalReportAccess::titles(),
                 fn (string $title, string $type): bool => $access->canExport($user, $type),

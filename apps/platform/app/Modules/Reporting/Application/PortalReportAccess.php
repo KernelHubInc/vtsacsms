@@ -24,6 +24,10 @@ final readonly class PortalReportAccess
             'sessions' => 'Charging sessions',
             'assets' => 'Sites and charging stations',
             'finance' => 'Payment reconciliation',
+            'vehicles' => 'Vehicle register',
+            'vehicle_sessions' => 'Vehicle charging details',
+            'vehicle_usage' => 'Vehicle usage summary',
+            'vehicle_models' => 'Brand and model comparison',
         ];
     }
 
@@ -54,28 +58,53 @@ final readonly class PortalReportAccess
     {
         $this->assertCanExport($user, $type);
 
-        $query = $this->sites->for($user, PermissionKey::ReportingExport)
-            ->whereIn('sites.id', $this->sites->for($user, PermissionKey::ReportingView)->select('id'))
-            ->whereIn('sites.id', $this->sites->for($user, $this->dataPermission($type))->select('id'));
+        $query = $this->sites->for($user, PermissionKey::ReportingExport);
+        foreach ($this->permissions($type) as $permission) {
+            $query->whereIn('sites.id', $this->sites->for($user, $permission)->select('id'));
+        }
 
         return array_values($query->orderBy('sites.id')->pluck('sites.id')->map(strval(...))->all());
     }
 
     public function scopeFingerprint(User $user, string $type): string
     {
-        return hash('sha256', implode('|', $this->siteIds($user, $type)));
+        $scope = implode('|', $this->siteIds($user, $type));
+        if (self::isVehicleReport($type)) {
+            $scope .= $this->canReadWholeRegister($user, $type) ? '|tenant-register' : '|site-register';
+        }
+
+        return hash('sha256', $scope);
+    }
+
+    public static function isVehicleReport(string $type): bool
+    {
+        return in_array($type, ['vehicles', 'vehicle_sessions', 'vehicle_usage', 'vehicle_models'], true);
+    }
+
+    public function canReadWholeRegister(User $user, string $type): bool
+    {
+        foreach ($this->permissions($type) as $permission) {
+            if (! $this->authorization->allows($user, $permission)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @return list<PermissionKey> */
     private function permissions(string $type): array
     {
-        return [PermissionKey::ReportingView, PermissionKey::ReportingExport, $this->dataPermission($type)];
+        return array_values(array_unique([
+            PermissionKey::ReportingView, PermissionKey::ReportingExport, $this->dataPermission($type),
+            ...(self::isVehicleReport($type) ? [PermissionKey::AssetView] : []),
+        ], SORT_REGULAR));
     }
 
     private function dataPermission(string $type): PermissionKey
     {
         return match ($type) {
-            'sessions' => PermissionKey::ChargingSessionView,
+            'sessions', 'vehicles', 'vehicle_sessions', 'vehicle_usage', 'vehicle_models' => PermissionKey::ChargingSessionView,
             'assets' => PermissionKey::LocationView,
             'finance' => PermissionKey::PaymentView,
             default => throw new DomainException('Unsupported report export type.'),

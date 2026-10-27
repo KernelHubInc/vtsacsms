@@ -1,5 +1,9 @@
 # Data Ownership and Bounded Contexts
 
+## Vehicle reporting query contract (2026-10-27)
+
+`Reporting/Application/VehicleReportQuery` is a read-only operational projection over Assets driver vehicles/garages, Charging sessions/customer attribution, Locations sites, Organizations charging-account names/types and Identity display names. It explicitly joins tenant identifiers, intersects every required permission at each site, and never writes these source tables. It exports current vehicle metadata and frozen session attribution IDs, not an invented historical vehicle snapshot. Only tenant-wide authorized readers may list unvisited vehicles. No contact information, decrypted plate or KYC data is projected. Assets owns normalization of free-text brand/model, including its resumable tenant-scoped backfill. See the [report catalog](../product/report-catalog.md) for semantics and access rules.
+
 **Status:** Normative architecture baseline  
 **Rule:** A durable concept has exactly one context authorized to change it.
 

@@ -31,6 +31,7 @@ final readonly class PortalExportService
             throw new DomainException('Unsupported report format.');
         }
 
+        $vehicleFilters = PortalReportAccess::isVehicleReport($type) ? VehicleReportFilters::validate($filters, $type) : [];
         $filters = array_intersect_key($filters, array_flip(['from', 'to']));
         foreach ($filters as $value) {
             if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1
@@ -41,6 +42,7 @@ final readonly class PortalExportService
         if (isset($filters['from'], $filters['to']) && $filters['from'] >= $filters['to']) {
             throw new DomainException('The end date must be after the start date.');
         }
+        $filters = ($type === 'vehicles' ? [] : $filters) + $vehicleFilters;
         $filters['_format'] = $format;
 
         $context = $this->tenant->get();
