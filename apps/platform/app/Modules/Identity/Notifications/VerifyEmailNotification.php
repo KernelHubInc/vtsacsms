@@ -30,6 +30,9 @@ final class VerifyEmailNotification extends VerifyEmail
             ->subject('Verify your Power Solutions email address')
             ->line('Confirm this email address to finish securing your Power Solutions account.')
             ->action('Verify email address', $url)
-            ->line('This link expires in 60 minutes.');
+            ->line('This link expires in 60 minutes.')
+            ->view(['html' => 'mail.welcome', 'text' => 'mail.text.welcome'], [
+                'verificationUrl' => $url,
+            ]);
     }
 }

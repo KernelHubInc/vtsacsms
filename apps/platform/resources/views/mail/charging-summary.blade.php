@@ -1,54 +1,33 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Charging receipt | Power Solutions</title>
-</head>
-<body style="margin:0;padding:0;background:#f1f6f8;color:#10243f;font-family:Arial,Helvetica,sans-serif;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your charging session is complete. Your payment details and PDF receipt are inside.</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f6f8;padding:28px 12px;">
-        <tr><td align="center">
-            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #d9e6eb;">
-                <tr><td style="height:6px;background:#48d4cb;font-size:1px;line-height:1px;">&nbsp;</td></tr>
-                <tr><td style="padding:28px 34px 23px;">
-                    <img src="{{ asset('branding/power-solutions-email-logo.png') }}" width="230" alt="Power Solutions" style="display:block;max-width:100%;height:auto;border:0;">
-                </td></tr>
-                <tr><td style="background:#0b2341;padding:30px 34px 32px;color:#ffffff;">
-                    <div style="font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#80e5df;font-weight:bold;">Payment confirmed</div>
-                    <h1 style="font-size:28px;line-height:1.15;margin:10px 0 8px;font-weight:700;">Charging receipt</h1>
-                    <p style="font-size:14px;line-height:1.5;margin:0;color:#d8e9f0;">Your charging session is complete. A copy of this receipt is attached as a PDF.</p>
-                </td></tr>
-                <tr><td style="padding:28px 34px 13px;">
-                    <div style="font-size:12px;color:#5d7184;text-transform:uppercase;letter-spacing:1px;font-weight:bold;">Total paid from prepaid wallet</div>
-                    <div style="font-size:34px;line-height:1.2;font-weight:bold;color:#0b2341;margin-top:7px;">{{ $receipt['amount'] }}</div>
-                    <div style="border-bottom:1px solid #dce7ec;margin-top:24px;"></div>
-                </td></tr>
-                <tr><td style="padding:2px 34px 29px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:1.45;">
-                        @foreach ([
-                            'Reference' => $receipt['reference'],
-                            'Station' => $receipt['station'],
-                            'Connector' => $receipt['connector'],
-                            'Started' => $receipt['started'],
-                            'Stopped' => $receipt['stopped'],
-                            'Duration' => $receipt['duration'],
-                            'Energy delivered' => $receipt['energy'],
-                            'Payment method' => $receipt['payment_method'],
-                        ] as $label => $value)
-                            <tr>
-                                <td style="padding:9px 0;color:#5d7184;vertical-align:top;width:39%;">{{ $label }}</td>
-                                <td style="padding:9px 0;color:#10243f;font-weight:600;vertical-align:top;word-break:break-word;">{{ $value }}</td>
-                            </tr>
-                        @endforeach
-                    </table>
-                </td></tr>
-                <tr><td style="background:#edf7f7;padding:21px 34px;color:#3d5667;font-size:12px;line-height:1.55;">
-                    Keep the reference above if you need help with this charge. This document confirms the charging session and prepaid wallet payment; it is not an official tax receipt or tax invoice.
-                </td></tr>
-            </table>
-            <p style="max-width:600px;margin:18px 0 0;font-size:12px;color:#718497;line-height:1.5;">Power Solutions &middot; EV charging in the Philippines</p>
-        </td></tr>
-    </table>
-</body>
-</html>
+@extends('mail.layout')
+@section('title', 'Charging receipt')
+@section('preheader', 'Your charging session is complete. Your payment details and PDF receipt are inside.')
+@section('body')
+@include('mail.partials.brand')
+<p style="margin:0 0 12px;color:#12645f;font-size:13px;line-height:20px;"><img src="{{ rtrim(config('app.url'), '/') }}/branding/email/check.png" width="20" height="20" alt="" style="vertical-align:middle;border:0;"> &nbsp; Payment complete</p>
+<h1 class="email-heading" style="font-size:36px;line-height:1.1;color:#12366b;margin:0 0 12px;">All charged up.<br>You’re good to go.</h1>
+<p style="font-size:15px;line-height:1.6;color:#66758a;margin:0 0 24px;">Thanks for charging with Power Solutions. Here’s a summary of your completed session.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eaf9f7;border-radius:12px;margin-bottom:24px;">
+<tr><td style="padding:20px;">
+<p style="margin:0;font-size:14px;font-weight:bold;color:#12366b;">Total paid</p>
+<p class="email-amount" style="margin:8px 0;font-size:46px;line-height:1.2;font-weight:bold;color:#12366b;overflow-wrap:anywhere;">{{ $receipt['amount'] }}</p>
+<p style="margin:0;font-size:12px;line-height:1.5;color:#12645f;">Paid from your prepaid wallet. Your PDF receipt is attached.</p>
+</td></tr></table>
+<h2 style="font-size:18px;color:#12366b;margin:0 0 12px;">Your charging session</h2>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;font-size:14px;line-height:1.5;">
+@foreach (['Station' => $receipt['station'], 'Connector' => $receipt['connector'], 'Started' => $receipt['started'], 'Stopped' => $receipt['stopped'], 'Duration' => $receipt['duration'], 'Energy delivered' => $receipt['energy']] as $label => $value)
+<tr><td class="detail-label" style="width:36%;padding:7px 12px 7px 0;color:#66758a;vertical-align:top;">{{ $label }}</td>
+<td class="detail-value" style="padding:7px 0;color:#17243a;text-align:right;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;">{{ $value }}</td></tr>
+@endforeach
+</table>
+<div style="border-top:1px solid #dce5ed;margin:24px 0;"></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;background:#f5f8fb;border-radius:8px;font-size:14px;line-height:1.5;">
+<tr><td style="padding:20px;">
+<p style="margin:0 0 6px;color:#66758a;">Paid with</p><p style="margin:0 0 16px;color:#17243a;">{{ $receipt['payment_method'] }}</p>
+<p style="margin:0 0 6px;color:#66758a;">Session reference</p><p style="margin:0;color:#17243a;overflow-wrap:anywhere;word-break:break-all;">{{ $receipt['reference'] }}</p>
+</td></tr></table>
+@include('mail.partials.button', ['href' => rtrim(config('app.url'), '/').'/mobile/', 'label' => 'Open Power Solutions'])
+<p style="font-size:12px;line-height:1.6;color:#66758a;margin:12px 0 0;">Sign in and open Activity to view this session. Match the session reference above.</p>
+@endsection
+@section('email-context')
+Keep the session reference if you need help with this charge. This document confirms your charging session and prepaid wallet payment; it is not an official tax receipt or tax invoice.
+@endsection

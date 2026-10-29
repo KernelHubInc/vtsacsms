@@ -22,7 +22,7 @@ final class ChargingSummaryMail extends Mailable
 
     public function content(): Content
     {
-        return new Content(view: 'mail.charging-summary', with: [
+        return new Content(view: 'mail.charging-summary', text: 'mail.text.charging-summary', with: [
             'receipt' => app(ChargingReceiptPdf::class)->details($this->summary),
         ]);
     }
