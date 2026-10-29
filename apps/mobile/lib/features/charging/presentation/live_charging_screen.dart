@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
+import 'package:vtsa_mobile/features/charging/presentation/vehicle_battery_progress.dart';
 
 class LiveChargingScreen extends StatefulWidget {
   const LiveChargingScreen({
@@ -111,6 +112,13 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
             _Actions(dependencies: widget.dependencies, session: session),
             const SizedBox(height: VtsaSpacing.md),
             _Metrics(session: session),
+            const SizedBox(height: VtsaSpacing.md),
+            VehicleBatteryProgress(
+              percentage: session.batteryPercentage,
+              reportedAt: session.batteryReportedAt,
+              connected: charging.isOnline && !session.chargerDisconnected,
+              sessionEnded: session.isTerminal,
+            ),
             const SizedBox(height: VtsaSpacing.md),
             _ChargerReadings(session: session),
             const SizedBox(height: VtsaSpacing.md),
@@ -404,15 +412,6 @@ class _ChargerReadings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reportedAt = session.batteryReportedAt;
-    final age = reportedAt == null
-        ? null
-        : DateTime.now().difference(reportedAt.toLocal());
-    final fresh =
-        age != null && !age.isNegative && age <= const Duration(minutes: 5);
-    final battery = session.batteryPercentage == null
-        ? 'Not reported by charger'
-        : '${session.batteryPercentage}%${fresh ? '' : ' · last known'}';
     String time(DateTime? value, String fallback) => value == null
         ? fallback
         : DateFormat.yMMMd().add_jms().format(value.toLocal());
@@ -431,17 +430,6 @@ class _ChargerReadings extends StatelessWidget {
             label: 'Current power',
             value: formatPower(session.currentPowerW),
           ),
-          _Reading(label: 'Vehicle battery', value: battery),
-          if (reportedAt != null && session.batteryPercentage != null)
-            Text(
-              'Battery reported ${time(reportedAt, '')}. This value comes from the charger, not directly from your vehicle.',
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          else
-            Text(
-              'Battery percentage appears only if the charger reports it. Energy delivered does not determine battery percentage.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
           const SizedBox(height: 8),
           _Reading(
             label: 'Energy-flow time',
