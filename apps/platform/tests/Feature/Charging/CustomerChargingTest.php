@@ -63,6 +63,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
     public function test_customer_start_reserves_once_and_final_energy_settles_once(): void
     {
         Mail::fake();
+        config(['mail.default' => 'smtp']);
         $actor = $this->createUser();
         $tenant = $this->createTenant('mobile-charging');
         $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {

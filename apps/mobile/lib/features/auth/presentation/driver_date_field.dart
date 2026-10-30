@@ -20,12 +20,14 @@ class DriverDateField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.birthDate = true,
+    this.invalid = false,
     super.key,
   });
   final String label;
   final DateTime? value;
   final ValueChanged<DateTime> onChanged;
   final bool birthDate;
+  final bool invalid;
 
   @override
   Widget build(BuildContext context) {
@@ -44,24 +46,35 @@ class DriverDateField extends StatelessWidget {
         value == null || value!.isBefore(first) || value!.isAfter(last)
         ? last
         : value!;
-    return OutlinedButton.icon(
-      icon: const Icon(Icons.calendar_month_outlined),
-      label: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Text(
-          '$label: ${value == null ? "Select date" : DateFormat("dd MMM yyyy").format(value!)}',
+    return Semantics(
+      hint: invalid ? '$label needs attention' : null,
+      child: OutlinedButton.icon(
+        style: invalid
+            ? OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.error,
+                  width: 2,
+                ),
+              )
+            : null,
+        icon: const Icon(Icons.calendar_month_outlined),
+        label: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Text(
+            '$label: ${value == null ? "Select date" : DateFormat("dd MMM yyyy").format(value!)}',
+          ),
         ),
+        onPressed: () async {
+          final date = await showDatePicker(
+            context: context,
+            initialDate: initial,
+            firstDate: first,
+            lastDate: last,
+            helpText: birthDate ? 'You must be 18 or older' : label,
+          );
+          if (date != null) onChanged(date);
+        },
       ),
-      onPressed: () async {
-        final date = await showDatePicker(
-          context: context,
-          initialDate: initial,
-          firstDate: first,
-          lastDate: last,
-          helpText: birthDate ? 'You must be 18 or older' : label,
-        );
-        if (date != null) onChanged(date);
-      },
     );
   }
 }

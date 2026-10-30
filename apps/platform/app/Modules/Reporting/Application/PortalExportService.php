@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Reporting\Application;
 
 use App\Foundation\Audit\AuditEntry;
+use App\Foundation\Audit\AuditLogQuery;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
 use App\Models\User;
@@ -27,11 +28,12 @@ final readonly class PortalExportService
     public function queue(User $user, string $type, array $filters = [], string $format = 'csv'): PortalExport
     {
         $this->access->assertCanExport($user, $type);
-        if (! in_array($format, ['csv', 'pdf'], true)) {
+        if (! in_array($format, ['csv', 'pdf', 'xlsx'], true)) {
             throw new DomainException('Unsupported report format.');
         }
 
         $vehicleFilters = PortalReportAccess::isVehicleReport($type) ? VehicleReportFilters::validate($filters, $type) : [];
+        $auditFilters = $type === 'audit' ? AuditLogQuery::validate($filters) : [];
         $filters = array_intersect_key($filters, array_flip(['from', 'to']));
         foreach ($filters as $value) {
             if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1
@@ -42,7 +44,11 @@ final readonly class PortalExportService
         if (isset($filters['from'], $filters['to']) && $filters['from'] >= $filters['to']) {
             throw new DomainException('The end date must be after the start date.');
         }
-        $filters = ($type === 'vehicles' ? [] : $filters) + $vehicleFilters;
+        $filters = ($type === 'vehicles' ? [] : $filters) + $vehicleFilters + $auditFilters;
+        if ($type === 'audit') {
+            // Close the interval before enqueueing so retries cannot include the export's own event.
+            $filters['_before'] = now('UTC')->startOfSecond()->format('Y-m-d H:i:s');
+        }
         $filters['_format'] = $format;
 
         $context = $this->tenant->get();

@@ -10,6 +10,7 @@ use App\Filament\Operator\Resources\SupportTickets\SupportTicketResource;
 use App\Filament\Platform\Pages\KycSettings;
 use App\Filament\Platform\Pages\KycVerifications;
 use App\Filament\Platform\Pages\MasterData;
+use App\Filament\Platform\Resources\ChargingReceipts\ChargingReceiptResource;
 use App\Filament\Platform\Resources\Content\DriverNoticeResource;
 use App\Foundation\Audit\Models\AuditEvent;
 use App\Modules\Assets\Domain\Models\ChargingCurrentType;
@@ -111,7 +112,8 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
     {
         $panel = Filament::getPanel('admin');
 
-        $this->assertCount(48, $panel->getResources());
+        $this->assertCount(49, $panel->getResources());
+        $this->assertContains(ChargingReceiptResource::class, $panel->getResources());
         $this->assertContains(DriverNoticeResource::class, $panel->getResources());
         $this->assertContains(SupportTicketResource::class, $panel->getResources());
         $this->assertCount(9, $panel->getPages());
@@ -155,6 +157,7 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
             '/admin/support-tickets',
             '/admin/content/cms-pages',
             '/admin/audit-events',
+            '/admin/charging-receipts',
         ] as $route) {
             $response = $this->actingAs($user)->get($route);
             $this->assertSame(200, $response->status(), "Failed to render {$route}.");

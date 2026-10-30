@@ -73,6 +73,7 @@ final class PortalPdfReport
     private function columns(string $type): array
     {
         return match ($type) {
+            'audit' => [1 => 'Time (UTC)', 3 => 'Actor ID', 4 => 'Action', 5 => 'Record type', 6 => 'Record ID', 7 => 'Result', 8 => 'Correlation ID'],
             'sessions' => [0 => 'Session ID', 5 => 'State', 7 => 'Started (UTC)', 8 => 'Stopped (UTC)', 9 => 'Energy (kWh)', 10 => 'Duration (min)', 11 => 'Currency', 13 => 'Final amount', 14 => 'Reason'],
             'assets' => [2 => 'Site', 1 => 'Code', 3 => 'Status', 9 => 'Stations', 6 => 'Address', 4 => 'Timezone'],
             'finance' => [0 => 'Payment ID', 1 => 'Session ID', 2 => 'State', 3 => 'Currency', 6 => 'Captured', 7 => 'Refunded', 8 => 'Created (UTC)'],

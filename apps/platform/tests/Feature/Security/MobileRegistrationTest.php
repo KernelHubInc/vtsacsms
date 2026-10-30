@@ -222,18 +222,79 @@ final class MobileRegistrationTest extends TestCase
         $this->assertDatabaseCount('users', 0);
     }
 
+    public function test_configured_production_signup_creates_only_a_consumer_membership(): void
+    {
+        Notification::fake();
+        $tenantId = (string) Str::ulid();
+        $this->seedRegistrationScope($tenantId);
+        config()->set('features.demo_mode', false);
+        config()->set('registration.enabled', true);
+        config()->set('registration.tenant_id', $tenantId);
+        config()->set('registration.organization_id', $this->fleetOrganizationId);
+        $originalEnvironment = app()->environment();
+        app()->detectEnvironment(static fn (): string => 'production');
+        try {
+            $this->postJson('/api/v2/auth/register', array_replace($this->signupPayload(), ['tenant_id' => $tenantId]))->assertCreated();
+            $user = User::query()->where('email', 'configured@example.test')->sole();
+            self::assertNull($user->email_verified_at);
+            $this->assertDatabaseHas('memberships', [
+                'user_id' => $user->getKey(), 'tenant_id' => $tenantId,
+                'organization_id' => $this->fleetOrganizationId, 'status' => 'active',
+            ]);
+            $this->assertDatabaseHas('role_assignments', [
+                'role_id' => $this->consumerRoleId, 'scope_id' => $this->fleetOrganizationId,
+                'scope_type' => 'organization',
+            ]);
+            $this->assertDatabaseCount('role_assignments', 1);
+            $this->assertDatabaseCount('driver_vehicles', 1);
+        } finally {
+            app()->detectEnvironment(static fn (): string => $originalEnvironment);
+        }
+    }
+
+    public function test_signup_rejects_wrong_tenant_missing_scope_and_inactive_tenant_without_partial_accounts(): void
+    {
+        Notification::fake();
+        $this->seedRegistrationScope();
+        config()->set('registration.enabled', true);
+        config()->set('registration.tenant_id', DemoEnvironment::TENANT_ID);
+        config()->set('registration.organization_id', $this->fleetOrganizationId);
+        $this->postJson('/api/v2/auth/register', array_replace($this->signupPayload(), [
+            'tenant_id' => '01J00000000000000000000001',
+        ]))->assertNotFound()->assertJsonPath('error.code', 'registration_unavailable');
+        config()->set('registration.organization_id', (string) Str::ulid());
+        $this->postJson('/api/v2/auth/register', $this->signupPayload())->assertNotFound();
+        config()->set('registration.organization_id', $this->fleetOrganizationId);
+        DB::table('tenants')->where('id', DemoEnvironment::TENANT_ID)->update(['status' => 'suspended']);
+        $this->postJson('/api/v2/auth/register', $this->signupPayload())->assertNotFound();
+        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('memberships', 0);
+        Notification::assertNothingSent();
+    }
+
+    /** @return array<string, mixed> */
+    private function signupPayload(): array
+    {
+        return [
+            'birth_date' => '1990-01-01', 'plate_pending' => true,
+            'first_name' => 'New', 'last_name' => 'Driver',
+            'email' => 'configured@example.test', 'password' => 'SafePassword!2026',
+            'password_confirmation' => 'SafePassword!2026', 'tenant_id' => DemoEnvironment::TENANT_ID,
+        ];
+    }
+
     private string $fleetOrganizationId;
 
     private string $consumerRoleId;
 
-    private function seedRegistrationScope(): void
+    private function seedRegistrationScope(string $tenantId = DemoEnvironment::TENANT_ID): void
     {
         $now = now('UTC');
         $this->fleetOrganizationId = (string) Str::ulid();
         $this->consumerRoleId = (string) Str::ulid();
 
         DB::table('tenants')->insert([
-            'id' => DemoEnvironment::TENANT_ID,
+            'id' => $tenantId,
             'name' => 'Mobile Registration Tenant',
             'slug' => 'mobile-registration',
             'status' => 'active',
@@ -242,7 +303,7 @@ final class MobileRegistrationTest extends TestCase
         ]);
         DB::table('organizations')->insert([
             'id' => $this->fleetOrganizationId,
-            'tenant_id' => DemoEnvironment::TENANT_ID,
+            'tenant_id' => $tenantId,
             'name' => 'Consumer Drivers',
             'code' => 'CONSUMER-DRIVERS',
             'type' => 'fleet',
@@ -252,7 +313,7 @@ final class MobileRegistrationTest extends TestCase
         ]);
         DB::table('roles')->insert([
             'id' => $this->consumerRoleId,
-            'tenant_id' => DemoEnvironment::TENANT_ID,
+            'tenant_id' => $tenantId,
             'key' => 'consumer-driver',
             'name' => 'Consumer Driver',
             'is_system' => true,

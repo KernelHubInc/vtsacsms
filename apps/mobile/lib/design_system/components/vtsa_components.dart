@@ -81,6 +81,7 @@ class VtsaTextField extends StatelessWidget {
     this.controller,
     this.hint,
     this.error,
+    this.invalid = false,
     this.required = false,
     this.enabled = true,
     this.keyboardType,
@@ -96,6 +97,7 @@ class VtsaTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? hint;
   final String? error;
+  final bool invalid;
   final bool required;
   final bool enabled;
   final TextInputType? keyboardType;
@@ -106,19 +108,41 @@ class VtsaTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   @override
-  Widget build(BuildContext context) => TextField(
-    controller: controller,
-    enabled: enabled,
-    keyboardType: keyboardType,
-    obscureText: obscureText,
-    textInputAction: textInputAction,
-    autofillHints: autofillHints,
-    onSubmitted: onSubmitted,
-    onChanged: onChanged,
-    decoration: InputDecoration(
-      labelText: required ? '$label (required)' : label,
-      helperText: hint,
-      errorText: error,
+  Widget build(BuildContext context) => Semantics(
+    hint: invalid ? '$label needs attention' : null,
+    child: TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      onSubmitted: onSubmitted,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: required ? '$label (required)' : label,
+        helperText: hint,
+        errorText: error,
+        helperMaxLines: 3,
+        enabledBorder: invalid
+            ? OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.error,
+                  width: 2,
+                ),
+              )
+            : null,
+        focusedBorder: invalid
+            ? OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.error,
+                  width: 2,
+                ),
+              )
+            : null,
+      ),
     ),
   );
 }

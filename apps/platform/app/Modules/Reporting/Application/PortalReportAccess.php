@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Tenancy\Application\CurrentTenant;
 use DomainException;
 
 final readonly class PortalReportAccess
@@ -21,6 +22,7 @@ final readonly class PortalReportAccess
     public static function titles(): array
     {
         return [
+            'audit' => 'Activity and audit log',
             'sessions' => 'Charging sessions',
             'assets' => 'Sites and charging stations',
             'finance' => 'Payment reconciliation',
@@ -38,7 +40,7 @@ final readonly class PortalReportAccess
         }
 
         foreach ($this->permissions($type) as $permission) {
-            if (! $this->authorization->holdsAnywhere($user, $permission)) {
+            if (! ($type === 'audit' ? $this->authorization->allows($user, $permission) : $this->authorization->holdsAnywhere($user, $permission))) {
                 return false;
             }
         }
@@ -68,6 +70,11 @@ final readonly class PortalReportAccess
 
     public function scopeFingerprint(User $user, string $type): string
     {
+        if ($type === 'audit') {
+            $this->assertCanExport($user, $type);
+
+            return hash('sha256', app(CurrentTenant::class)->get()->tenantId.'|tenant-audit');
+        }
         $scope = implode('|', $this->siteIds($user, $type));
         if (self::isVehicleReport($type)) {
             $scope .= $this->canReadWholeRegister($user, $type) ? '|tenant-register' : '|site-register';
@@ -97,6 +104,7 @@ final readonly class PortalReportAccess
     {
         return array_values(array_unique([
             PermissionKey::ReportingView, PermissionKey::ReportingExport, $this->dataPermission($type),
+            ...($type === 'audit' ? [PermissionKey::AuditExport] : []),
             ...(self::isVehicleReport($type) ? [PermissionKey::AssetView] : []),
         ], SORT_REGULAR));
     }
@@ -104,6 +112,7 @@ final readonly class PortalReportAccess
     private function dataPermission(string $type): PermissionKey
     {
         return match ($type) {
+            'audit' => PermissionKey::AuditView,
             'sessions', 'vehicles', 'vehicle_sessions', 'vehicle_usage', 'vehicle_models' => PermissionKey::ChargingSessionView,
             'assets' => PermissionKey::LocationView,
             'finance' => PermissionKey::PaymentView,

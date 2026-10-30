@@ -6,10 +6,10 @@ import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 /// Scoped to the driver journey so account, identity and payment screens retain
 /// their established presentation. Figma direction board: 7:2.
 abstract final class DriverTheme {
-  static const blue = Color(0xFF1457C2);
-  static const navy = Color(0xFF142640);
+  static const blue = PowerSolutionsColors.brandNavy;
+  static const navy = PowerSolutionsColors.brandDarkNavy;
   static const muted = Color(0xFF617085);
-  static const ice = Color(0xFFEBF5FF);
+  static const ice = PowerSolutionsColors.surfaceSoftCyan;
   static const canvas = Color(0xFFF7FAFC);
   static const border = Color(0xFFE0E5ED);
   static const green = Color(0xFF148552);
@@ -162,6 +162,7 @@ class DriverPage extends StatelessWidget {
     this.actions = const [],
     this.selectedIndex = 0,
     this.onBack,
+    this.bottomActions,
     super.key,
   });
   final String title;
@@ -169,6 +170,7 @@ class DriverPage extends StatelessWidget {
   final List<Widget> actions;
   final int selectedIndex;
   final VoidCallback? onBack;
+  final Widget? bottomActions;
 
   @override
   Widget build(BuildContext context) => Theme(
@@ -199,7 +201,21 @@ class DriverPage extends StatelessWidget {
             ),
           ),
         ),
-        bottomNavigationBar: DriverNavigation(selectedIndex: selectedIndex),
+        bottomNavigationBar: bottomActions == null
+            ? DriverNavigation(selectedIndex: selectedIndex)
+            : SafeArea(
+                top: false,
+                child: Center(
+                  heightFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                      child: bottomActions,
+                    ),
+                  ),
+                ),
+              ),
       ),
     ),
   );

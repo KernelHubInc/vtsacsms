@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_start_screen.dart';
+import 'package:vtsa_mobile/features/discovery/presentation/station_widgets.dart';
 
 import 'driver_journey_design_test.dart' show availableStation, preview;
 import 'support/fakes.dart';
@@ -37,7 +38,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Harbor Exchange').first);
+      await tester.scrollUntilVisible(
+        find.byType(DriverStationCard),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byType(DriverStationCard));
       await tester.pumpAndSettle();
       final details = find.text('Station details & directions');
       await tester.scrollUntilVisible(

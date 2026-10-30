@@ -78,6 +78,80 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
   }
 
+  Widget _currentVehicleCard(BuildContext context) {
+    final vehicle = widget.dependencies.vehicles.defaultVehicle;
+    final hasVehicles = widget.dependencies.vehicles.vehicles.isNotEmpty;
+    final description = vehicle == null
+        ? hasVehicles
+              ? 'Choose your vehicle'
+              : 'Add your vehicle'
+        : [
+            vehicle.manufacturer,
+            vehicle.model,
+            vehicle.variant ?? '',
+          ].where((part) => part.trim().isNotEmpty).join(' ');
+    return Semantics(
+      button: true,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push('/vehicles'),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: context.vtsaColors.brandSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.electric_car_outlined,
+                    size: 34,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CURRENT VEHICLE',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        description.isEmpty ? vehicle!.nickname : description,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        vehicle == null
+                            ? hasVehicles
+                                  ? 'Choose a default vehicle'
+                                  : 'Set up your charging preferences'
+                            : vehicle.platePending
+                            ? 'Plate pending'
+                            : vehicle.plateNumber ?? vehicle.nickname,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([
@@ -194,6 +268,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 16),
+                                _currentVehicleCard(context),
                                 const SizedBox(height: 16),
                                 if (_showMap)
                                   ClipRRect(

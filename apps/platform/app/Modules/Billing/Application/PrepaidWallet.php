@@ -128,7 +128,11 @@ final readonly class PrepaidWallet
     private function entry(PrepaidAccount $account, string $reference, string $kind, int $amount): void
     {
         $entry = PrepaidEntry::query()->create(['account_id' => $account->getKey(), 'reference_id' => $reference, 'kind' => $kind, 'amount_minor' => $amount, 'created_at' => now('UTC')]);
-        $this->audit->record(new AuditEntry('billing.prepaid.'.$kind, 'prepaid_entry', (string) $entry->getKey(), AuditResult::Succeeded));
+        $this->audit->record(new AuditEntry('billing.prepaid.'.$kind, 'prepaid_entry', (string) $entry->getKey(), AuditResult::Succeeded,
+            metadata: ['wallet_id' => (string) $account->getKey(), 'reference_id' => $reference,
+                'charging_account_id' => $account->charging_account_id, 'book' => $account->book,
+                'currency' => $account->currency, 'amount_minor' => $amount,
+                'balance_minor' => $account->balance_minor, 'reserved_minor' => $account->reserved_minor]));
     }
 
     /** @return array<string,mixed> */

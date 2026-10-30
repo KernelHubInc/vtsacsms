@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Foundation\Audit\AuditResult;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\LoginRequest;
 use App\Http\Resources\Api\V1\UserResource;
 use App\Models\User;
+use App\Modules\Identity\Application\AuthenticationAudit;
 use App\Modules\Identity\Application\Contracts\MfaChallengeProvider;
 use App\Modules\Identity\Application\MobileTokenService;
 use App\Modules\Identity\Domain\ActorType;
@@ -42,10 +44,14 @@ final class MobileAuthController extends Controller
             || ! $user->isEnabled()
             || ! $this->hasActiveMembership($user, $tenantId)
         ) {
+            app(AuthenticationAudit::class)->record($user, $tenantId, 'mobile', AuditResult::Failed);
+
             return $this->invalidCredentials($request);
         }
 
         if ($user->mfa_required) {
+            app(AuthenticationAudit::class)->record($user, $tenantId, 'mobile', AuditResult::Denied);
+
             return response()->json(['error' => [
                 'code' => $mfa->isAvailableFor($user) ? 'mfa_challenge_required' : 'mfa_unavailable',
                 'message' => 'Multi-factor authentication is required for this account.',
@@ -76,6 +82,8 @@ final class MobileAuthController extends Controller
                 $abilities,
             );
         });
+
+        app(AuthenticationAudit::class)->record($user, $tenantId, 'mobile', AuditResult::Succeeded);
 
         return response()->json([
             'data' => [

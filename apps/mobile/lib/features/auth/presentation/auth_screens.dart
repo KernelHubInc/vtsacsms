@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_entry_scaffold.dart';
 import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
+import 'package:vtsa_mobile/features/auth/presentation/registration_validation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.dependencies, super.key});
@@ -137,6 +139,43 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _plate = TextEditingController();
   DateTime? _birthDate;
   bool _platePending = false;
+  Set<String> _invalid = {};
+  final _fieldKeys = {
+    for (final name in [
+      'first_name',
+      'middle_name',
+      'last_name',
+      'birth_date',
+      'plate_number',
+      'email',
+      'password',
+    ])
+      name: GlobalKey(),
+  };
+
+  void _showFirstInvalid() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _invalid.isEmpty) return;
+      final fieldContext = _fieldKeys[_invalid.first]?.currentContext;
+      if (fieldContext != null) {
+        Scrollable.ensureVisible(
+          fieldContext,
+          alignment: .2,
+          duration: const Duration(milliseconds: 200),
+        );
+      }
+    });
+  }
+
+  AppFailure? _requestFailure;
+
+  void _edited(String field) {
+    setState(() {
+      _invalid.remove(field);
+      _requestFailure = null;
+    });
+  }
+
   final _email = TextEditingController();
   final _password = TextEditingController();
 
@@ -165,6 +204,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           VtsaTextField(
             label: 'First name',
             controller: _first,
+            key: _fieldKeys['first_name'],
+            invalid: _invalid.contains('first_name'),
+            onChanged: (_) => _edited('first_name'),
+            enabled: !widget.dependencies.auth.isBusy,
             required: true,
             autofillHints: const [AutofillHints.givenName],
           ),
@@ -172,12 +215,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           VtsaTextField(
             label: 'Middle name (optional)',
             controller: _middle,
+            key: _fieldKeys['middle_name'],
+            invalid: _invalid.contains('middle_name'),
+            onChanged: (_) => _edited('middle_name'),
+            enabled: !widget.dependencies.auth.isBusy,
             autofillHints: const [AutofillHints.middleName],
           ),
           const SizedBox(height: VtsaSpacing.md),
           VtsaTextField(
             label: 'Last name',
             controller: _last,
+            key: _fieldKeys['last_name'],
+            invalid: _invalid.contains('last_name'),
+            onChanged: (_) => _edited('last_name'),
+            enabled: !widget.dependencies.auth.isBusy,
             required: true,
             autofillHints: const [AutofillHints.familyName],
           ),
@@ -185,13 +236,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           DriverDateField(
             label: 'Date of birth',
             value: _birthDate,
-            onChanged: (date) => setState(() => _birthDate = date),
+            key: _fieldKeys['birth_date'],
+            invalid: _invalid.contains('birth_date'),
+            onChanged: (date) {
+              _birthDate = date;
+              _edited('birth_date');
+            },
           ),
           const SizedBox(height: VtsaSpacing.md),
           if (!_platePending)
             VtsaTextField(
               label: 'Vehicle plate number',
               controller: _plate,
+              key: _fieldKeys['plate_number'],
+              invalid: _invalid.contains('plate_number'),
+              onChanged: (_) => _edited('plate_number'),
+              enabled: !widget.dependencies.auth.isBusy,
               required: true,
               hint: 'Use the plate on your vehicle. You can update it later.',
             ),
@@ -202,13 +262,20 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               'For a newly registered vehicle awaiting its plate.',
             ),
             value: _platePending,
-            onChanged: (value) =>
-                setState(() => _platePending = value ?? false),
+            onChanged: (value) => setState(() {
+              _platePending = value ?? false;
+              _invalid.remove('plate_number');
+              _requestFailure = null;
+            }),
           ),
           const SizedBox(height: VtsaSpacing.md),
           VtsaTextField(
             label: 'Email address',
             controller: _email,
+            key: _fieldKeys['email'],
+            invalid: _invalid.contains('email'),
+            onChanged: (_) => _edited('email'),
+            enabled: !widget.dependencies.auth.isBusy,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newUsername],
@@ -220,17 +287,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             hint:
                 '12+ characters, with uppercase, lowercase, a number and a symbol.',
             controller: _password,
+            key: _fieldKeys['password'],
+            invalid: _invalid.contains('password'),
+            onChanged: (_) => _edited('password'),
+            enabled: !widget.dependencies.auth.isBusy,
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
             required: true,
           ),
           const SizedBox(height: VtsaSpacing.lg),
-          if (widget.dependencies.auth.failure != null) ...[
+          if (_requestFailure != null) ...[
             VtsaErrorState(
               title: 'Account creation was not successful',
-              description:
-                  'Check your details and try again. If you already have an account, sign in or reset your password.',
-              correlationId: widget.dependencies.auth.failure!.correlationId,
+              description: _requestFailure!.kind == FailureKind.validation
+                  ? 'We could not create this account. If you already have an account, sign in or reset your password.'
+                  : _requestFailure!.message,
+              correlationId: _requestFailure!.correlationId,
             ),
             const SizedBox(height: VtsaSpacing.md),
           ],
@@ -249,28 +321,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   );
 
   Future<void> _submit() async {
-    if (_first.text.trim().isEmpty ||
-        _last.text.trim().isEmpty ||
-        _first.text.trim().length > 80 ||
-        _middle.text.trim().length > 80 ||
-        _last.text.trim().length > 80 ||
-        _birthDate == null ||
-        !isAdult(_birthDate!, DateTime.now().toUtc()) ||
-        (!_platePending &&
-            !RegExp(
-              r'^[A-Z0-9][A-Z0-9 -]{0,19}$',
-            ).hasMatch(_plate.text.trim().toUpperCase())) ||
-        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim()) ||
-        _password.text.length < 12 ||
-        !RegExp('[A-Z]').hasMatch(_password.text) ||
-        !RegExp('[a-z]').hasMatch(_password.text) ||
-        !RegExp('[0-9]').hasMatch(_password.text) ||
-        !RegExp(r'[^a-zA-Z0-9]').hasMatch(_password.text)) {
-      showVtsaToast(
-        context,
-        message:
-            'Enter your names, an adult date of birth, a plate or Plate pending, a valid email and the required password.',
+    if (widget.dependencies.auth.isBusy) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _requestFailure = null;
+      _invalid = registrationInvalidFields(
+        firstName: _first.text,
+        middleName: _middle.text,
+        lastName: _last.text,
+        birthDate: _birthDate,
+        today: DateTime.now().toUtc(),
+        plate: _plate.text,
+        platePending: _platePending,
+        email: _email.text,
+        password: _password.text,
       );
+    });
+    if (_invalid.isNotEmpty) {
+      _showFirstInvalid();
       return;
     }
     final created = await widget.dependencies.auth.register(
@@ -288,7 +356,32 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       email: _email.text,
       password: _password.text,
     );
-    if (mounted && created) {
+    if (!mounted) return;
+    if (!created) {
+      final failure = widget.dependencies.auth.failure;
+      setState(() {
+        _invalid =
+            failure?.fieldErrors.keys
+                .where(
+                  (field) => const {
+                    'first_name',
+                    'middle_name',
+                    'last_name',
+                    'birth_date',
+                    'plate_number',
+                    'email',
+                    'password',
+                  }.contains(field),
+                )
+                .toSet() ??
+            {};
+        // Account existence and configuration failures must never blame a field.
+        _requestFailure = _invalid.isEmpty ? failure : null;
+      });
+      _showFirstInvalid();
+      return;
+    }
+    if (created) {
       final deliveryFailed =
           widget.dependencies.auth.registration?.verificationEmailSent == false;
       context.go(

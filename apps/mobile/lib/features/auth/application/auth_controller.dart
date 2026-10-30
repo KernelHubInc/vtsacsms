@@ -119,6 +119,7 @@ final class AuthController extends ChangeNotifier {
     String? plateNumber,
     bool platePending = false,
   }) async {
+    if (_busy) return false;
     _setBusy(true);
     _registration = null;
     try {

@@ -36,8 +36,8 @@ final class EmailDesignTest extends TestCase
         self::assertStringContainsString('29 Oct 2026, 10:15 AM PHT', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
         self::assertStringNotContainsString('<script>', $html);
-        self::assertStringNotContainsString('USD', $html);
-        self::assertStringNotContainsString('4242', $html);
+        self::assertStringNotContainsString('USD', strip_tags($html));
+        self::assertStringNotContainsString('4242', strip_tags($html));
         self::assertStringContainsString('https://charging.example.test/mobile/', $html);
         self::assertStringContainsString('Sign in and open Activity', $html);
         self::assertCount(1, $mail->attachments());

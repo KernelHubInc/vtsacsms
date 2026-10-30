@@ -3,7 +3,7 @@
 @section('preheader', 'Your charging session is complete. Your payment details and PDF receipt are inside.')
 @section('body')
 @include('mail.partials.brand')
-<p style="margin:0 0 12px;color:#12645f;font-size:13px;line-height:20px;"><img src="{{ rtrim(config('app.url'), '/') }}/branding/email/check.png" width="20" height="20" alt="" style="vertical-align:middle;border:0;"> &nbsp; Payment complete</p>
+<p style="margin:0 0 12px;color:#12645f;font-size:13px;line-height:20px;"><img src="{{ $message->embed(public_path('branding/email/check.png')) }}" width="20" height="20" alt="" style="vertical-align:middle;border:0;"> &nbsp; Payment complete</p>
 <h1 class="email-heading" style="font-size:36px;line-height:1.1;color:#12366b;margin:0 0 12px;">All charged up.<br>You’re good to go.</h1>
 <p style="font-size:15px;line-height:1.6;color:#66758a;margin:0 0 24px;">Thanks for charging with Power Solutions. Here’s a summary of your completed session.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eaf9f7;border-radius:12px;margin-bottom:24px;">

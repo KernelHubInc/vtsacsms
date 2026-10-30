@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Shared\Pages;
 
+use App\Foundation\Audit\AuditEntry;
+use App\Foundation\Audit\AuditRecorder;
+use App\Foundation\Audit\AuditResult;
 use App\Models\User;
 use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Locations\Domain\Models\Site;
@@ -86,12 +89,20 @@ abstract class PortalReports extends Page
         abort_unless(is_string($scopeHash) && hash_equals($scopeHash, $access->scopeFingerprint($user, $export->type)), 403);
         abort_unless(Storage::disk($export->disk)->exists($export->path), 404);
         $format = $export->filters['_format'] ?? 'csv';
-        abort_unless(in_array($format, ['csv', 'pdf'], true), 404);
+        abort_unless(in_array($format, ['csv', 'pdf', 'xlsx'], true), 404);
+        app(AuditRecorder::class)->record(new AuditEntry(
+            'reporting.portal_export.downloaded', 'portal_export', (string) $export->getKey(), AuditResult::Succeeded,
+            metadata: ['type' => $export->type, 'format' => $format],
+        ));
 
         return Storage::disk($export->disk)->download(
             $export->path,
             sprintf('power-solutions-%s-%s.%s', $export->type, $export->getKey(), $format),
-            ['Content-Type' => $format === 'pdf' ? 'application/pdf' : 'text/csv; charset=UTF-8'],
+            ['Content-Type' => match ($format) {
+                'pdf' => 'application/pdf',
+                'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                default => 'text/csv; charset=UTF-8',
+            }, 'Cache-Control' => 'private, no-store'],
         );
     }
 

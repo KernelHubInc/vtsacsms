@@ -103,7 +103,17 @@ void main() {
         await preview(tester, 'explore-${width.toInt()}-$scale');
         await tester.enterText(find.byType(TextField), 'not-a-station');
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('No chargers in this view'),
+          180,
+          scrollable: find.byType(Scrollable).first,
+        );
         expect(find.text('No chargers in this view'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.byType(TextField),
+          -180,
+          scrollable: find.byType(Scrollable).first,
+        );
         await tester.enterText(find.byType(TextField), 'Harbor');
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text('Harbor Exchange').first);

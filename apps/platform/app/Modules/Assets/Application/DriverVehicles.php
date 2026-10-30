@@ -51,6 +51,7 @@ final readonly class DriverVehicles
                 DriverGarage::query()->whereKey($garage->getKey())->lockForUpdate()->firstOrFail();
                 $vehicle = DriverVehicle::query()->whereKey($id)->first();
                 abort_if($vehicle !== null && $vehicle->garage_id !== $garage->getKey(), 404);
+                $operation = $vehicle === null ? 'created' : 'updated';
                 $default = ($data['is_default'] ?? false) || ! DriverVehicle::query()->where('garage_id', $garage->getKey())->exists();
                 if ($default) {
                     DriverVehicle::query()->where('garage_id', $garage->getKey())->where('is_default', true)->update(['is_default' => false]);
@@ -63,8 +64,11 @@ final readonly class DriverVehicles
                     'plate_pending' => $data['plate_pending'] ?? false, 'manufacturer' => $data['manufacturer'] ?? '',
                     'model' => $data['model'] ?? '', 'variant' => $data['variant'] ?? null,
                     'connector_standards' => array_values(array_unique($data['connector_standards'] ?? [])), 'is_default' => $default,
-                ])->save();
-                $this->audit->record(new AuditEntry('assets.driver_vehicle.saved', 'driver_vehicle', $id, AuditResult::Succeeded));
+                ]);
+                $changed = array_values(array_intersect(array_keys($vehicle->getDirty()), ['nickname', 'plate_number', 'plate_pending', 'manufacturer', 'model', 'variant', 'connector_standards', 'is_default']));
+                $vehicle->save();
+                $this->audit->record(new AuditEntry('assets.driver_vehicle.'.$operation, 'driver_vehicle', $id, AuditResult::Succeeded,
+                    metadata: ['operation' => $operation, 'charging_account_id' => $accountId, 'changed_fields' => $changed]));
 
                 return $this->present($vehicle);
             });

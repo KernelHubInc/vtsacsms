@@ -60,6 +60,7 @@
                         <article class="rounded-xl border border-gray-200 p-4 dark:border-white/10">
                             <h3 class="font-semibold">{{ $label }}</h3>
                             <p class="mt-1 min-h-12 text-sm text-slate-600 dark:text-slate-300">{{ match($type) {
+                                'audit' => 'Tenant activity: sign-ins, vehicle changes, wallet movements and administrative actions. Use Activity log for detailed filters.',
                                 'sessions' => 'Start and stop times, energy, duration and final charge.',
                                 'assets' => 'Authorized sites, publication status and charging-station counts.',
                                 'finance' => 'Session payment intents, captures and refunds.',
@@ -69,6 +70,7 @@
                                 'vehicle_models' => 'Compare completed usage by current brand/model and currency; identify your most-used vehicle models.',
                             } }}</p>
                             <div class="mt-4 flex flex-wrap gap-2">
+                                <button wire:click="queueExport('{{ $type }}', 'xlsx')" wire:loading.attr="disabled" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold dark:border-white/20">Export Excel</button>
                                 <button wire:click="queueExport('{{ $type }}', 'pdf')" wire:loading.attr="disabled" type="button" class="rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:opacity-50">Create PDF</button>
                                 <button wire:click="queueExport('{{ $type }}', 'csv')" wire:loading.attr="disabled" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:border-white/20 dark:hover:bg-white/5">Export all rows as CSV</button>
                             </div>

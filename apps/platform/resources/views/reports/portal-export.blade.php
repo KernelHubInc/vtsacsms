@@ -42,6 +42,14 @@
             <td><div class="metric-label">{{ $title === 'Payment reconciliation' ? 'Captured' : ($vehicleReport ? 'Known final charges' : 'Final charges') }} · {{ $currency }}</div><div class="metric-value">{{ $currency }} {{ (new \App\Modules\Reporting\Application\PortalPdfReport)->minor($minor) }}</div></td>
         @endforeach
     </tr></table>
+    @if ($title === 'Activity and audit log')
+        <p class="note">Recorded activity only. Older events may contain fewer details. Anonymous actor IDs mean the identity was not authenticated or the event came from a service. Excel includes event IDs and selected wallet/change details; secrets, contact details and vehicle plates are excluded.</p>
+        @foreach ($filters as $key => $value)
+            @if (! str_starts_with($key, '_') && ! in_array($key, ['from', 'to'], true))
+                <span class="note">{{ str($key)->replace('_', ' ')->ucfirst() }}: {{ $value }} · </span>
+            @endif
+        @endforeach
+    @endif
     @if ($vehicleReport)
         <p class="note">Brand, model and owner reflect the current vehicle register. Missing or deleted vehicles remain unassigned/unknown; no vehicle is inferred. Usage summaries include completed sessions only. Known final charges exclude unpriced sessions and are not proof of payment. Vehicle counts exclude sessions without a recorded vehicle ID.</p>
         @foreach ($filters as $key => $value)
@@ -52,7 +60,7 @@
     @endif
     <h2>Record details</h2>
     @if ($count > $limit)
-        <p class="note">Showing the first {{ number_format($limit) }} of {{ number_format($count) }} records. Download CSV for complete row-level details.</p>
+        <p class="note">Showing the first {{ number_format($limit) }} of {{ number_format($count) }} records. Download Excel or CSV for complete row-level details.</p>
     @elseif ($title === 'Sites and charging stations')
         <p class="note">This is a snapshot of the current authorized site inventory and charging-station counts.</p>
     @else

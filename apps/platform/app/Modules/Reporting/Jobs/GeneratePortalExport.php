@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Reporting\Jobs;
 
 use App\Models\User;
+use App\Modules\Reporting\Application\PortalExcelReport;
 use App\Modules\Reporting\Application\PortalExportRowsQuery;
 use App\Modules\Reporting\Application\PortalPdfReport;
 use App\Modules\Reporting\Application\PortalReportAccess;
@@ -51,7 +52,7 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
         }
 
         $format = $export->filters['_format'] ?? 'csv';
-        if (! in_array($format, ['csv', 'pdf'], true)) {
+        if (! in_array($format, ['csv', 'pdf', 'xlsx'], true)) {
             $export->update(['status' => 'failed', 'failure_code' => 'unsupported_format']);
 
             return;
@@ -61,9 +62,11 @@ final class GeneratePortalExport implements ShouldQueue, TenantAwareJob
         $export->update(['status' => 'processing', 'failure_code' => null, 'filters' => $filters]);
         $report = $rows->for($export->type, $user, $export->filters);
         $disk = (string) config('filesystems.report_disk', 'local');
-        if ($format === 'pdf') {
-            $result = app(PortalPdfReport::class)->render($export->type, $report, $filters);
-            $path = sprintf('portal-exports/%s/%s.pdf', $this->envelope->tenantId, $export->getKey());
+        if (in_array($format, ['pdf', 'xlsx'], true)) {
+            $result = $format === 'pdf'
+                ? app(PortalPdfReport::class)->render($export->type, $report, $filters)
+                : app(PortalExcelReport::class)->render($report);
+            $path = sprintf('portal-exports/%s/%s.%s', $this->envelope->tenantId, $export->getKey(), $format);
             if (! Storage::disk($disk)->put($path, $result['bytes'])) {
                 throw new RuntimeException('Unable to persist PDF export.');
             }

@@ -76,7 +76,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose a plug'), findsOneWidget);
-    expect(find.textContaining('CCS2'), findsOneWidget);
+    expect(find.text('CCS2 · CCS connector'), findsOneWidget);
     expect(find.textContaining('Connection unconfirmed'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Station details & directions'),

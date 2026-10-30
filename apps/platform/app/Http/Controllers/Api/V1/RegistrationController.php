@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Foundation\Demo\DemoEnvironment;
-use App\Foundation\Features\Feature;
-use App\Foundation\Features\FeatureFlags;
+use App\Foundation\Audit\AuditEntry;
+use App\Foundation\Audit\AuditRecorder;
+use App\Foundation\Audit\AuditResult;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\RegisterRequest;
 use App\Models\User;
 use App\Modules\Assets\Application\DriverVehicles;
 use App\Modules\Identity\Domain\ActorType;
+use App\Modules\Organizations\Application\ConsumerEnrollment;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Application\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -31,16 +32,12 @@ final class RegistrationController extends Controller
         ]], 426)->header('Cache-Control', 'no-store');
     }
 
-    public function __invoke(RegisterRequest $request, FeatureFlags $flags): JsonResponse
+    public function __invoke(RegisterRequest $request, ConsumerEnrollment $enrollment): JsonResponse
     {
-        abort_unless(
-            app()->environment(['local', 'development', 'testing', 'demo', 'staging'])
-            && $flags->enabled(Feature::DemoMode)
-            && $request->validated('tenant_id') === DemoEnvironment::TENANT_ID,
-            404,
-        );
+        $tenantId = (string) $request->validated('tenant_id');
+        $enrollment->scope($tenantId);
 
-        $user = DB::transaction(function () use ($request): User {
+        $user = DB::transaction(function () use ($request, $tenantId, $enrollment): User {
             $user = User::query()->create([
                 'name' => $request->validated('name'),
                 'first_name' => $request->validated('first_name'),
@@ -51,40 +48,19 @@ final class RegistrationController extends Controller
                 'password' => $request->validated('password'),
                 'activated_at' => now('UTC'),
             ]);
-            $membershipId = (string) Str::ulid();
-            DB::table('memberships')->insert([
-                'id' => $membershipId,
-                'tenant_id' => DemoEnvironment::TENANT_ID,
-                'user_id' => $user->getKey(),
-                'organization_id' => DB::table('organizations')
-                    ->where('tenant_id', DemoEnvironment::TENANT_ID)
-                    ->where('type', 'fleet')->value('id'),
-                'status' => 'active',
-                'joined_at' => now('UTC'),
-                'created_at' => now('UTC'),
-                'updated_at' => now('UTC'),
-            ]);
-            DB::table('role_assignments')->insert([
-                'id' => (string) Str::ulid(),
-                'tenant_id' => DemoEnvironment::TENANT_ID,
-                'membership_id' => $membershipId,
-                'role_id' => DB::table('roles')
-                    ->where('tenant_id', DemoEnvironment::TENANT_ID)
-                    ->where('key', 'consumer-driver')->value('id'),
-                'scope_type' => 'organization',
-                'scope_id' => DB::table('organizations')
-                    ->where('tenant_id', DemoEnvironment::TENANT_ID)
-                    ->where('type', 'fleet')->value('id'),
-                'created_at' => now('UTC'),
-                'updated_at' => now('UTC'),
-            ]);
+            $enrollment->enroll((int) $user->getKey(), $tenantId);
 
             app(CurrentTenant::class)->run(new TenantContext(
-                DemoEnvironment::TENANT_ID, ActorType::Human, (string) $user->public_id, (string) Str::ulid(),
-            ), fn () => app(DriverVehicles::class)->save((string) $user->public_id, (string) Str::ulid(), [
-                'nickname' => 'My vehicle', 'plate_number' => $request->validated('plate_number'),
-                'plate_pending' => $request->boolean('plate_pending'), 'is_default' => true,
-            ]));
+                $tenantId, ActorType::Human, (string) $user->public_id, (string) Str::ulid(),
+            ), function () use ($user, $request): void {
+                app(AuditRecorder::class)->record(new AuditEntry(
+                    'identity.user.registered', 'identity', $user->public_id, AuditResult::Succeeded,
+                ));
+                app(DriverVehicles::class)->save((string) $user->public_id, (string) Str::ulid(), [
+                    'nickname' => 'My vehicle', 'plate_number' => $request->validated('plate_number'),
+                    'plate_pending' => $request->boolean('plate_pending'), 'is_default' => true,
+                ]);
+            });
 
             return $user;
         });
@@ -96,7 +72,7 @@ final class RegistrationController extends Controller
             // Registration is committed; a mail outage must not invite duplicate signup.
             $verificationEmailSent = false;
             Log::warning('identity.registration.verification_email_failed', [
-                'tenant_id' => DemoEnvironment::TENANT_ID,
+                'tenant_id' => $tenantId,
                 'correlation_id' => $request->attributes->get('correlation_id'),
                 'exception_class' => $exception::class,
             ]);

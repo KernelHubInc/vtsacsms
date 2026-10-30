@@ -7,6 +7,7 @@ import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charger_scanner_view.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
 
 class ChargingStartScreen extends StatefulWidget {
@@ -187,6 +188,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             ),
           );
         }
+        if (_cameraEnabled) return _cameraView(context);
         return VtsaPageShell(
           eyebrow: 'START CHARGING',
           title: 'Identify the connector',
@@ -201,71 +203,26 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
                 ),
                 const SizedBox(height: VtsaSpacing.md),
               ],
-              if (!_cameraEnabled)
-                VtsaCard(
-                  eyebrow: 'CAMERA PERMISSION',
-                  title: 'Scan only when you choose',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Power Solutions uses the camera only to decode the charger QR code. Camera video is not stored. You can always enter the printed code manually.',
-                      ),
-                      const SizedBox(height: VtsaSpacing.lg),
-                      VtsaButton(
-                        label: 'Continue to camera',
-                        icon: Icons.qr_code_scanner,
-                        onPressed: charging.isOnline
-                            ? () => setState(() => _cameraEnabled = true)
-                            : null,
-                      ),
-                    ],
-                  ),
-                )
-              else
-                SizedBox(
-                  height: 320,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(VtsaRadii.lg),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        MobileScanner(
-                          controller: _scanner,
-                          onDetect: _onDetect,
-                          errorBuilder: (context, error) => VtsaErrorState(
-                            title: 'Camera unavailable',
-                            description:
-                                'Camera permission was denied or the camera could not start. Enter the charger code below instead.',
-                            action: VtsaButton(
-                              label: 'Use manual entry',
-                              variant: VtsaButtonVariant.secondary,
-                              onPressed: () =>
-                                  setState(() => _cameraEnabled = false),
-                            ),
-                          ),
-                        ),
-                        IgnorePointer(
-                          child: Center(
-                            child: Container(
-                              width: 220,
-                              height: 220,
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 3,
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  VtsaRadii.lg,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+              VtsaCard(
+                eyebrow: 'CAMERA PERMISSION',
+                title: 'Scan only when you choose',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Power Solutions uses the camera only to decode the charger QR code. Camera video is not stored. You can always enter the printed code manually.',
                     ),
-                  ),
+                    const SizedBox(height: VtsaSpacing.lg),
+                    VtsaButton(
+                      label: 'Continue to camera',
+                      icon: Icons.qr_code_scanner,
+                      onPressed: charging.isOnline
+                          ? () => setState(() => _cameraEnabled = true)
+                          : null,
+                    ),
+                  ],
                 ),
+              ),
               const SizedBox(height: VtsaSpacing.lg),
               Row(
                 children: [
@@ -316,8 +273,46 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     );
   }
 
+  Widget _cameraView(BuildContext context) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _closeCamera();
+    },
+    child: ChargerScannerView(
+      onManualEntry: _closeCamera,
+      loading: widget.dependencies.charging.mutationInFlight,
+      errorMessage: widget.dependencies.charging.failure?.message,
+      camera: MobileScanner(
+        controller: _scanner,
+        onDetect: _onDetect,
+        errorBuilder: (context, error) => const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Camera unavailable. Allow camera access in settings, or enter the printed charge point ID.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _closeCamera() async {
+    await _scanner.stop();
+    if (mounted) {
+      setState(() {
+        _cameraEnabled = false;
+        _scanHandled = false;
+      });
+    }
+  }
+
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_scanHandled) {
+    if (_scanHandled ||
+        !_cameraEnabled ||
+        !widget.dependencies.charging.isOnline) {
       return;
     }
     final value = capture.barcodes.firstOrNull?.rawValue;
@@ -328,6 +323,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     await _scanner.stop();
     await _prepare(value);
     if (mounted &&
+        _cameraEnabled &&
         widget.dependencies.charging.phase != ChargingFlowPhase.reviewing) {
       _scanHandled = false;
       await _scanner.start();

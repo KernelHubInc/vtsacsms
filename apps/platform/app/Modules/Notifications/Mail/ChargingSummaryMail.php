@@ -24,6 +24,7 @@ final class ChargingSummaryMail extends Mailable
     {
         return new Content(view: 'mail.charging-summary', text: 'mail.text.charging-summary', with: [
             'receipt' => app(ChargingReceiptPdf::class)->details($this->summary),
+            'embedReceiptImages' => true,
         ]);
     }
 

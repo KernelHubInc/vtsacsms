@@ -212,3 +212,18 @@ of the asset/location hierarchy, existing Charging presence queries and Tariffs
 selection. It never writes observations or financial records. Filament actions
 use these owning-context workflows; configuration does not synthesize device
 connectivity, availability or a completed session.
+
+### Administrative activity reports
+
+Foundation's `AuditLogQuery` is the tenant-authorized read contract for the immutable
+audit ledger. Reporting's `AuditReportQuery` uses it for private queued Excel/PDF
+exports, requiring tenant-wide AuditView, AuditExport, ReportingView and ReportingExport. It
+does not join or mutate source business records, rewrite history, or export raw
+audit payloads. Identity owns authentication/registration evidence, Assets owns
+vehicle evidence, Billing owns wallet evidence and Charging owns state-transition
+evidence. See [activity log instructions](../runbooks/activity-log.md) for coverage,
+privacy, retention limits and rollout.
+
+## Public consumer enrollment (2026-10-30)
+
+Organizations exposes `ConsumerEnrollment` to the Identity registration workflow. It resolves only the configured active consumer fleet organization and fixed `consumer-driver` role in the requested signup tenant, then writes membership and role assignment inside the registration transaction. Tenancy exposes `RegistrationTenantQuery::isActive`. The HTTP controller no longer writes Organizations tables directly. Demo fallback is limited to its existing non-production environment guard; production uses explicit registration configuration and never enables demo mode. Assets still owns initial vehicle creation through `DriverVehicles`. See [mobile registration operations](../runbooks/mobile-registration-and-discovery.md).

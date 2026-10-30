@@ -32,6 +32,153 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
           (connector.availability == 'occupied' &&
               connector.reportedStatus == 'preparing'));
 
+  Future<void> _directions(Station station) async {
+    final opened = await widget.dependencies.directions.open(
+      latitude: station.latitude,
+      longitude: station.longitude,
+    );
+    if (mounted && !opened) {
+      showVtsaToast(
+        context,
+        message: 'No navigation application could open directions.',
+      );
+    }
+  }
+
+  Widget _summary(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: context.vtsaColors.border)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelSmall),
+              const SizedBox(height: 5),
+              Text(value),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _connectorCard(
+    BuildContext context,
+    Station station,
+    StationConnector connector,
+    bool selected,
+    bool? compatible,
+  ) {
+    final enabled = _canSelect(station, connector);
+    final status = station.isStale
+        ? 'Status stale'
+        : station.connectionStatus == 'offline'
+        ? 'Offline'
+        : station.connectionStatus != 'online'
+        ? 'Connection unconfirmed'
+        : connector.statusLabel;
+    final colors = context.vtsaColors;
+    final color = enabled
+        ? colors.success
+        : connector.availability == 'faulted'
+        ? colors.danger
+        : colors.textMuted;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      child: Material(
+        color: selected ? colors.brandSoft : color.withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: selected
+                ? Theme.of(context).colorScheme.primary
+                : color.withValues(alpha: 0.45),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled
+              ? () => setState(() => _selectedId = connector.id)
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: color),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${connector.standard} · ${connector.name}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 18),
+                Text('OUTPUT', style: Theme.of(context).textTheme.labelSmall),
+                Text(
+                  connector.powerLabel,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                Text('PRICE', style: Theme.of(context).textTheme.labelSmall),
+                const Text('Shown at review'),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (connectorAsset(connector.standard) case final asset?)
+                      Image.asset(
+                        'assets/interface/$asset.png',
+                        width: 24,
+                        height: 24,
+                        excludeFromSemantics: true,
+                      ),
+                    Text(connector.standard),
+                    if (selected)
+                      Icon(
+                        Icons.check_circle,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  compatible == null
+                      ? 'Check your vehicle connector'
+                      : compatible
+                      ? 'Compatible with your vehicle'
+                      : 'Check vehicle compatibility',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([
@@ -62,93 +209,112 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
       final vehicle = dependencies.vehicles.defaultVehicle;
       return DriverPage(
         title: 'Charging station',
+        bottomActions: LayoutBuilder(
+          builder: (context, constraints) {
+            final directions = VtsaButton(
+              label: 'Directions',
+              variant: VtsaButtonVariant.secondary,
+              icon: Icons.directions_outlined,
+              onPressed: () => _directions(station),
+            );
+            final charge = VtsaButton(
+              label: selected == null
+                  ? 'Choose a plug to continue'
+                  : 'Continue with ${selected.standard}',
+              onPressed: selected == null
+                  ? null
+                  : () => context.push('/charge?code=${selected.id}'),
+            );
+            if (constraints.maxWidth < 400 ||
+                MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [directions, const SizedBox(height: 8), charge],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: directions),
+                const SizedBox(width: 12),
+                Expanded(child: charge),
+              ],
+            );
+          },
+        ),
         body: ListView(
           children: [
-            DriverNotice(
-              title: station.name,
-              message:
-                  '${station.address ?? station.siteName}\n${!station.hoursKnown
-                      ? 'Hours not provided'
-                      : station.openNow
-                      ? 'Open now'
-                      : 'Closed now'} · ${station.connectionLabel}',
+            Text(
+              station.name,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 8),
+            Text(station.address ?? station.siteName),
+            if (station.distanceM != null)
+              Text('${(station.distanceM! / 1000).toStringAsFixed(1)} km away'),
+            const SizedBox(height: 20),
+            _summary(
+              context,
+              Icons.bolt_outlined,
+              'POWER OUTPUT',
+              'Up to ${(station.maximumPowerW / 1000).toStringAsFixed(1)} kW',
+            ),
+            _summary(
+              context,
+              Icons.ev_station_outlined,
+              'CHARGE POINTS',
+              '${station.connectors.where((c) => _canSelect(station, c) && c.availability == 'available').length} of ${station.connectors.length} available · ${station.connectionLabel}',
+            ),
+            _summary(
+              context,
+              Icons.schedule_outlined,
+              'OPERATING HOURS',
+              !station.hoursKnown
+                  ? 'Hours not provided'
+                  : station.openNow
+                  ? 'Open now'
+                  : 'Closed now',
+            ),
+            const SizedBox(height: 20),
             Text(
               'Choose a plug',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 4),
-            const Text('We’ll show you the price before you begin.'),
+            const SizedBox(height: 6),
+            const Text(
+              'Live pricing and your wallet reservation are shown before you start.',
+            ),
             const SizedBox(height: 16),
-            for (final connector in station.connectors)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Semantics(
-                  selected: selected?.id == connector.id && selected != null,
-                  button: true,
-                  child: VtsaCard(
-                    padding: EdgeInsets.zero,
-                    selected: selected?.id == connector.id && selected != null,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: _canSelect(station, connector)
-                          ? () => setState(() => _selectedId = connector.id)
-                          : null,
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                if (connectorAsset(connector.standard)
-                                    case final asset?)
-                                  Image.asset(
-                                    'assets/interface/$asset.png',
-                                    width: 24,
-                                    height: 24,
-                                    excludeFromSemantics: true,
-                                  ),
-                                Text(
-                                  '${connector.standard} · ${connector.name}',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                                VtsaStatusChip(
-                                  label: station.isStale
-                                      ? 'Status stale'
-                                      : connector.statusLabel,
-                                  state: _canSelect(station, connector)
-                                      ? VtsaOperationalState.available
-                                      : VtsaOperationalState.unavailable,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Up to ${(connector.maximumPowerW / 1000).toStringAsFixed(1)} kW',
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              vehicle == null
-                                  ? 'Price confirmed in the next step'
-                                  : vehicle.supports(connector.standard)
-                                  ? 'Compatible with ${vehicle.nickname}'
-                                  : 'Check compatibility with ${vehicle.nickname}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoColumns =
+                    constraints.maxWidth >= 340 &&
+                    MediaQuery.textScalerOf(context).scale(1) <= 1.2;
+                final width = twoColumns
+                    ? (constraints.maxWidth - 12) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final connector in station.connectors)
+                      SizedBox(
+                        width: width,
+                        child: _connectorCard(
+                          context,
+                          station,
+                          connector,
+                          selected?.id == connector.id && selected != null,
+                          vehicle == null || vehicle.connectorStandards.isEmpty
+                              ? null
+                              : vehicle.supports(connector.standard),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
             if (station.connectors.isEmpty)
               const DriverNotice(
                 title: 'Plug details pending',
@@ -162,32 +328,6 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
                     'These are the last loaded details. Refresh before choosing a plug.',
               ),
             const SizedBox(height: 8),
-            const DriverNotice(
-              title: 'No surprises',
-              message:
-                  'Review the tariff and reserved wallet budget before charging.',
-              positive: true,
-            ),
-            const SizedBox(height: 16),
-            VtsaButton(
-              label: selected == null
-                  ? 'Choose a plug to continue'
-                  : 'Continue with ${selected.standard}',
-              onPressed: selected == null
-                  ? null
-                  : () => context.push(
-                      Uri(
-                        path: '/charge',
-                        queryParameters: {'code': selected.id!},
-                      ).toString(),
-                    ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Availability can change while you travel.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
@@ -283,24 +423,6 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                VtsaButton(
-                  label: 'Directions',
-                  icon: Icons.directions_outlined,
-                  variant: VtsaButtonVariant.secondary,
-                  onPressed: () async {
-                    final opened = await dependencies.directions.open(
-                      latitude: station.latitude,
-                      longitude: station.longitude,
-                    );
-                    if (context.mounted && !opened) {
-                      showVtsaToast(
-                        context,
-                        message:
-                            'No navigation application could open directions.',
-                      );
-                    }
-                  },
-                ),
                 const SizedBox(height: 8),
                 VtsaButton(
                   label: 'Scan charger to start',
