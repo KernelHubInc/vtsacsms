@@ -45,10 +45,12 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
 
   @override
   Widget build(BuildContext context) {
+    final percentage = widget.percentage;
+    if (percentage == null || percentage < 0 || percentage > 100) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     final colors = context.vtsaColors;
-    final raw = widget.percentage;
-    final percentage = raw != null && raw >= 0 && raw <= 100 ? raw : null;
     final reportedAt = widget.reportedAt;
     final age = reportedAt == null ? null : widget.now().difference(reportedAt);
     final fresh =
@@ -57,9 +59,7 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
         age != null &&
         !age.isNegative &&
         age <= const Duration(minutes: 5);
-    final status = percentage == null
-        ? 'Not reported by charger'
-        : widget.sessionEnded
+    final status = widget.sessionEnded
         ? 'Last reported battery level'
         : fresh
         ? 'Latest battery reading'
@@ -67,9 +67,7 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
     final ring = Semantics(
       container: true,
       label: 'Vehicle battery',
-      value: percentage == null
-          ? 'Not reported by charger'
-          : '$percentage percent. $status',
+      value: '$percentage percent. $status',
       child: ExcludeSemantics(
         child: SizedBox.square(
           dimension: 156,
@@ -78,7 +76,7 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
             children: [
               Positioned.fill(
                 child: CircularProgressIndicator(
-                  value: percentage == null ? 0 : percentage / 100,
+                  value: percentage / 100,
                   strokeWidth: 10,
                   strokeCap: StrokeCap.round,
                   backgroundColor: colors.border,
@@ -93,15 +91,13 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        percentage == null
-                            ? Icons.battery_unknown_outlined
-                            : Icons.battery_std_outlined,
+                        Icons.battery_std_outlined,
                         color: colors.textMuted,
                         size: 24,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        percentage == null ? '—' : '$percentage%',
+                        '$percentage%',
                         style: theme.textTheme.headlineLarge?.copyWith(
                           fontSize: 38,
                           fontWeight: FontWeight.w700,
@@ -123,12 +119,10 @@ class _VehicleBatteryProgressState extends State<VehicleBatteryProgress> {
         Text(status, style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         Text(
-          percentage == null
-              ? 'This charger has not provided a battery percentage. Check your vehicle’s display.'
-              : 'Battery level reported by the charger. Energy delivered is shown separately.',
+          'Battery level reported by the charger. Energy delivered is shown separately.',
           style: theme.textTheme.bodyMedium,
         ),
-        if (percentage != null && reportedAt != null) ...[
+        if (reportedAt != null) ...[
           const SizedBox(height: 8),
           Text(
             'Reported ${DateFormat.yMMMd().add_jms().format(reportedAt.toLocal())}',

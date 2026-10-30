@@ -113,13 +113,16 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
             const SizedBox(height: VtsaSpacing.md),
             _Metrics(session: session),
             const SizedBox(height: VtsaSpacing.md),
-            VehicleBatteryProgress(
-              percentage: session.batteryPercentage,
-              reportedAt: session.batteryReportedAt,
-              connected: charging.isOnline && !session.chargerDisconnected,
-              sessionEnded: session.isTerminal,
-            ),
-            const SizedBox(height: VtsaSpacing.md),
+            if (session.batteryPercentage case final int percentage
+                when percentage >= 0 && percentage <= 100) ...[
+              VehicleBatteryProgress(
+                percentage: percentage,
+                reportedAt: session.batteryReportedAt,
+                connected: charging.isOnline && !session.chargerDisconnected,
+                sessionEnded: session.isTerminal,
+              ),
+              const SizedBox(height: VtsaSpacing.md),
+            ],
             _ChargerReadings(session: session),
             const SizedBox(height: VtsaSpacing.md),
             if (charging.phase == ChargingFlowPhase.live &&

@@ -70,24 +70,30 @@ void main() {
   });
 
   for (final percentage in [null, -1, 101]) {
-    testWidgets('missing or invalid percentage $percentage stays unknown', (
+    testWidgets('missing or invalid percentage $percentage hides the section', (
       tester,
     ) async {
       await mount(tester, percentage: percentage, reportedAt: instant);
-      expect(find.text('Not reported by charger'), findsOneWidget);
-      expect(find.text('—'), findsOneWidget);
+      expect(find.text('Vehicle battery'), findsNothing);
+      expect(find.text('Not reported by charger'), findsNothing);
+      expect(find.text('—'), findsNothing);
       expect(find.text('0%'), findsNothing);
-      expect(
-        tester
-            .widget<CircularProgressIndicator>(
-              find.byType(CircularProgressIndicator),
-            )
-            .value,
-        0,
-      );
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.getSize(find.byType(VehicleBatteryProgress)).height, 0);
       await tester.pumpAndSettle();
     });
   }
+
+  testWidgets('battery section follows incoming readings', (tester) async {
+    await mount(tester, percentage: null);
+    expect(find.text('Vehicle battery'), findsNothing);
+    await mount(tester, percentage: 64, reportedAt: instant);
+    expect(find.text('Vehicle battery'), findsOneWidget);
+    expect(find.text('64%'), findsOneWidget);
+    await mount(tester, percentage: null);
+    expect(find.text('Vehicle battery'), findsNothing);
+    expect(find.text('64%'), findsNothing);
+  });
 
   for (final percentage in [0, 100]) {
     testWidgets(
