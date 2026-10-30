@@ -196,11 +196,12 @@ void main() {
     expect(find.text('Waiting for physical start'), findsOneWidget);
     expect(find.textContaining('charging is not active until'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Vehicle battery'),
+      find.text('Charging timeline & vehicle'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Not reported by charger'), findsOneWidget);
+    expect(find.text('Vehicle battery'), findsNothing);
+    expect(find.text('Not reported by charger'), findsNothing);
     expect(fixture.charging.startCalls, 1);
   });
 
