@@ -70,6 +70,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
@@ -100,6 +101,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Laravel's symbols check also accepts spaces; require actual punctuation or a symbol.
+        Password::defaults(static fn (): Password => Password::min(8)->mixedCase()->numbers()->symbols()
+            ->rules(['regex:/[\p{S}\p{P}]/u']));
+
         app(FeatureFlags::class)->assertProductionSafe();
         if (config('kyc.enabled') && ! app()->environment(['local', 'testing'])) {
             foreach (['request_secret', 'callback_secret'] as $key) {

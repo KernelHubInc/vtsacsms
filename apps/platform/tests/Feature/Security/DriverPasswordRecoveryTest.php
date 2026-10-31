@@ -68,7 +68,7 @@ final class DriverPasswordRecoveryTest extends TenantSecurityTestCase
             ->assertHeader('Cache-Control', 'no-store, private')->assertHeader('Referrer-Policy', 'no-referrer');
 
         $fields = ['email' => $user->email, 'token' => $notification->token,
-            'password' => 'Driver-new-password-2026!', 'password_confirmation' => 'Driver-new-password-2026!'];
+            'password' => 'Abcdef1!', 'password_confirmation' => 'Abcdef1!'];
         $this->post('/reset-password', $fields)->assertOk()->assertSee('Password updated');
         self::assertTrue(Hash::check($fields['password'], $user->fresh()->password));
         $this->post('/reset-password', $fields)->assertStatus(422)->assertSee('invalid or expired');

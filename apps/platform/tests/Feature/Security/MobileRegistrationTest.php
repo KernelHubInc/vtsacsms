@@ -278,8 +278,8 @@ final class MobileRegistrationTest extends TestCase
         return [
             'birth_date' => '1990-01-01', 'plate_pending' => true,
             'first_name' => 'New', 'last_name' => 'Driver',
-            'email' => 'configured@example.test', 'password' => 'SafePassword!2026',
-            'password_confirmation' => 'SafePassword!2026', 'tenant_id' => DemoEnvironment::TENANT_ID,
+            'email' => 'configured@example.test', 'password' => 'Abcdef1!',
+            'password_confirmation' => 'Abcdef1!', 'tenant_id' => DemoEnvironment::TENANT_ID,
         ];
     }
 

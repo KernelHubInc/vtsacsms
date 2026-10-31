@@ -11,6 +11,7 @@ Set<String> registrationInvalidFields({
   required bool platePending,
   required String email,
   required String password,
+  required String passwordConfirmation,
 }) => {
   if (firstName.trim().isEmpty || firstName.trim().runes.length > 80)
     'first_name',
@@ -25,10 +26,12 @@ Set<String> registrationInvalidFields({
   if (email.trim().length > 254 ||
       !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email.trim()))
     'email',
-  if (password.runes.length < 12 ||
+  if (password.runes.length < 8 ||
       !RegExp(r'\p{Lu}', unicode: true).hasMatch(password) ||
       !RegExp(r'\p{Ll}', unicode: true).hasMatch(password) ||
       !RegExp(r'\p{N}', unicode: true).hasMatch(password) ||
-      !RegExp(r'[\p{Z}\p{S}\p{P}]', unicode: true).hasMatch(password))
+      !RegExp(r'[\p{S}\p{P}]', unicode: true).hasMatch(password))
     'password',
+  if (passwordConfirmation.isEmpty || passwordConfirmation != password)
+    'password_confirmation',
 };

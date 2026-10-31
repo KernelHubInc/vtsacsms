@@ -2369,7 +2369,9 @@
                   },
                   "password": {
                     "type": "string",
-                    "format": "password"
+                    "format": "password",
+                    "minLength": 8,
+                    "description": "Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol."
                   },
                   "password_confirmation": {
                     "type": "string",
@@ -2423,7 +2425,9 @@
                   },
                   "password": {
                     "type": "string",
-                    "format": "password"
+                    "format": "password",
+                    "minLength": 8,
+                    "description": "Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol."
                   },
                   "password_confirmation": {
                     "type": "string",
@@ -2975,8 +2979,9 @@
                   },
                   "password": {
                     "type": "string",
-                    "minLength": 12,
-                    "writeOnly": true
+                    "minLength": 8,
+                    "writeOnly": true,
+                    "description": "Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol."
                   },
                   "password_confirmation": {
                     "type": "string",

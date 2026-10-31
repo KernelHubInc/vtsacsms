@@ -6,9 +6,9 @@ import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
-import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 
 import 'support/fakes.dart';
+import 'support/registration_steps.dart';
 
 const unverifiedUser = UserProfile(
   id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
@@ -152,36 +152,12 @@ void main() {
       expect(find.text('Sign in to your drive.'), findsOneWidget);
       await tester.tap(find.text('Create an account'));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'First name (required)'),
-        'Ada',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Last name (required)'),
-        'Driver',
-      );
-      tester
-          .widget<DriverDateField>(find.byType(DriverDateField))
-          .onChanged(DateTime(1990, 1, 1));
-      await tester.ensureVisible(find.text('Plate pending'));
-      await tester.tap(find.text('Plate pending'));
-      await tester.pump();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Email address (required)'),
-        'ada@example.test',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Password (required)'),
-        'TestOnlyPassword!2026',
-      );
-      FocusManager.instance.primaryFocus?.unfocus();
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(
-        find.widgetWithText(FilledButton, 'Create account'),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
-      await tester.pumpAndSettle();
+      await fillRegistrationSecurity(tester);
+      await pressRegistrationAction(tester, 'Continue');
+      await fillRegistrationPersonal(tester);
+      await pressRegistrationAction(tester, 'Continue');
+      await pressRegistrationAction(tester, 'Plate pending');
+      await pressRegistrationAction(tester, 'Create account');
       expect(fixture.auth.registrationRequested, isTrue);
       expect(
         find.text(

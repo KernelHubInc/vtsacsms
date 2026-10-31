@@ -5,6 +5,8 @@
 
 ## Identity Lifecycle
 
+New account passwords (including invitation acceptance) and password resets require at least eight Unicode characters, an uppercase letter, a lowercase letter, a number and a punctuation/symbol character. Whitespace alone does not meet the symbol requirement. The shared Laravel password default enforces the policy; mobile/browser registration mirrors it and highlights invalid fields without inline error text. Existing password hashes are unchanged and sign-in does not revalidate password complexity. No migration or forced password reset is required. Deploy the backend and updated Flutter clients together; older clients may still enforce the previous twelve-character registration minimum.
+
 Invitation acceptance activates an account and verifies the invited email because the single-use token is delivered to that address. Existing accounts gain a new tenant membership without changing their password. New accounts must supply a name and password. Invitations expire after seven days, store only a SHA-256 token verifier, and may be revoked before acceptance.
 
 Tenant operators suspend memberships. Platform-authorized workflows may suspend a global account. Global suspension and password recovery increment the subject security version, revoke all Sanctum tokens, and logically revoke browser sessions. Reactivation is an explicit audited action; removing `disabled_at` through direct model updates is not an approved workflow.

@@ -3,14 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
-import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
 import 'package:vtsa_mobile/features/auth/presentation/registration_validation.dart';
 
 import 'support/fakes.dart';
+import 'support/form_fields.dart';
+import 'support/registration_steps.dart';
 
 void main() {
   Set<String> validate({
     String password = 'Password!2026',
+    String? confirmation,
     String email = 'ada@example.test',
     DateTime? birthDate,
     bool pending = true,
@@ -25,6 +27,7 @@ void main() {
     platePending: pending,
     email: email,
     password: password,
+    passwordConfirmation: confirmation ?? password,
   );
 
   test(
@@ -40,10 +43,67 @@ void main() {
   test(
     'password checks follow Laravel Unicode rules; highlights only bad fields',
     () {
-      expect(validate(password: 'Password2026 '), isEmpty);
+      expect(validate(password: 'Password2026 '), {'password'});
       expect(validate(password: 'Password2026'), {'password'});
       expect(validate(email: 'bad'), {'email'});
       expect(validate(password: 'Pässword!2026'), isEmpty);
+    },
+  );
+
+  test('password needs eight characters and every required character type', () {
+    for (final password in ['Abcdef1!', 'Longer-Password-2026!', 'Äbcdef1€']) {
+      expect(validate(password: password), isEmpty, reason: password);
+    }
+    for (final password in [
+      'Abcde1!',
+      'abcdef1!',
+      'ABCDEF1!',
+      'Abcdefg!',
+      'Abcdef12',
+      'Abcdef1 ',
+    ]) {
+      expect(validate(password: password), {'password'}, reason: password);
+    }
+  });
+
+  test('confirmation must match exactly, including case and spaces', () {
+    expect(validate(confirmation: ''), {'password_confirmation'});
+    expect(validate(confirmation: 'password!2026'), {'password_confirmation'});
+    expect(validate(confirmation: 'Password!2026 '), {'password_confirmation'});
+    expect(validate(confirmation: 'Password!2026'), isEmpty);
+  });
+
+  testWidgets(
+    'mismatched confirmation blocks registration and clears on correction',
+    (tester) async {
+      final fixture = await buildTestDependencies();
+      await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create an account'));
+      await tester.pumpAndSettle();
+      await fillRegistrationSecurity(tester, confirmation: 'Different!2026');
+      await pressRegistrationAction(tester, 'Continue');
+      expect(fixture.auth.registrationRequested, isFalse);
+      expect(
+        tester
+            .widgetList<VtsaTextField>(find.byType(VtsaTextField))
+            .where((field) => field.invalid)
+            .map((field) => field.label),
+        ['Confirm password'],
+      );
+      expect(
+        tester
+            .widget<TextField>(textInput('Confirm password'))
+            .decoration!
+            .errorText,
+        isNull,
+      );
+      expect(textInput('Confirm password').hitTestable(), findsOneWidget);
+      await tester.enterText(textInput('Confirm password'), 'Password!2026');
+      await pressRegistrationAction(tester, 'Continue');
+      expect(find.text('Step 2 of 3'), findsOneWidget);
+      expect(fixture.auth.registrationRequested, isFalse);
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -65,29 +125,18 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Create an account'));
         await tester.pumpAndSettle();
-        for (final entry in {
-          'First name': 'Ada',
-          'Last name': 'Driver',
-          'Email address': serverError ? 'ada@example.test' : 'invalid',
-          'Password': 'Password!2026',
-        }.entries) {
-          await tester.enterText(
-            find.widgetWithText(TextField, '${entry.key} (required)'),
-            entry.value,
-          );
-        }
-        tester
-            .widget<DriverDateField>(find.byType(DriverDateField))
-            .onChanged(DateTime(1990));
-        await tester.ensureVisible(find.text('Plate pending'));
-        await tester.tap(find.text('Plate pending'));
-        FocusManager.instance.primaryFocus?.unfocus();
-        await tester.pumpAndSettle();
-        await tester.ensureVisible(
-          find.widgetWithText(FilledButton, 'Create account'),
+        await fillRegistrationSecurity(
+          tester,
+          email: serverError ? 'ada@example.test' : 'invalid',
         );
-        await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
-        await tester.pumpAndSettle();
+        await pressRegistrationAction(tester, 'Continue');
+        if (serverError) {
+          await fillRegistrationPersonal(tester);
+          await pressRegistrationAction(tester, 'Continue');
+          await pressRegistrationAction(tester, 'Plate pending');
+          await pressRegistrationAction(tester, 'Create account');
+        }
+        expect(find.text('Step 1 of 3'), findsOneWidget);
         final fields = tester.widgetList<VtsaTextField>(
           find.byType(VtsaTextField),
         );
@@ -100,7 +149,7 @@ void main() {
         expect(find.text('Incorrect server message'), findsNothing);
         expect(find.text('Internal validation text'), findsNothing);
         await tester.enterText(
-          find.widgetWithText(TextField, 'Email address (required)'),
+          textInput('Email address'),
           'fixed@example.test',
         );
         await tester.pump();

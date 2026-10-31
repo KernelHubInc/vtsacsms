@@ -80,6 +80,8 @@ class VtsaTextField extends StatelessWidget {
     required this.label,
     this.controller,
     this.hint,
+    this.placeholder,
+    this.labelAbove = false,
     this.error,
     this.invalid = false,
     this.required = false,
@@ -96,6 +98,8 @@ class VtsaTextField extends StatelessWidget {
   final String label;
   final TextEditingController? controller;
   final String? hint;
+  final String? placeholder;
+  final bool labelAbove;
   final String? error;
   final bool invalid;
   final bool required;
@@ -108,43 +112,65 @@ class VtsaTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    hint: invalid ? '$label needs attention' : null,
-    child: TextField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      textInputAction: textInputAction,
-      autofillHints: autofillHints,
-      onSubmitted: onSubmitted,
-      onChanged: onChanged,
-      decoration: InputDecoration(
-        labelText: required ? '$label (required)' : label,
-        helperText: hint,
-        errorText: error,
-        helperMaxLines: 3,
-        enabledBorder: invalid
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.error,
-                  width: 2,
-                ),
-              )
-            : null,
-        focusedBorder: invalid
-            ? OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: Theme.of(context).colorScheme.error,
-                  width: 2,
-                ),
-              )
-            : null,
+  Widget build(BuildContext context) {
+    final field = Semantics(
+      label: labelAbove ? (required ? '$label (required)' : label) : null,
+      hint: invalid ? '$label needs attention' : null,
+      child: TextField(
+        controller: controller,
+        enabled: enabled,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        onSubmitted: onSubmitted,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          labelText: labelAbove
+              ? null
+              : (required ? '$label (required)' : label),
+          hintText: placeholder,
+          helperText: hint,
+          errorText: error,
+          helperMaxLines: 3,
+          enabledBorder: invalid
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 2,
+                  ),
+                )
+              : null,
+          focusedBorder: invalid
+              ? OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Theme.of(context).colorScheme.error,
+                    width: 2,
+                  ),
+                )
+              : null,
+        ),
       ),
-    ),
-  );
+    );
+    if (!labelAbove) return field;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          required ? '$label *' : label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        field,
+      ],
+    );
+  }
 }
 
 class VtsaCard extends StatelessWidget {

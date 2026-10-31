@@ -4180,7 +4180,10 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     token: string;
-                    /** Format: password */
+                    /**
+                     * Format: password
+                     * @description Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol.
+                     */
                     password: string;
                     /** Format: password */
                     password_confirmation: string;
@@ -4211,7 +4214,10 @@ export interface operations {
                 "application/json": {
                     token: string;
                     name?: string;
-                    /** Format: password */
+                    /**
+                     * Format: password
+                     * @description Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol.
+                     */
                     password?: string;
                     /** Format: password */
                     password_confirmation?: string;
@@ -4658,6 +4664,7 @@ export interface operations {
                     birth_date: string;
                     /** Format: email */
                     email: string;
+                    /** @description Requires uppercase and lowercase letters plus a number and a symbol. Whitespace alone does not count as a symbol. */
                     password: string;
                     password_confirmation: string;
                     tenant_id: components["schemas"]["Ulid"];

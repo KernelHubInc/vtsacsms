@@ -10,6 +10,7 @@ abstract interface class AuthRepository {
     required String name,
     required String email,
     required String password,
+    required String passwordConfirmation,
     String? firstName,
     String? middleName,
     String? lastName,

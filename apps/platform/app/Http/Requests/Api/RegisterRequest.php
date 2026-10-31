@@ -52,7 +52,7 @@ final class RegisterRequest extends FormRequest
             'plate_pending' => ['required', 'boolean'],
             'plate_number' => ['nullable', 'required_if:plate_pending,false', 'prohibited_if:plate_pending,true', 'string', 'max:20', 'regex:/^[A-Z0-9][A-Z0-9 -]*$/'],
             'email' => ['required', 'email:rfc', 'max:254', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()->symbols()],
+            'password' => ['required', 'confirmed', Password::defaults()],
             'tenant_id' => ['required', 'ulid'],
         ];
     }

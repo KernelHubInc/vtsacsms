@@ -16,7 +16,7 @@
             @if ($completed)
                 <p class="mt-5 leading-7 text-slate-600">Return to the Power Solutions app and sign in with your new password. Existing signed-in sessions have been revoked. You can set up quick unlock again after signing in.</p>
             @else
-                <p class="mt-4 leading-6 text-slate-600">Use a password you do not use for other accounts.</p>
+                <p id="password-requirements" class="mt-4 leading-6 text-slate-600">Use at least 8 characters, with uppercase and lowercase letters, a number and a symbol. Choose a password you do not use for other accounts.</p>
                 @if ($error || $errors->any())
                     <div role="alert" class="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                         @if ($error)<p>{{ $error }}</p>@endif
@@ -32,7 +32,7 @@
                     </div>
                     <div>
                         <label for="password" class="mb-2 block text-sm font-semibold">New password</label>
-                        <input id="password" name="password" type="password" required autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
+                        <input id="password" name="password" type="password" required minlength="8" aria-describedby="password-requirements" autocomplete="new-password" class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-blue-600 focus:ring-2 focus:ring-blue-200">
                     </div>
                     <div>
                         <label for="password_confirmation" class="mb-2 block text-sm font-semibold">Confirm new password</label>

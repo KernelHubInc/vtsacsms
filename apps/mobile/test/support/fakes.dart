@@ -28,6 +28,7 @@ final class FakeAuthRepository implements AuthRepository {
   bool signedIn;
   bool passwordResetRequested = false;
   bool registrationRequested = false;
+  int registrationCalls = 0;
   AppFailure? registrationFailure;
   Completer<RegistrationResult>? registrationCompleter;
   bool verificationEmailSent = true;
@@ -91,6 +92,7 @@ final class FakeAuthRepository implements AuthRepository {
     required String name,
     required String email,
     required String password,
+    required String passwordConfirmation,
     String? firstName,
     String? middleName,
     String? lastName,
@@ -99,6 +101,7 @@ final class FakeAuthRepository implements AuthRepository {
     bool platePending = false,
   }) async {
     registrationRequested = true;
+    registrationCalls++;
     if (registrationFailure case final failure?) throw failure;
     if (registrationCompleter case final pending?) return pending.future;
     return RegistrationResult(verificationEmailSent: verificationEmailSent);

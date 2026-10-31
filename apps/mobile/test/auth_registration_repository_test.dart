@@ -20,6 +20,10 @@ void main() {
             expect(request.extra['anonymous'], isTrue);
             expect((request.data as Map)['first_name'], 'Test');
             expect((request.data as Map)['birth_date'], '1990-01-01');
+            expect(
+              (request.data as Map)['password_confirmation'],
+              'ConfirmationEntered!2026',
+            );
             expect((request.data as Map)['plate_pending'], isTrue);
             expect((request.data as Map).containsKey('plate_number'), isFalse);
             handler.resolve(
@@ -47,6 +51,7 @@ void main() {
         platePending: true,
         email: 'driver@example.test',
         password: 'TestOnlyPassword!2026',
+        passwordConfirmation: 'ConfirmationEntered!2026',
       );
       expect(result.verificationEmailSent, sent ?? true);
       expect(await tokens.read(), isNull);
