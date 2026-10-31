@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
+import 'package:vtsa_mobile/features/auth/presentation/registration_validation.dart';
 
 abstract final class RegistrationColors {
   static const navy = Color(0xFF102D42);
@@ -28,6 +29,7 @@ abstract final class RegistrationColors {
       scaffoldBackgroundColor: dark ? base.scaffoldBackgroundColor : canvas,
       colorScheme: base.colorScheme.copyWith(
         primary: dark ? mint : teal,
+        error: dark ? const Color(0xFFFFB4AB) : const Color(0xFFB42318),
         onSurface: foreground,
         outline: outline,
       ),
@@ -69,6 +71,11 @@ abstract final class RegistrationColors {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: dark ? mint : teal, width: 2),
+        ),
+        errorStyle: TextStyle(
+          color: dark ? const Color(0xFFFFB4AB) : const Color(0xFFB42318),
+          fontSize: 13,
+          height: 1.4,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -329,7 +336,8 @@ class RegistrationSection extends StatelessWidget {
 }
 
 class RegistrationPasswordGuide extends StatelessWidget {
-  const RegistrationPasswordGuide({super.key});
+  const RegistrationPasswordGuide({this.password = '', super.key});
+  final String password;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -345,20 +353,30 @@ class RegistrationPasswordGuide extends StatelessWidget {
           'Your password needs',
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
-        for (final requirement in [
-          'At least 8 characters',
-          'Uppercase and lowercase letters',
-          'At least one number',
-          'At least one special character',
-        ]) ...[
+        for (final requirement in registrationPasswordRequirements(
+          password,
+        ).entries) ...[
           const SizedBox(height: 9),
           Row(
             children: [
-              const RegistrationIcon('requirement-marker', 4),
+              Semantics(
+                label: requirement.value
+                    ? 'Requirement met'
+                    : 'Requirement not yet met',
+                child: Icon(
+                  requirement.value
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: requirement.value
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).hintColor,
+                ),
+              ),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  requirement,
+                  requirement.key,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

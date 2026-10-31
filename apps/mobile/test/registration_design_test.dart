@@ -83,8 +83,21 @@ void main() {
           tester,
           step == 2 ? 'Create account' : 'Continue',
         );
+        await preview(
+          tester,
+          'registration-errors-step-${step + 1}-$width-$scale-$dark',
+        );
         expect(find.text('Step ${step + 1} of 3'), findsOneWidget);
         expect(fixture.auth.registrationRequested, isFalse);
+        final theme = Theme.of(
+          tester.element(find.byType(RegistrationSection)),
+        );
+        final errorLuminance = theme.colorScheme.error.computeLuminance();
+        final surfaceLuminance = theme.colorScheme.surface.computeLuminance();
+        final contrast = errorLuminance > surfaceLuminance
+            ? (errorLuminance + .05) / (surfaceLuminance + .05)
+            : (surfaceLuminance + .05) / (errorLuminance + .05);
+        expect(contrast, greaterThanOrEqualTo(4.5));
         expect(tester.takeException(), isNull);
         if (step == 0) {
           await fillRegistrationSecurity(tester);

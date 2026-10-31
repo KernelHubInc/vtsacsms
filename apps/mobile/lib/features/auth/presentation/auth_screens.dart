@@ -150,6 +150,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     {'plate_number'},
   ];
   Set<String> _invalid = {};
+  final Set<String> _validated = {};
+  final Map<String, String> _serverErrors = {};
+  late final Map<String, FocusNode> _focusNodes;
   final _fieldKeys = {
     for (final name in [
       'email',
@@ -176,10 +179,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           _fieldKeys[_fieldKeys.keys.firstWhere(_invalid.contains)]
               ?.currentContext;
       if (fieldContext != null) {
+        _focusNodes[_fieldKeys.keys.firstWhere(_invalid.contains)]
+            ?.requestFocus();
         Scrollable.ensureVisible(
           fieldContext,
           alignment: .2,
-          duration: const Duration(milliseconds: 200),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
         );
       }
     });
@@ -187,11 +194,46 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   AppFailure? _requestFailure;
 
+  @override
+  void initState() {
+    super.initState();
+    _focusNodes = {
+      for (final field in _fieldKeys.keys.where((name) => name != 'birth_date'))
+        field: FocusNode(),
+    };
+    for (final entry in _focusNodes.entries) {
+      entry.value.addListener(() {
+        if (!entry.value.hasFocus &&
+            mounted &&
+            !widget.dependencies.auth.isBusy) {
+          setState(() {
+            _validated.add(entry.key);
+            _refreshValidation(entry.key);
+          });
+        }
+      });
+    }
+  }
+
+  void _refreshValidation(String field) {
+    if (!_validated.contains(field)) return;
+    if (_invalidFields().contains(field) || _serverErrors.containsKey(field)) {
+      _invalid.add(field);
+    } else {
+      _invalid.remove(field);
+    }
+  }
+
+  String? _fieldError(String field) => _invalid.contains(field)
+      ? _serverErrors[field] ?? registrationFieldMessage(field)
+      : null;
+
   void _edited(String field) {
     setState(() {
-      _invalid.remove(field);
-      if (field == 'password' && _password.text == _passwordConfirmation.text) {
-        _invalid.remove('password_confirmation');
+      _serverErrors.remove(field);
+      _refreshValidation(field);
+      if (field == 'password') {
+        _refreshValidation('password_confirmation');
       }
       _requestFailure = null;
     });
@@ -203,6 +245,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
+    for (final node in _focusNodes.values) {
+      node.dispose();
+    }
     _scroll.dispose();
     _first.dispose();
     _middle.dispose();
@@ -263,6 +308,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           autofill: AutofillHints.newPassword,
                           obscureText: !_passwordVisible,
                         ),
+                        const SizedBox(height: 12),
+                        RegistrationPasswordGuide(password: _password.text),
                         const SizedBox(height: 20),
                         _field(
                           'password_confirmation',
@@ -300,7 +347,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             ),
                           ),
                         ),
-                        const RegistrationPasswordGuide(),
                       ],
                     ),
                   ),
@@ -349,6 +395,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           labelAbove: true,
                           enabled: !busy,
                           invalid: _invalid.contains('birth_date'),
+                          error: _fieldError('birth_date'),
                           onChanged: (date) {
                             _birthDate = date;
                             _edited('birth_date');
@@ -414,6 +461,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                               : (value) => setState(() {
                                   _platePending = value ?? false;
                                   _invalid.remove('plate_number');
+                                  _serverErrors.remove('plate_number');
                                   _requestFailure = null;
                                 }),
                         ),
@@ -498,6 +546,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+                    if (_invalid.any(_stepFields[_step].contains)) ...[
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          'Check the highlighted fields to continue.',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
                         if (_step > 0) ...[
@@ -573,6 +633,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     labelAbove: true,
     required: required,
     invalid: _invalid.contains(name),
+    error: _fieldError(name),
+    focusNode: _focusNodes[name],
     enabled: !widget.dependencies.auth.isBusy,
     onChanged: (_) => _edited(name),
     autofillHints: autofill == null ? null : [autofill],
@@ -617,7 +679,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     FocusScope.of(context).unfocus();
     setState(() {
       _requestFailure = null;
+      _validated.addAll(_stepFields[_step]);
       _invalid = _invalidFields().where(_stepFields[_step].contains).toSet();
+      _invalid.addAll(_serverErrors.keys.where(_stepFields[_step].contains));
     });
     if (_invalid.isNotEmpty) {
       _showFirstInvalid();
@@ -644,7 +708,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     FocusScope.of(context).unfocus();
     setState(() {
       _requestFailure = null;
+      _validated.addAll(_fieldKeys.keys);
       _invalid = _invalidFields();
+      _invalid.addAll(_serverErrors.keys);
     });
     if (_invalid.isNotEmpty) {
       _showFirstInvalid();
@@ -687,6 +753,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 .toSet() ??
             {};
         // Account existence and configuration failures must never blame a field.
+        _serverErrors
+          ..clear()
+          ..addEntries(
+            _invalid.map(
+              (field) => MapEntry(field, registrationServerFieldMessage(field)),
+            ),
+          );
         _requestFailure = _invalid.isEmpty ? failure : null;
       });
       _showFirstInvalid();

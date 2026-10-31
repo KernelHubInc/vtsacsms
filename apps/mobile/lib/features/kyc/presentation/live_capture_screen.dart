@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/features/kyc/data/capture_cleanup.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/live_challenge.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/capture_viewport.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/live_capture_feedback.dart';
 
 class LiveCaptureScreen extends StatefulWidget {
@@ -199,9 +200,14 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
             if (error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ),
               ),
             if (!running)
@@ -230,95 +236,59 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
     appBar: AppBar(title: const Text('Live identity check')),
     body: SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
-          if (challenge case final prompt?)
-            LivePrompt(challenge: prompt, checking: checking)
-          else
-            Text(
-              running
-                  ? 'Preparing your live check…'
-                  : 'Get comfortable before you start',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          const SizedBox(height: 12),
-          if (!running)
-            const Text(
-              'Hold your phone at eye level. Keep your whole face inside the oval. No audio is recorded.',
-            ),
-          const SizedBox(height: 24),
-          if (camera case final controller? when controller.value.isInitialized)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: SizedBox(
-                height: (MediaQuery.sizeOf(context).height * .42).clamp(
-                  200,
-                  380,
-                ),
-                child: ColoredBox(
-                  color: const Color(0xff102b4a),
-                  child: Center(
-                    child: CameraPreview(
-                      controller,
-                      child: LiveFaceGuide(
-                        state: LiveScanState.from(
-                          challenge,
-                          checking: running && checking,
-                        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: challenge != null
+                ? LivePrompt(challenge: challenge!, checking: checking)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        running
+                            ? 'Preparing your live check…'
+                            : 'Position your face',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Hold your phone at eye level, with your whole face in the oval. No audio is recorded.',
+                      ),
+                    ],
+                  ),
+          ),
+          CaptureViewport(
+            camera: camera,
+            opening: opening,
+            guide: camera?.value.isInitialized == true
+                ? LiveFaceGuide(
+                    state: LiveScanState.from(
+                      challenge,
+                      checking: running && checking,
                     ),
-                  ),
-                ),
-              ),
-            )
-          else
-            Container(
-              height: 280,
-              decoration: BoxDecoration(
-                color: const Color(0xff102b4a),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const CaptureGuide(face: true),
-                  Center(
-                    child: opening
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Icon(
-                            Icons.face_outlined,
-                            size: 80,
-                            color: Colors.white,
-                          ),
-                  ),
-                ],
-              ),
-            ),
+                  )
+                : const CaptureGuide(face: true),
+          ),
           const SizedBox(height: 20),
-          if (challenge case final prompt?) ...[
-            LinearProgressIndicator(
-              value: prompt.step / 9,
-              semanticsLabel: '${prompt.step} of 9 movements completed',
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Movement ${(prompt.step + 1).clamp(1, 9)} of 9 · Photos are taken automatically.',
-            ),
-          ] else if (running) ...[
+          if (challenge == null && running) ...[
             const LinearProgressIndicator(),
             const SizedBox(height: 12),
             const Text('Preparing your live check…'),
-          ] else ...[
-            const CaptureTips(
-              tips: [
-                'Face a light source and remove sunglasses or face coverings.',
-                'Position your face in the oval. Start when you are ready.',
-                'Turn your head slowly in the requested direction, then hold still. Keep the phone in place.',
+          ] else if (!running) ...[
+            const ExpansionTile(
+              title: Text('Tips for a clear face check'),
+              childrenPadding: EdgeInsets.symmetric(horizontal: 20),
+              children: [
+                CaptureTips(
+                  tips: [
+                    'Face a light source and remove sunglasses or face coverings.',
+                    'Position your face in the oval. Start when you are ready.',
+                    'Turn your head slowly in the requested direction, then hold still. Keep the phone in place.',
+                    'Photos are taken automatically. Follow one prompt at a time.',
+                  ],
+                ),
               ],
-            ),
-            const Text(
-              'Follow one prompt at a time. The check takes photos automatically; there is no shutter button.',
             ),
             const SizedBox(height: 16),
           ],
@@ -359,6 +329,11 @@ class LivePrompt extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Movement ${(challenge.step + 1).clamp(1, 9)} of 9 · Automatic capture',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
           LiveScanIndicator(

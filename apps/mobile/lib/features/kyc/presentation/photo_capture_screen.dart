@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:vtsa_mobile/features/kyc/data/capture_cleanup.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/capture_viewport.dart';
 
 class PhotoCaptureScreen extends StatefulWidget {
   const PhotoCaptureScreen({
@@ -160,7 +161,9 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen>
                     : Icons.refresh,
               ),
               label: Text(
-                taking
+                opening
+                    ? 'Opening camera…'
+                    : taking
                     ? 'Taking photo…'
                     : camera?.value.isInitialized == true
                     ? 'Take photo'
@@ -186,73 +189,55 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen>
     ),
     body: SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         children: [
-          Text(
-            face
-                ? 'Fit your face inside the oval'
-                : 'Fit your ID inside the frame',
-            style: Theme.of(context).textTheme.headlineSmall,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  face
+                      ? 'Fit your face inside the oval'
+                      : 'Fit your ID inside the frame',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  face
+                      ? 'Look straight at the camera. Keep your eyes and face visible.'
+                      : widget.passport
+                      ? 'Show your photo page, including the code lines at the bottom.'
+                      : 'Show the ${widget.kind} of your ID. Keep all four corners visible.',
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            face
-                ? 'Look straight at the camera. Keep your eyes and face visible.'
-                : widget.passport
-                ? 'Open to the page with your photo. Keep the text and the code lines at the bottom visible.'
-                : 'Show the ${widget.kind} of your ID. Keep all four corners visible.',
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: camera != null && camera!.value.isInitialized
-                ? SizedBox(
-                    height: (MediaQuery.sizeOf(context).height * .42).clamp(
-                      200,
-                      380,
-                    ),
-                    child: ColoredBox(
-                      color: const Color(0xff102b4a),
-                      child: Center(
-                        child: CameraPreview(
-                          camera!,
-                          child: CaptureGuide(face: face),
-                        ),
-                      ),
-                    ),
-                  )
-                : AspectRatio(
-                    aspectRatio: 3 / 4,
-                    child: ColoredBox(
-                      color: const Color(0xff102b4a),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CaptureGuide(face: face),
-                          if (opening)
-                            const Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+          CaptureViewport(
+            face: face,
+            camera: camera,
+            opening: opening,
+            guide: CaptureGuide(face: face),
           ),
           const SizedBox(height: 16),
-          CaptureTips(
-            tips: face
-                ? const [
-                    'Use light in front of you, not a bright window behind you.',
-                    'Remove sunglasses and anything covering your face.',
-                    'Hold still, then tap Take photo. You can review it before uploading.',
-                  ]
-                : const [
-                    'Place the original document on a flat, plain surface.',
-                    'Avoid glare, shadows and fingers covering the text.',
-                    'Hold still, then tap Take photo. You can retake a blurry image.',
-                  ],
+          ExpansionTile(
+            title: const Text('Tips for a clear photo'),
+            childrenPadding: const EdgeInsets.symmetric(horizontal: 20),
+            children: [
+              CaptureTips(
+                tips: face
+                    ? const [
+                        'Use light in front of you, not a bright window behind you.',
+                        'Remove sunglasses and anything covering your face.',
+                        'Hold still, then tap Take photo. You can review it before uploading.',
+                      ]
+                    : const [
+                        'Place the original document on a flat, plain surface.',
+                        'Avoid glare, shadows and fingers covering the text.',
+                        'Hold still, then tap Take photo. You can retake a blurry image.',
+                      ],
+              ),
+            ],
           ),
         ],
       ),

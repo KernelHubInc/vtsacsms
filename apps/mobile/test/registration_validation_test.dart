@@ -96,7 +96,7 @@ void main() {
             .widget<TextField>(textInput('Confirm password'))
             .decoration!
             .errorText,
-        isNull,
+        'Enter the same password in both fields.',
       );
       expect(textInput('Confirm password').hitTestable(), findsOneWidget);
       await tester.enterText(textInput('Confirm password'), 'Password!2026');
@@ -107,9 +107,51 @@ void main() {
     },
   );
 
+  testWidgets(
+    'validate on blur, keep errors until corrected, and recheck confirmation',
+    (tester) async {
+      final fixture = await buildTestDependencies();
+      await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create an account'));
+      await tester.pumpAndSettle();
+      String? error(String label) =>
+          tester.widget<TextField>(textInput(label)).decoration!.errorText;
+      expect(error('Email address'), isNull);
+      await tester.enterText(textInput('Email address'), 'bad');
+      await tester.pump();
+      expect(error('Email address'), isNull);
+      await tester.enterText(textInput('Password'), 'abc');
+      await tester.pumpAndSettle();
+      expect(error('Email address'), registrationFieldMessage('email'));
+      await tester.enterText(textInput('Email address'), 'stillbad');
+      await tester.pump();
+      expect(error('Email address'), isNotNull);
+      expect(error('Password'), registrationFieldMessage('password'));
+      await tester.enterText(textInput('Email address'), 'ada@example.test');
+      await tester.enterText(textInput('Password'), 'Abcdef1!');
+      await tester.enterText(textInput('Confirm password'), 'Abcdef1!');
+      await tester.pump();
+      expect(error('Email address'), isNull);
+      expect(error('Password'), isNull);
+      await tester.enterText(textInput('Password'), 'Changed1!');
+      await tester.pumpAndSettle();
+      expect(
+        error('Confirm password'),
+        registrationFieldMessage('password_confirmation'),
+      );
+      await tester.enterText(textInput('Confirm password'), 'Changed1!');
+      await tester.pump();
+      expect(error('Confirm password'), isNull);
+      expect(find.byIcon(Icons.check_circle), findsNWidgets(4));
+      expect(fixture.auth.registrationCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final serverError in [false, true]) {
     testWidgets(
-      'registration outlines only invalid fields; server=$serverError',
+      'registration gives safe inline feedback only on rejected fields; server=$serverError',
       (tester) async {
         final fixture = await buildTestDependencies();
         if (serverError) {
@@ -144,7 +186,18 @@ void main() {
           fields.where((field) => field.invalid).map((field) => field.label),
           ['Email address'],
         );
-        expect(fields.every((field) => field.error == null), isTrue);
+        expect(
+          fields.singleWhere((field) => field.label == 'Email address').error,
+          serverError
+              ? registrationServerFieldMessage('email')
+              : registrationFieldMessage('email'),
+        );
+        expect(
+          fields
+              .where((field) => !field.invalid)
+              .every((field) => field.error == null),
+          isTrue,
+        );
         expect(fixture.auth.registrationRequested, serverError);
         expect(find.text('Incorrect server message'), findsNothing);
         expect(find.text('Internal validation text'), findsNothing);

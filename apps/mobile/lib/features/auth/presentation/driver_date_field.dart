@@ -21,6 +21,7 @@ class DriverDateField extends StatelessWidget {
     required this.onChanged,
     this.birthDate = true,
     this.invalid = false,
+    this.error,
     this.labelAbove = false,
     this.enabled = true,
     super.key,
@@ -30,6 +31,7 @@ class DriverDateField extends StatelessWidget {
   final ValueChanged<DateTime> onChanged;
   final bool birthDate;
   final bool invalid;
+  final String? error;
   final bool labelAbove;
   final bool enabled;
 
@@ -124,6 +126,17 @@ class DriverDateField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         field,
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ),
       ],
     );
   }

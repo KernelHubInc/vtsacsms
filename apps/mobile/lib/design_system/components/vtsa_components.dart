@@ -92,6 +92,7 @@ class VtsaTextField extends StatelessWidget {
     this.autofillHints,
     this.onSubmitted,
     this.onChanged,
+    this.focusNode,
     super.key,
   });
 
@@ -110,6 +111,7 @@ class VtsaTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +119,7 @@ class VtsaTextField extends StatelessWidget {
       label: labelAbove ? (required ? '$label (required)' : label) : null,
       hint: invalid ? '$label needs attention' : null,
       child: TextField(
+        focusNode: focusNode,
         controller: controller,
         enabled: enabled,
         keyboardType: keyboardType,
@@ -132,6 +135,7 @@ class VtsaTextField extends StatelessWidget {
           hintText: placeholder,
           helperText: hint,
           errorText: error,
+          errorMaxLines: 5,
           helperMaxLines: 3,
           enabledBorder: invalid
               ? OutlineInputBorder(

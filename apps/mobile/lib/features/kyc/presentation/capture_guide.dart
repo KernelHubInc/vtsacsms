@@ -45,8 +45,8 @@ class _GuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final width = math.min(
-      size.width * (face ? .66 : .86),
-      size.height * (face ? .56 : 1.15),
+      size.width * (face ? .82 : .90),
+      size.height * (face ? .66 : 1.30),
     );
     final height = width / (face ? .76 : 1.58);
     final rect = Rect.fromCenter(

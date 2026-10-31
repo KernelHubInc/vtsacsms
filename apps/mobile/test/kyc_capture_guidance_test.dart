@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 import 'package:vtsa_mobile/features/kyc/domain/live_challenge.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
+import 'package:vtsa_mobile/features/kyc/presentation/capture_viewport.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/kyc_screen.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/live_capture_feedback.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/live_capture_screen.dart';
@@ -145,6 +146,7 @@ Future<void> preview(WidgetTester tester, String name) async {
 Widget app(Widget screen, {double scale = 1}) => RepaintBoundary(
   key: const ValueKey('preview'),
   child: MaterialApp(
+    debugShowCheckedModeBanner: false,
     theme: VtsaTheme.light(),
     builder: (context, child) => MediaQuery(
       data: MediaQuery.of(
@@ -299,6 +301,42 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final size in [
+    const Size(390, 844),
+    const Size(844, 390),
+    const Size(1280, 900),
+  ]) {
+    testWidgets('face capture stays spacious and actions reachable at $size', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        app(
+          const PhotoCaptureScreen(kind: 'selfie', passport: false),
+          scale: 1.3,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final viewport = tester.getSize(find.byType(CaptureViewport));
+      expect(viewport.width, size.width);
+      expect(viewport.height, greaterThanOrEqualTo(320));
+      final guide = tester.getSize(find.byType(CaptureGuide));
+      expect(guide.width, greaterThanOrEqualTo(240));
+      if (size.width == 390) {
+        expect(guide.width, greaterThanOrEqualTo(380));
+        expect(guide.height, greaterThan(500));
+      }
+      expect(find.text('Take photo').hitTestable(), findsOneWidget);
+      expect(find.text('Cancel').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await preview(tester, 'expanded-selfie-${size.width}');
       await tester.pumpWidget(const SizedBox());
     });
   }
