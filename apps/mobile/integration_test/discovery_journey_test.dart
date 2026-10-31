@@ -17,6 +17,11 @@ void main() {
 
     await tester.tap(find.text('Harbor Exchange'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Availability needs a refresh'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Availability needs a refresh'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Station details & directions'),
@@ -25,14 +30,10 @@ void main() {
     );
     await tester.tap(find.text('Station details & directions'));
     await tester.pumpAndSettle();
-    await tester.drag(
-      find
-          .ancestor(
-            of: find.text('Add to favorites'),
-            matching: find.byType(ListView),
-          )
-          .first,
-      const Offset(0, -220),
+    await tester.scrollUntilVisible(
+      find.text('Add to favorites'),
+      150,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add to favorites'));
