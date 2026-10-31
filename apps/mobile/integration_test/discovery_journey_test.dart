@@ -17,29 +17,29 @@ void main() {
 
     await tester.tap(find.text('Harbor Exchange'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Availability needs a refresh'),
-      150,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await scrollTo(tester, find.text('Availability needs a refresh'));
     expect(find.text('Availability needs a refresh'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Station details & directions'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await scrollTo(tester, find.text('Station details & directions'));
     await tester.tap(find.text('Station details & directions'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Add to favorites'),
-      150,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+    await scrollTo(tester, find.text('Add to favorites'));
     await tester.tap(find.text('Add to favorites'));
     await tester.pumpAndSettle();
 
     expect(fixture.dependencies.favorites.contains(sampleStation.id), isTrue);
     expect(find.text('Remove from favorites'), findsOneWidget);
   });
+}
+
+Future<void> scrollTo(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(
+    target,
+    150,
+    scrollable: find.byType(Scrollable).first,
+  );
+  // Device scrolling must finish before measuring or tapping the target.
+  await tester.pumpAndSettle();
+  await Scrollable.ensureVisible(tester.element(target), alignment: 0.5);
+  await tester.pumpAndSettle();
+  expect(target.hitTestable(), findsOneWidget);
 }
