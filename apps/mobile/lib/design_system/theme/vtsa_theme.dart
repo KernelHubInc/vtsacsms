@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vtsa_mobile/design_system/theme/slide_page_transitions.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 
 abstract final class VtsaTheme {
@@ -48,6 +49,16 @@ abstract final class VtsaTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: semantic.canvas,
       useMaterial3: true,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SlidePageTransitionsBuilder(),
+          TargetPlatform.iOS: SlidePageTransitionsBuilder(),
+          TargetPlatform.macOS: SlidePageTransitionsBuilder(),
+          TargetPlatform.windows: SlidePageTransitionsBuilder(),
+          TargetPlatform.linux: SlidePageTransitionsBuilder(),
+          TargetPlatform.fuchsia: SlidePageTransitionsBuilder(),
+        },
+      ),
       extensions: <ThemeExtension<dynamic>>[semantic],
     );
     final textTheme = base.textTheme

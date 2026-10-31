@@ -14,6 +14,16 @@ After password sign-in and email verification, open **Account > PIN & fingerprin
 
 PIN verifiers and attempt limits use secure storage; biometric data remains with the OS. See [ADR-0020](../../docs/architecture/decisions/0020-mobile-pin-and-biometric-unlock.md) for security boundaries and required physical Android/iOS verification. Changing the PIN requires signing out and signing in with the password again.
 
+## Page navigation
+
+Child pages slide in from the trailing edge over 300 ms and reverse when going
+back, on both the native app and browser app. The shared theme covers GoRouter
+pages and directly pushed Material pages, including wallet top-ups and KYC.
+Main navigation tabs retain their instant `NoTransitionPage` changes. System
+Reduce Motion disables page movement. Flutter's Cupertino transition retains
+direction-aware movement and interactive back gestures where supported.
+No API, database, or permission changes are needed for these transitions.
+
 ## Configure
 
 Copy `dart_defines.example.json` to an ignored local file such as `dart_defines.local.json` and set:
