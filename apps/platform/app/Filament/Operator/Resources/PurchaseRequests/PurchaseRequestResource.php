@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\PurchaseRequests;
 
 use App\Filament\Operator\Resources\PurchaseRequests\Pages\ListPurchaseRequests;
+use App\Filament\Shared\Actions\PurchaseRequestActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Modules\Procurement\Domain\Models\PurchaseRequest;
+use App\Modules\Procurement\Domain\PurchaseRequestStatus;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -43,26 +45,17 @@ final class PurchaseRequestResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
-                SelectFilter::make('status')->options([
-                    'draft' => 'Draft',
-                    'submitted' => 'Submitted',
-                    'pending_approval' => 'Pending approval',
-                    'approved' => 'Approved',
-                    'rejected' => 'Rejected',
-                    'revision_required' => 'Revision required',
-                    'sourcing' => 'Sourcing',
-                    'ordered' => 'Ordered',
-                    'canceled' => 'Canceled',
-                ]),
+                SelectFilter::make('status')->options(collect(PurchaseRequestStatus::cases())->mapWithKeys(fn ($status): array => [$status->value => str($status->value)->headline()->toString()])->all()),
             ])
             ->recordActions([
+                ...PurchaseRequestActions::records(),
                 RecordViewAction::make([
                     'request_number' => 'Request',
                     'department.name' => 'Department',
                     'costCenter.name' => 'Cost center',
                     'status' => 'Status',
                     'revision' => 'Revision',
-                    'justification' => 'Justification',
+                    'business_reason' => 'Business reason',
                     'total_minor' => 'Total (minor units)',
                     'currency' => 'Currency',
                     'needed_by' => 'Needed by',

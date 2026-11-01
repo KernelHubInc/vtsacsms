@@ -72,3 +72,13 @@ php artisan security:sync-permissions
 - Audit events contain actor, tenant, source IP, user agent, action, target entity, before/after state, and correlation ULID, then join an immutable per-tenant hash chain.
 
 PostgreSQL RLS, production MFA, SSO, support impersonation, mobile token rotation, and external audit anchoring remain open decisions.
+
+## Operator onboarding
+
+The admin onboarding wizard creates an active charge-point-operator organization (or selects an existing one) and issues a seven-day invitation atomically. A tenant-bound request ULID and input digest prevent duplicate completion. The inviting admin must hold organization management, invitation management and role assignment permissions; the selected role must include operator-panel access, exclude admin-panel access and contain no permission above the inviter's authority.
+
+Operator panel entry supports tenant, organization and site grants. An active charge-point-operator organization grant authorizes that operator's owned sites in both list queries and resource policies; it does not become tenant-wide authority. Operator membership lists follow organization/site grants. Admin panel entry still requires tenant-wide platform-panel access.
+
+Invitation emails use encrypted queued notifications dispatched after commit. Only the token hash is persisted in the invitation. The public acceptance form does not automatically authenticate the recipient. Acceptance locks the invitation and rechecks expiry, revocation, organization activity and the inviter's current authority. Disabled users and suspended or conflicting memberships cannot be restored or reassigned by accepting a link. Resending invalidates the previous token; accepted invitations cannot be revoked to remove access. Use the audited membership and role-assignment controls instead.
+
+See [Admin module audit and onboarding instructions](../runbooks/admin-modules-and-operator-onboarding.md) for operation, deployment and retention notes.

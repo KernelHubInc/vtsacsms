@@ -80,13 +80,13 @@ final class ListMemberships extends ListRecords
             $fields[] = TextInput::make('email')->email()->required()->maxLength(254);
             $fields[] = Select::make('organization_id')
                 ->label('Organization')
-                ->options(fn (): array => Organization::query()->orderBy('name')->pluck('name', 'id')->all())
+                ->options(fn (): array => Organization::query()->orderBy('name')->get()->filter(fn (Organization $organization): bool => app(AuthorizationService::class)->allows($this->actor(), PermissionKey::InvitationManage, new ResourceScope(ScopeType::Organization, (string) $organization->getKey())))->pluck('name', 'id')->all())
                 ->searchable();
         }
         if ($includeMembership) {
             $fields[] = Select::make('membership_id')
                 ->label('User membership')
-                ->options(fn (): array => Membership::query()
+                ->options(fn (): array => MembershipResource::getEloquentQuery()
                     ->with('user')
                     ->get()
                     ->mapWithKeys(fn (Membership $membership): array => [

@@ -18,6 +18,8 @@ final class PublicContentRepository
     public function page(string $slug): CmsPage
     {
         return CmsPage::query()
+            ->select('cms_pages.*')
+            ->selectSub(CmsPage::query()->published()->where('slug', 'refund-policy')->select('id')->limit(1), 'published_refund_policy_id')
             ->published()
             ->with(['sections' => fn ($query) => $query->where('is_enabled', true), 'seo'])
             ->where('slug', $slug)
@@ -38,7 +40,9 @@ final class PublicContentRepository
 
     public function article(string $slug): ContentArticle
     {
-        return ContentArticle::query()->published()->with('seo')->where('slug', $slug)->sole();
+        return ContentArticle::query()->select('cms_articles.*')
+            ->selectSub(CmsPage::query()->published()->where('slug', 'refund-policy')->select('id')->limit(1), 'published_refund_policy_id')
+            ->published()->with('seo')->where('slug', $slug)->sole();
     }
 
     /** @return Collection<int, PartnerLogo> */

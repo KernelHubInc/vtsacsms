@@ -5,17 +5,22 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-final class UserInvitationNotification extends Notification
+final class UserInvitationNotification extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
     public function __construct(
         private readonly string $plainTextToken,
         private readonly string $organizationName,
-    ) {}
+    ) {
+        $this->afterCommit();
+        $this->onQueue('invitations');
+    }
 
     /** @return list<string> */
     public function via(object $notifiable): array

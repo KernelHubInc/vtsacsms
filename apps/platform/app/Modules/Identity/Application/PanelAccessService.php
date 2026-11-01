@@ -45,7 +45,6 @@ final class PanelAccessService
             ->where('memberships.user_id', $user->getKey())
             ->where('memberships.status', MembershipStatus::Active->value)
             ->where('tenants.status', TenantStatus::Active->value)
-            ->where('assignments.scope_type', ScopeType::Tenant->value)
             ->where('role_permissions.permission_key', $permission->value)
             ->where(function (Builder $query): void {
                 $query->whereNull('memberships.expires_at')->orWhere('memberships.expires_at', '>', now('UTC'));
@@ -54,15 +53,33 @@ final class PanelAccessService
                 $query->whereNull('assignments.expires_at')->orWhere('assignments.expires_at', '>', now('UTC'));
             });
 
+        if ($panelId === 'admin') {
+            $query->where('assignments.scope_type', ScopeType::Tenant->value);
+        } else {
+            $query->whereIn('assignments.scope_type', [ScopeType::Tenant->value, ScopeType::Organization->value, ScopeType::Site->value]);
+        }
+
         $organizationType = $panelId === 'admin'
             ? OrganizationType::Platform
             : OrganizationType::ChargePointOperator;
-        $query->whereExists(function (Builder $organization) use ($organizationType): void {
+        $query->whereExists(function (Builder $organization) use ($organizationType, $panelId): void {
             $organization->selectRaw('1')
                 ->from('organizations')
                 ->whereColumn('organizations.tenant_id', 'memberships.tenant_id')
                 ->where('organizations.type', $organizationType->value)
                 ->where('organizations.is_active', true);
+            if ($panelId === 'operator') {
+                $organization->where(function (Builder $scope): void {
+                    $scope->where('assignments.scope_type', ScopeType::Tenant->value)
+                        ->orWhere(function (Builder $scope): void {
+                            $scope->where('assignments.scope_type', ScopeType::Organization->value)->whereColumn('organizations.id', 'assignments.scope_id');
+                        })->orWhere(function (Builder $scope): void {
+                            $scope->where('assignments.scope_type', ScopeType::Site->value)->whereExists(function (Builder $site): void {
+                                $site->selectRaw('1')->from('sites')->whereColumn('sites.tenant_id', 'memberships.tenant_id')->whereColumn('sites.id', 'assignments.scope_id')->whereColumn('sites.operator_organization_id', 'organizations.id');
+                            });
+                        });
+                });
+            }
         });
 
         $tenantId = $query->orderBy('memberships.tenant_id')->value('memberships.tenant_id');

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\VendorInvoices;
 
 use App\Filament\Operator\Resources\VendorInvoices\Pages\ListVendorInvoices;
+use App\Filament\Shared\Actions\ProcurementActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Modules\Procurement\Domain\Models\VendorInvoice;
+use App\Modules\Procurement\Domain\VendorInvoiceStatus;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -42,15 +44,7 @@ final class VendorInvoiceResource extends Resource
                 TextColumn::make('due_date')->date(),
             ])
             ->filters([
-                SelectFilter::make('status')->options([
-                    'draft' => 'Draft',
-                    'matching' => 'Matching',
-                    'matched' => 'Matched',
-                    'discrepancy' => 'Discrepancy',
-                    'approved' => 'Approved',
-                    'rejected' => 'Rejected',
-                    'exported' => 'Exported',
-                ]),
+                SelectFilter::make('status')->options(collect(VendorInvoiceStatus::cases())->mapWithKeys(fn ($status): array => [$status->value => str($status->value)->headline()->toString()])->all()),
                 SelectFilter::make('accounting_export_state')->options([
                     'pending' => 'Pending',
                     'ready' => 'Ready',
@@ -59,6 +53,7 @@ final class VendorInvoiceResource extends Resource
                 ]),
             ])
             ->recordActions([
+                ...ProcurementActions::invoices(),
                 RecordViewAction::make([
                     'invoice_reference' => 'Vendor invoice',
                     'purchaseOrder.po_number' => 'Purchase order',

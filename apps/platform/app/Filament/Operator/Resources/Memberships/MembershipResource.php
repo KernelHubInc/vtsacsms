@@ -7,18 +7,22 @@ namespace App\Filament\Operator\Resources\Memberships;
 use App\Filament\Operator\Resources\Memberships\Pages\ListMemberships;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
+use App\Modules\Organizations\Application\AccessibleMembershipsQuery;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Application\MembershipLifecycleService;
+use App\Modules\Organizations\Application\RoleAssignmentService;
 use App\Modules\Organizations\Domain\MembershipStatus;
 use App\Modules\Organizations\Domain\Models\Membership;
 use App\Modules\Organizations\Domain\PermissionKey;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 final class MembershipResource extends Resource
@@ -30,6 +34,12 @@ final class MembershipResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'People and access';
 
     protected static ?string $navigationLabel = 'Operator users';
+
+    /** @return Builder<Membership> */
+    public static function getEloquentQuery(): Builder
+    {
+        return app(AccessibleMembershipsQuery::class)->for(self::actor())->with(['user', 'organization']);
+    }
 
     public static function table(Table $table): Table
     {
@@ -50,6 +60,17 @@ final class MembershipResource extends Resource
                 'expires_at' => 'Expires at (UTC)',
                 'created_at' => 'Created at (UTC)',
             ]),
+            Action::make('revokeRole')
+                ->label('Remove role access')->color('danger')->requiresConfirmation()
+                ->visible(fn (): bool => app(AuthorizationService::class)->allows(self::actor(), PermissionKey::RoleAssign))
+                ->schema(fn (Membership $record): array => [
+                    Select::make('assignment_id')->label('Role grant')->required()->options($record->assignments()->with('role')->get()->mapWithKeys(fn ($assignment): array => [(string) $assignment->getKey() => $assignment->role->name.'  /  '.$assignment->scope_type->value.'  /  '.($assignment->scope_id ?? 'All')])->all()),
+                    Textarea::make('reason')->required()->maxLength(500),
+                ])
+                ->action(function (Membership $record, array $data): void {
+                    $assignment = $record->assignments()->whereKey($data['assignment_id'])->firstOrFail();
+                    app(RoleAssignmentService::class)->revoke(self::actor(), $assignment, $data['reason']);
+                }),
             Action::make('activate')
                 ->visible(fn (Membership $record): bool => $record->status !== MembershipStatus::Active
                     && self::canManageMemberships())

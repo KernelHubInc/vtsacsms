@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Foundation\Demo\DemoEnvironment;
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Tariffs\Domain\Models\Tariff;
 use App\Modules\Tariffs\Domain\TariffStatus;
@@ -17,7 +18,7 @@ final class ChargingTariffSeeder extends Seeder
 {
     public function run(CurrentTenant $currentTenant): void
     {
-        if (! app()->environment(['local', 'development', 'testing', 'demo', 'staging'])) {
+        if (! DemoEnvironment::allowsSampleData()) {
             return;
         }
         $currency = mb_strtoupper(trim((string) config('app.seed_demo_currency')));

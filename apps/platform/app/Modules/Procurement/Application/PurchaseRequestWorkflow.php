@@ -164,6 +164,62 @@ final readonly class PurchaseRequestWorkflow
         });
     }
 
+    /** @param array<string, mixed> $data */
+    public function updateDraft(PurchaseRequest $request, array $data): PurchaseRequest
+    {
+        return DB::transaction(function () use ($request, $data): PurchaseRequest {
+            $locked = PurchaseRequest::query()->lockForUpdate()->whereKey($request->getKey())->firstOrFail();
+            if (! in_array($locked->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::RevisionRequested], true)) {
+                throw new DomainException('Only draft or returned requests can be edited.');
+            }
+            Department::query()->whereKey($data['department_id'])->where('is_active', true)->firstOrFail();
+            CostCenter::query()->whereKey($data['cost_center_id'])->where('is_active', true)->firstOrFail();
+            $before = $locked->load('lines')->toArray();
+            $total = 0;
+            if ($data['lines'] === []) {
+                throw new DomainException('A purchase request requires at least one line.');
+            }
+            foreach ($data['lines'] as $line) {
+                if ($line['quantity_base'] <= 0 || $line['estimated_unit_minor'] < 0) {
+                    throw new DomainException('Quantities must be positive and prices non-negative.');
+                }
+                $total += $line['quantity_base'] * $line['estimated_unit_minor'];
+            }
+            $locked->forceFill([
+                'department_id' => $data['department_id'], 'cost_center_id' => $data['cost_center_id'],
+                'currency' => mb_strtoupper($data['currency']), 'needed_by' => $data['needed_by'] ?? null,
+                'business_reason' => $data['business_reason'], 'total_minor' => $total,
+            ])->save();
+            $locked->lines()->delete();
+            foreach ($data['lines'] as $line) {
+                $locked->lines()->create([
+                    'item_id' => $line['item_id'] ?? null, 'uom_id' => $line['uom_id'] ?? null,
+                    'description' => $line['description'], 'quantity_base' => $line['quantity_base'],
+                    'estimated_unit_minor' => $line['estimated_unit_minor'],
+                    'estimated_total_minor' => $line['quantity_base'] * $line['estimated_unit_minor'],
+                ]);
+            }
+            $this->audit->record(new AuditEntry('procurement.purchase_request.updated', 'purchase_request', (string) $locked->getKey(), AuditResult::Succeeded, before: $before, after: $locked->fresh('lines')->toArray()));
+
+            return $locked->refresh()->load('lines');
+        });
+    }
+
+    public function cancelDraft(PurchaseRequest $request, string $reason): void
+    {
+        if (trim($reason) === '') {
+            throw new DomainException('A cancellation reason is required.');
+        }
+        DB::transaction(function () use ($request, $reason): void {
+            $locked = PurchaseRequest::query()->lockForUpdate()->whereKey($request->getKey())->firstOrFail();
+            if (! in_array($locked->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::RevisionRequested, PurchaseRequestStatus::Rejected], true)) {
+                throw new DomainException('Only unapproved requests can be canceled.');
+            }
+            $locked->forceFill(['status' => PurchaseRequestStatus::Canceled, 'decision_reason' => $reason])->save();
+            $this->audit->record(new AuditEntry('procurement.purchase_request.canceled', 'purchase_request', (string) $locked->getKey(), AuditResult::Succeeded, reason: $reason));
+        });
+    }
+
     public function approve(PurchaseRequest $request, string $approverRoleKey, ?string $reason = null): PurchaseRequest
     {
         return $this->decide($request, $approverRoleKey, 'approved', $reason);

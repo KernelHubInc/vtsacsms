@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\GoodsReceipts;
 
 use App\Filament\Operator\Resources\GoodsReceipts\Pages\ListGoodsReceipts;
+use App\Filament\Shared\Actions\GoodsReceiptActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Inventory\Application\AccessibleWarehousesQuery;
@@ -44,15 +45,14 @@ final class GoodsReceiptResource extends Resource
             ->filters([
                 SelectFilter::make('status')->options([
                     'draft' => 'Draft',
-                    'inspection_pending' => 'Inspection pending',
-                    'accepted' => 'Accepted',
-                    'partially_accepted' => 'Partially accepted',
-                    'rejected' => 'Rejected',
+                    'pending_inspection' => 'Pending inspection',
+                    'inspected' => 'Inspected',
                     'posted' => 'Posted',
                     'returned' => 'Returned',
                 ]),
             ])
             ->recordActions([
+                ...GoodsReceiptActions::records(),
                 RecordViewAction::make([
                     'receipt_number' => 'Receipt',
                     'purchase_order_id' => 'Purchase order',

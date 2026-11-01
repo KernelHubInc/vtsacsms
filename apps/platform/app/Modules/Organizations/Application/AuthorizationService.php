@@ -128,6 +128,22 @@ final readonly class AuthorizationService
                     $query->where('assignments.scope_type', $resourceScope->type->value)
                         ->where('assignments.scope_id', $resourceScope->id);
                 });
+            if ($resourceScope->type === ScopeType::Site) {
+                $query->orWhere(function (Builder $organization) use ($resourceScope): void {
+                    $organization->where('assignments.scope_type', ScopeType::Organization->value)
+                        ->whereExists(function (Builder $site) use ($resourceScope): void {
+                            $site->selectRaw('1')->from('sites')
+                                ->join('organizations', function ($join): void {
+                                    $join->on('organizations.id', '=', 'sites.operator_organization_id')->on('organizations.tenant_id', '=', 'sites.tenant_id');
+                                })
+                                ->whereColumn('sites.tenant_id', 'memberships.tenant_id')
+                                ->where('sites.id', $resourceScope->id)
+                                ->whereColumn('sites.operator_organization_id', 'assignments.scope_id')
+                                ->where('organizations.type', 'charge_point_operator')
+                                ->where('organizations.is_active', true);
+                        });
+                });
+            }
         });
     }
 }

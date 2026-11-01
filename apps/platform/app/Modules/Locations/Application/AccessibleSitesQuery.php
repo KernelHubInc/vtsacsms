@@ -55,15 +55,19 @@ final readonly class AccessibleSitesQuery
             })
             ->select(['assignments.scope_type', 'assignments.scope_id']);
 
-        return $query->where(function (Builder $sites) use ($assignments): void {
+        $organizations = DB::table('organizations')->where('tenant_id', $tenantId)->where('is_active', true)->select('id');
+
+        return $query->where(function (Builder $sites) use ($assignments, $organizations): void {
             $sites->whereIn('id', (clone $assignments)
                 ->where('assignments.scope_type', ScopeType::Site->value)
                 ->select('assignments.scope_id'))
                 ->orWhereIn('operator_organization_id', (clone $assignments)
                     ->where('assignments.scope_type', ScopeType::Organization->value)
+                    ->whereIn('assignments.scope_id', clone $organizations)
                     ->select('assignments.scope_id'))
                 ->orWhereIn('site_host_organization_id', (clone $assignments)
                     ->where('assignments.scope_type', ScopeType::Organization->value)
+                    ->whereIn('assignments.scope_id', clone $organizations)
                     ->select('assignments.scope_id'));
         });
     }

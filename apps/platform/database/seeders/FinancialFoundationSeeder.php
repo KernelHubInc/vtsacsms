@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Foundation\Demo\DemoEnvironment;
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Organizations\Domain\Models\Role;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -21,7 +22,7 @@ final class FinancialFoundationSeeder extends Seeder
     {
         Tenant::query()->orderBy('id')->each(function (Tenant $tenant) use ($currentTenant): void {
             $currentTenant->run(new TenantContext((string) $tenant->getKey(), ActorType::Platform, null, (string) Str::ulid()), function () use ($tenant): void {
-                if (app()->environment(['local', 'development', 'testing', 'demo', 'staging'])) {
+                if (DemoEnvironment::allowsSampleData()) {
                     PaymentProviderConfig::query()->firstOrCreate(['provider' => 'fake', 'configuration_version' => 1], [
                         'environment' => 'local', 'api_version' => 'v1', 'capabilities' => [
                             'authorization' => true, 'incremental_authorization' => true, 'capture' => true,

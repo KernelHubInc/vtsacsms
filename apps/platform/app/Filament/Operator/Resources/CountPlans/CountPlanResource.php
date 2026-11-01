@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\CountPlans;
 
 use App\Filament\Operator\Resources\CountPlans\Pages\ListCountPlans;
+use App\Filament\Shared\Actions\InventoryActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Inventory\Application\AccessibleWarehousesQuery;
+use App\Modules\Inventory\Domain\CountStatus;
 use App\Modules\Inventory\Domain\Models\CountPlan;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -46,16 +48,10 @@ final class CountPlanResource extends Resource
                 TextColumn::make('posted_at')->dateTime(),
             ])
             ->filters([
-                SelectFilter::make('status')->options([
-                    'draft' => 'Draft',
-                    'in_progress' => 'In progress',
-                    'review' => 'Review',
-                    'approved' => 'Approved',
-                    'posted' => 'Posted',
-                    'canceled' => 'Canceled',
-                ]),
+                SelectFilter::make('status')->options(collect(CountStatus::cases())->mapWithKeys(fn ($status): array => [$status->value => str($status->value)->headline()->toString()])->all()),
             ])
             ->recordActions([
+                ...InventoryActions::counts(),
                 RecordViewAction::make([
                     'plan_number' => 'Count plan',
                     'count_type' => 'Count type',

@@ -31,7 +31,7 @@ final class PublicCmsSeeder extends Seeder
             ['privacy-policy', 'Privacy policy', 'legal', 'Privacy policy', 'This publication area is prepared for approved privacy language and data-handling notices.', null, null],
             ['terms-of-service', 'Terms of service', 'legal', 'Terms of service', 'This publication area is prepared for approved platform terms and conditions.', null, null],
             ['charging-terms', 'Charging terms', 'legal', 'Charging terms', 'This publication area is prepared for approved terms that apply to charging use and sessions.', null, null],
-            ['refund-policy', 'Refund policy', 'legal', 'Refund policy placeholder', 'This page is a clearly marked placeholder. Refund rules, eligibility, timing, evidence requirements, and market-specific consumer rights require legal and payment-operations review before publication as binding terms.', null, null, true],
+            ['refund-policy', 'Refund policy', 'legal', 'Refund policy', 'This policy is awaiting legal and payment-operations review. Publish only after the approved refund terms have been added.', null, null, true],
         ];
 
         foreach ($pages as $definition) {
@@ -43,11 +43,11 @@ final class PublicCmsSeeder extends Seeder
                 'hero_heading' => $heading,
                 'hero_copy' => $summary,
                 'template' => $template,
-                'status' => 'published',
+                'status' => ($definition[7] ?? false) ? 'draft' : 'published',
                 'primary_action_label' => $actionLabel,
                 'primary_action_url' => $actionUrl,
                 'legal_review_required' => $definition[7] ?? false,
-                'published_at' => now('UTC'),
+                'published_at' => ($definition[7] ?? false) ? null : now('UTC'),
             ]);
             SeoMetadata::query()->updateOrCreate(['target_type' => 'page', 'target_id' => $page->getKey()], [
                 'meta_title' => $title.' | Power Solutions',

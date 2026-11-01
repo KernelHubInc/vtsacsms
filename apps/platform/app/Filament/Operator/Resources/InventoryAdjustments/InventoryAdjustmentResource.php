@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\InventoryAdjustments;
 
 use App\Filament\Operator\Resources\InventoryAdjustments\Pages\ListInventoryAdjustments;
+use App\Filament\Shared\Actions\InventoryActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Inventory\Application\AccessibleWarehousesQuery;
@@ -52,6 +53,7 @@ final class InventoryAdjustmentResource extends Resource
                 ]),
             ])
             ->recordActions([
+                ...InventoryActions::adjustments(),
                 RecordViewAction::make([
                     'adjustment_number' => 'Adjustment',
                     'warehouse_id' => 'Warehouse',

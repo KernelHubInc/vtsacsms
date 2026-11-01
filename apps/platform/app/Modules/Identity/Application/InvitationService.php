@@ -27,7 +27,9 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 final readonly class InvitationService
@@ -58,42 +60,50 @@ final readonly class InvitationService
             throw new AuthorizationException('Invitation target is outside the tenant.');
         }
 
-        $this->validateScope($scope);
+        $this->assertGrantable($actor, $role, $scope);
+        if ($organization !== null && ! $organization->is_active) {
+            throw ValidationException::withMessages(['organization_id' => 'Choose an active organization.']);
+        }
+        $email = Str::lower(trim($email));
+        Validator::make(['email' => $email], ['email' => ['required', 'email', 'max:254']])->validate();
 
-        $plainTextToken = Str::random(64);
-        $invitation = UserInvitation::query()->create([
-            'tenant_id' => $tenantId,
-            'organization_id' => $organization?->getKey(),
-            'role_id' => $role->getKey(),
-            'scope_type' => $scope->type,
-            'scope_id' => $scope->id,
-            'email' => Str::lower($email),
-            'token_hash' => hash('sha256', $plainTextToken),
-            'invited_by_user_id' => $actor->getKey(),
-            'expires_at' => now('UTC')->addDays(7),
-        ]);
-
-        Notification::route('mail', $invitation->email)->notify(new UserInvitationNotification(
-            plainTextToken: $plainTextToken,
-            organizationName: $organization instanceof Organization ? $organization->name : 'Power Solutions',
-        ));
-
-        $this->audit->record(new AuditEntry(
-            action: 'identity.invitation.created',
-            targetType: 'user_invitation',
-            targetId: (string) $invitation->getKey(),
-            result: AuditResult::Succeeded,
-            after: [
-                'email_hash' => hash('sha256', $invitation->email),
-                'organization_id' => $invitation->organization_id,
-                'role_id' => $invitation->role_id,
-                'scope_type' => $scope->type->value,
+        return DB::transaction(function () use ($actor, $email, $organization, $role, $scope, $tenantId): IssuedInvitation {
+            $plainTextToken = Str::random(64);
+            $invitation = UserInvitation::query()->create([
+                'tenant_id' => $tenantId,
+                'purpose' => 'tenant',
+                'organization_id' => $organization?->getKey(),
+                'role_id' => $role->getKey(),
+                'scope_type' => $scope->type,
                 'scope_id' => $scope->id,
-                'expires_at' => $invitation->expires_at->utc()->toIso8601String(),
-            ],
-        ));
+                'email' => Str::lower($email),
+                'token_hash' => hash('sha256', $plainTextToken),
+                'invited_by_user_id' => $actor->getKey(),
+                'expires_at' => now('UTC')->addDays(7),
+            ]);
 
-        return new IssuedInvitation($invitation, $plainTextToken);
+            Notification::route('mail', $invitation->email)->notify(new UserInvitationNotification(
+                plainTextToken: $plainTextToken,
+                organizationName: $organization instanceof Organization ? $organization->name : 'Power Solutions',
+            ));
+
+            $this->audit->record(new AuditEntry(
+                action: 'identity.invitation.created',
+                targetType: 'user_invitation',
+                targetId: (string) $invitation->getKey(),
+                result: AuditResult::Succeeded,
+                after: [
+                    'email_hash' => hash('sha256', $invitation->email),
+                    'organization_id' => $invitation->organization_id,
+                    'role_id' => $invitation->role_id,
+                    'scope_type' => $scope->type->value,
+                    'scope_id' => $scope->id,
+                    'expires_at' => $invitation->expires_at->utc()->toIso8601String(),
+                ],
+            ));
+
+            return new IssuedInvitation($invitation, $plainTextToken);
+        });
     }
 
     /** @return array{user: User, tenant_id: string} */
@@ -139,6 +149,29 @@ final readonly class InvitationService
                 $password,
                 $actorId,
             ): array {
+                $invitation = UserInvitation::query()->whereKey($invitation->getKey())->lockForUpdate()->firstOrFail();
+                if (! $invitation->canBeAccepted()) {
+                    throw ValidationException::withMessages(['token' => 'The invitation is invalid or expired.']);
+                }
+                $grantor = $invitation->invitedBy;
+                if (! $grantor instanceof User) {
+                    throw ValidationException::withMessages(['token' => 'Ask the administrator for a new invitation.']);
+                }
+                $this->assertGrantable($grantor, $invitation->role, new ResourceScope($invitation->scope_type, $invitation->scope_id));
+                if ($invitation->organization !== null && ! $invitation->organization->is_active) {
+                    throw ValidationException::withMessages(['token' => 'This organization is inactive.']);
+                }
+                if ($existing !== null && $existing->disabled_at !== null) {
+                    throw ValidationException::withMessages(['token' => 'Contact your administrator to restore this account.']);
+                }
+                $previousMembership = $existing === null ? null : Membership::query()->where('user_id', $existing->getKey())->lockForUpdate()->first();
+                if ($previousMembership !== null && ($previousMembership->status !== MembershipStatus::Active
+                    || $previousMembership->organization_id !== $invitation->organization_id)) {
+                    throw ValidationException::withMessages(['token' => 'An administrator must review the existing membership before changing access.']);
+                }
+                if ($existing === null) {
+                    Validator::make(['name' => $name, 'password' => $password], ['name' => ['required', 'string', 'max:160'], 'password' => ['required', Password::defaults()]])->validate();
+                }
                 $user = $existing ?? User::query()->create([
                     'public_id' => $actorId,
                     'name' => $name,
@@ -148,7 +181,6 @@ final readonly class InvitationService
                 $user->forceFill([
                     'email_verified_at' => $user->email_verified_at ?? now('UTC'),
                     'activated_at' => $user->activated_at ?? now('UTC'),
-                    'disabled_at' => null,
                 ])->save();
 
                 $membership = Membership::query()->updateOrCreate(
@@ -157,7 +189,7 @@ final readonly class InvitationService
                         'organization_id' => $invitation->organization_id,
                         'status' => MembershipStatus::Active,
                         'joined_at' => now('UTC'),
-                        'expires_at' => null,
+                        'expires_at' => $previousMembership?->expires_at,
                     ],
                 );
                 RoleAssignment::query()->firstOrCreate([
@@ -191,22 +223,68 @@ final readonly class InvitationService
 
     public function revoke(User $actor, UserInvitation $invitation, string $reason): void
     {
+        abort_unless($invitation->tenant_id === $this->currentTenant->get()->tenantId && $invitation->purpose === 'tenant', 404);
+        if ($invitation->accepted_at !== null) {
+            throw ValidationException::withMessages(['invitation' => 'Accepted invitations cannot be revoked. Suspend the membership instead.']);
+        }
         $scope = new ResourceScope($invitation->scope_type, $invitation->scope_id);
 
         if (! $this->authorization->allows($actor, PermissionKey::InvitationManage, $scope)) {
             throw new AuthorizationException('Invitation revocation is not permitted.');
         }
 
-        $invitation->forceFill(['revoked_at' => now('UTC')])->save();
-        $this->audit->record(new AuditEntry(
-            action: 'identity.invitation.revoked',
-            targetType: 'user_invitation',
-            targetId: (string) $invitation->getKey(),
-            result: AuditResult::Succeeded,
-            reason: $reason,
-            before: ['revoked_at' => null],
-            after: ['revoked_at' => $invitation->revoked_at?->utc()->toIso8601String()],
-        ));
+        if ($invitation->revoked_at !== null) {
+            return;
+        }
+        DB::transaction(function () use ($invitation, $reason): void {
+            $invitation = UserInvitation::query()->lockForUpdate()->whereKey($invitation->getKey())->firstOrFail();
+            if ($invitation->accepted_at !== null) {
+                throw ValidationException::withMessages(['invitation' => 'Accepted invitations cannot be revoked. Suspend the membership instead.']);
+            }
+            if ($invitation->revoked_at !== null) {
+                return;
+            }
+            $invitation->forceFill(['revoked_at' => now('UTC')])->save();
+            $this->audit->record(new AuditEntry(
+                action: 'identity.invitation.revoked',
+                targetType: 'user_invitation',
+                targetId: (string) $invitation->getKey(),
+                result: AuditResult::Succeeded,
+                reason: $reason,
+                before: ['revoked_at' => null],
+                after: ['revoked_at' => $invitation->revoked_at?->utc()->toIso8601String()],
+            ));
+        });
+    }
+
+    public function resend(User $actor, UserInvitation $invitation): IssuedInvitation
+    {
+        abort_unless($invitation->tenant_id === $this->currentTenant->get()->tenantId && $invitation->purpose === 'tenant', 404);
+
+        return DB::transaction(function () use ($actor, $invitation): IssuedInvitation {
+            $invitation = UserInvitation::query()->whereKey($invitation->getKey())->lockForUpdate()->firstOrFail();
+            if ($invitation->accepted_at !== null || $invitation->revoked_at !== null) {
+                throw ValidationException::withMessages(['invitation' => 'Only pending or expired invitations can be resent.']);
+            }
+            $this->revoke($actor, $invitation, 'Replaced by a new invitation link');
+
+            return $this->invite($actor, $invitation->email, $invitation->organization, $invitation->role, new ResourceScope($invitation->scope_type, $invitation->scope_id));
+        });
+    }
+
+    public function assertGrantable(User $actor, Role $role, ResourceScope $scope): void
+    {
+        abort_unless($role->tenant_id === $this->currentTenant->get()->tenantId, 404);
+        if (! $this->authorization->allows($actor, PermissionKey::InvitationManage, $scope)) {
+            throw new AuthorizationException('Invitation management is not permitted.');
+        }
+        $this->validateScope($scope);
+        foreach ($role->permissions()->pluck('key') as $key) {
+            $permission = PermissionKey::tryFrom((string) $key);
+            if ($permission === null || ! $this->authorization->allows($actor, $permission, $scope)) {
+                throw new AuthorizationException('You cannot invite someone with permissions you do not hold.');
+            }
+        }
     }
 
     private function validateScope(ResourceScope $scope): void

@@ -58,6 +58,10 @@ CSV contains every matching row and escapes spreadsheet-formula prefixes. PDF co
 
 ## Open decisions
 
+The November 2026 admin audit adds a platform-only operator onboarding page and invitation tracking, and exposes existing maintenance, purchasing and inventory workflows through shared portal actions. State-changing actions reauthorize on submission and preserve module service ownership. Posted ledgers, device observations, generated invoices and audit history remain protected from arbitrary CRUD. A new additive `operator_onboardings` table stores tenant-bound retry/audit references; invitation acceptance uses the Identity workflow rather than creating users from the Organizations page.
+
+See [the module matrix and operator guide](../runbooks/admin-modules-and-operator-onboarding.md). Sourcing setup and approved quotation comparisons remain prerequisites for the purchase-order action. No additional wizard was introduced for those workflows.
+
 - Decide whether expensive historical Maintenance metrics require a dedicated reporting projection beyond the current bounded queries.
 - Add a scheduled purge of expired export files and decide whether encrypted object storage is required beyond the private, access-controlled local disk.
 - Decide whether platform administrators may assume a tenant or require a dedicated cross-tenant support workflow. The current implementation remains single-tenant per request.

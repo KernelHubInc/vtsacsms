@@ -20,7 +20,7 @@ final class CmsPage extends CmsModel
     /** @param Builder<self> $query */
     public function scopePublished(Builder $query): void
     {
-        $query->where('status', 'published')->whereNotNull('published_at')->where('published_at', '<=', now('UTC'));
+        $query->where('status', 'published')->where('legal_review_required', false)->whereNotNull('published_at')->where('published_at', '<=', now('UTC'));
     }
 
     /** @return HasMany<CmsSection, $this> */

@@ -25,7 +25,7 @@ final class PublicWebsiteTest extends TestCase
 
     public function test_every_required_public_page_is_published_from_cms(): void
     {
-        foreach (['/', '/network', '/charging-map', '/drivers', '/operators-and-site-hosts', '/installation-and-maintenance', '/mobile-app', '/news-and-resources', '/partner-program', '/frequently-asked-questions', '/contact', '/support', '/privacy-policy', '/terms-of-service', '/charging-terms', '/refund-policy'] as $path) {
+        foreach (['/', '/network', '/charging-map', '/drivers', '/operators-and-site-hosts', '/installation-and-maintenance', '/mobile-app', '/news-and-resources', '/partner-program', '/frequently-asked-questions', '/contact', '/support', '/privacy-policy', '/terms-of-service', '/charging-terms'] as $path) {
             $this->get($path)->assertOk()->assertSee('<main id="main-content"', false)
                 ->assertDontSee('class="eyebrow"', false)
                 ->assertDontSee('Demo');
@@ -48,13 +48,17 @@ final class PublicWebsiteTest extends TestCase
             ->assertDontSee('data-demo-data', false);
     }
 
-    public function test_refund_placeholder_is_noindex_and_cannot_look_approved(): void
+    public function test_unapproved_policy_remains_a_draft_and_has_no_public_footer_link(): void
     {
-        $this->get('/refund-policy')->assertOk()
-            ->assertSee('content="noindex, nofollow"', false)
-            ->assertSee('Legal review required')
-            ->assertSee('not approved policy');
+        $this->assertDatabaseHas('cms_pages', ['slug' => 'refund-policy', 'status' => 'draft', 'legal_review_required' => true]);
+        $this->get('/refund-policy')->assertNotFound();
+        $this->get('/')->assertOk()->assertDontSee('href="'.route('public.refund-policy').'"', false);
         $this->get('/sitemap.xml')->assertOk()->assertDontSee('/refund-policy');
+        DB::table('cms_pages')->where('slug', 'refund-policy')->update(['status' => 'published', 'published_at' => now()]);
+        $this->get('/refund-policy')->assertNotFound();
+        DB::table('cms_pages')->where('slug', 'refund-policy')->update(['legal_review_required' => false, 'hero_copy' => 'Approved policy text.']);
+        $this->get('/refund-policy')->assertOk()->assertSee('Approved policy text.');
+        $this->get('/')->assertOk()->assertSee('href="'.route('public.refund-policy').'"', false);
     }
 
     public function test_redirects_are_exact_managed_paths_and_record_usage(): void

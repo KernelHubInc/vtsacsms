@@ -112,11 +112,11 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
     {
         $panel = Filament::getPanel('admin');
 
-        $this->assertCount(49, $panel->getResources());
+        $this->assertCount(50, $panel->getResources());
         $this->assertContains(ChargingReceiptResource::class, $panel->getResources());
         $this->assertContains(DriverNoticeResource::class, $panel->getResources());
         $this->assertContains(SupportTicketResource::class, $panel->getResources());
-        $this->assertCount(9, $panel->getPages());
+        $this->assertCount(10, $panel->getPages());
         $this->assertContains(KycSettings::class, $panel->getPages());
         $this->assertContains(KycVerifications::class, $panel->getPages());
         $this->assertContains(MasterData::class, $panel->getPages());

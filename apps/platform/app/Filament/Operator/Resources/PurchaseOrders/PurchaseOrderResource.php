@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\PurchaseOrders;
 
 use App\Filament\Operator\Resources\PurchaseOrders\Pages\ListPurchaseOrders;
+use App\Filament\Shared\Actions\ProcurementActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Modules\Procurement\Domain\Models\PurchaseOrder;
+use App\Modules\Procurement\Domain\PurchaseOrderStatus;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -42,18 +44,10 @@ final class PurchaseOrderResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
-                SelectFilter::make('status')->options([
-                    'draft' => 'Draft',
-                    'pending_approval' => 'Pending approval',
-                    'approved' => 'Approved',
-                    'issued' => 'Issued',
-                    'partially_received' => 'Partially received',
-                    'received' => 'Received',
-                    'closed' => 'Closed',
-                    'canceled' => 'Canceled',
-                ]),
+                SelectFilter::make('status')->options(collect(PurchaseOrderStatus::cases())->mapWithKeys(fn ($status): array => [$status->value => str($status->value)->headline()->toString()])->all()),
             ])
             ->recordActions([
+                ...ProcurementActions::orders(),
                 RecordViewAction::make([
                     'po_number' => 'Purchase order',
                     'supplier.name' => 'Supplier',

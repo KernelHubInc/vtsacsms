@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\StockTransfers;
 
 use App\Filament\Operator\Resources\StockTransfers\Pages\ListStockTransfers;
+use App\Filament\Shared\Actions\InventoryActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Inventory\Application\AccessibleWarehousesQuery;
 use App\Modules\Inventory\Domain\Models\StockTransfer;
+use App\Modules\Inventory\Domain\TransferStatus;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -42,17 +44,10 @@ final class StockTransferResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
-                SelectFilter::make('status')->options([
-                    'draft' => 'Draft',
-                    'pending_approval' => 'Pending approval',
-                    'approved' => 'Approved',
-                    'in_transit' => 'In transit',
-                    'partially_received' => 'Partially received',
-                    'received' => 'Received',
-                    'canceled' => 'Canceled',
-                ]),
+                SelectFilter::make('status')->options(collect(TransferStatus::cases())->mapWithKeys(fn ($status): array => [$status->value => str($status->value)->headline()->toString()])->all()),
             ])
             ->recordActions([
+                ...InventoryActions::transfers(),
                 RecordViewAction::make([
                     'transfer_number' => 'Transfer',
                     'source_warehouse_id' => 'Source warehouse',

@@ -22,6 +22,9 @@ final readonly class AccessibleMaintenanceSitesQuery
     public function for(User $user, PermissionKey $permission = PermissionKey::MaintenanceView): Builder
     {
         $query = DB::table('sites')->where('tenant_id', $this->tenant->get()->tenantId);
+        if (! $user->isEnabled()) {
+            return $query->whereRaw('1 = 0');
+        }
         if ($this->authorization->allows($user, $permission)) {
             return $query;
         }
@@ -43,15 +46,19 @@ final readonly class AccessibleMaintenanceSitesQuery
             ->where(fn ($query) => $query->whereNull('assignment.expires_at')->orWhere('assignment.expires_at', '>', now('UTC')))
             ->select(['assignment.scope_type', 'assignment.scope_id']);
 
-        return $query->where(function (Builder $sites) use ($assignments): void {
+        $organizations = DB::table('organizations')->where('tenant_id', $this->tenant->get()->tenantId)->where('is_active', true)->select('id');
+
+        return $query->where(function (Builder $sites) use ($assignments, $organizations): void {
             $sites->whereIn('id', (clone $assignments)
                 ->where('assignment.scope_type', ScopeType::Site->value)
                 ->select('assignment.scope_id'))
                 ->orWhereIn('operator_organization_id', (clone $assignments)
                     ->where('assignment.scope_type', ScopeType::Organization->value)
+                    ->whereIn('assignment.scope_id', clone $organizations)
                     ->select('assignment.scope_id'))
                 ->orWhereIn('site_host_organization_id', (clone $assignments)
                     ->where('assignment.scope_type', ScopeType::Organization->value)
+                    ->whereIn('assignment.scope_id', clone $organizations)
                     ->select('assignment.scope_id'));
         });
     }

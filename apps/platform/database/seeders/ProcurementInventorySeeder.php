@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Foundation\Demo\DemoEnvironment;
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Inventory\Domain\Models\InventoryBin;
 use App\Modules\Inventory\Domain\Models\ItemCategory;
@@ -45,14 +46,16 @@ final class ProcurementInventorySeeder extends Seeder
                     ['code' => 'EV-NETWORK'],
                     ['name' => 'EV Network', 'is_active' => true],
                 );
-                Supplier::query()->firstOrCreate(
-                    ['code' => 'LOCAL-DEMO'],
-                    [
-                        'name' => 'Local development supplier',
-                        'email' => 'supplier@example.test',
-                        'status' => 'active',
-                    ],
-                );
+                if (DemoEnvironment::allowsSampleData()) {
+                    Supplier::query()->firstOrCreate(
+                        ['code' => 'LOCAL-DEMO'],
+                        [
+                            'name' => 'Local development supplier',
+                            'email' => 'supplier@example.test',
+                            'status' => 'active',
+                        ],
+                    );
+                }
                 $currency = mb_strtoupper(trim((string) config('app.seed_demo_currency', 'PHP')));
                 if (preg_match('/^[A-Z]{3}$/', $currency) === 1) {
                     foreach (['purchase_request', 'purchase_order'] as $documentType) {

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Foundation\Features\Feature;
+use App\Http\Controllers\AcceptOperatorInvitationController;
 use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicArticleController;
@@ -16,6 +17,9 @@ use App\Http\Middleware\RequireEnabledFeature;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', PublicPageController::class)->defaults('slug', 'home')->name('home');
+
+Route::get('/accept-invitation', [AcceptOperatorInvitationController::class, 'show'])->name('operator-invitation.show');
+Route::post('/accept-invitation', [AcceptOperatorInvitationController::class, 'accept'])->middleware('throttle:auth.recovery')->name('operator-invitation.accept');
 
 Route::get('/reset-password/{token}', [PasswordController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{32,128}')->name('password.reset');

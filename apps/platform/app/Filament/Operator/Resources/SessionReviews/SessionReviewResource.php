@@ -6,6 +6,7 @@ namespace App\Filament\Operator\Resources\SessionReviews;
 
 use App\Filament\Operator\Resources\SessionReviews\Pages\ListSessionReviews;
 use App\Filament\Shared\Actions\RecordViewAction;
+use App\Filament\Shared\Actions\SessionReviewAction;
 use App\Models\User;
 use App\Modules\Charging\Application\AccessibleChargingSessionsQuery;
 use App\Modules\Charging\Domain\Models\ChargingSessionReview;
@@ -49,6 +50,7 @@ final class SessionReviewResource extends Resource
                 ]),
             ])
             ->recordActions([
+                SessionReviewAction::make(),
                 RecordViewAction::make([
                     'session_id' => 'Session',
                     'status' => 'Status',
@@ -71,7 +73,7 @@ final class SessionReviewResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with('session');
 
         return $user instanceof User
             ? $query->whereIn(

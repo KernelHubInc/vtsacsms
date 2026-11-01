@@ -106,6 +106,9 @@ final readonly class RoleAssignmentService
 
     public function revoke(User $actor, RoleAssignment $assignment, string $reason): void
     {
+        if ($assignment->tenant_id !== $this->currentTenant->get()->tenantId) {
+            throw new TenantMismatch;
+        }
         $scope = new ResourceScope($assignment->scope_type, $assignment->scope_id);
 
         if (! $this->authorization->allows($actor, PermissionKey::RoleAssign, $scope)) {

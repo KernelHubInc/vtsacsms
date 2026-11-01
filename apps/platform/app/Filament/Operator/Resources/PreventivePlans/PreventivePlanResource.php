@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\PreventivePlans;
 
 use App\Filament\Operator\Resources\PreventivePlans\Pages\ListPreventivePlans;
+use App\Filament\Shared\Actions\MaintenanceActions;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
 use App\Modules\Maintenance\Application\AccessibleMaintenanceSitesQuery;
@@ -59,9 +60,9 @@ final class PreventivePlanResource extends Resource
             ->filters([
                 SelectFilter::make('trigger_type')->options([
                     'date' => 'Date',
-                    'runtime' => 'Runtime',
+                    'runtime_seconds' => 'Runtime',
                     'session_count' => 'Session count',
-                    'energy_delivered' => 'Energy delivered',
+                    'energy_wh' => 'Energy delivered',
                 ]),
                 TernaryFilter::make('is_active')
                     ->trueLabel('Active')
@@ -69,6 +70,7 @@ final class PreventivePlanResource extends Resource
                     ->placeholder('All plans'),
             ])
             ->recordActions([
+                ...MaintenanceActions::planActions(),
                 RecordViewAction::make([
                     'plan_number' => 'Plan',
                     'name' => 'Name',
