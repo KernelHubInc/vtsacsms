@@ -20,6 +20,7 @@ abstract interface class ChargingRepository {
   Future<ChargePreparation> prepare({
     required ChargerCode code,
     String? vehicleId,
+    int? budgetMinor,
   });
   Future<ChargingSession> start(StartChargingRequest request);
   Future<ChargingSession?> activeSession();

@@ -84,6 +84,15 @@ void main() {
     },
   );
 
+  test('selected budget is sent when requesting a fresh quote', () async {
+    expect(
+      await controller.prepare(rawCode: 'VSTA-ABC_123', budgetMinor: 75000),
+      isTrue,
+    );
+    expect(repository.lastPreparedBudget, 75000);
+    expect(controller.phase, ChargingFlowPhase.reviewing);
+  });
+
   test('manual or scanned code resolves a server preparation', () async {
     expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isTrue);
 

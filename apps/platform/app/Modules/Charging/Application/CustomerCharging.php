@@ -19,6 +19,7 @@ use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Organizations\Application\ChargingAccounts;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Tariffs\Application\PlatformFees;
 use App\Modules\Tariffs\Application\RatingInput;
 use App\Modules\Tariffs\Application\TariffEngine;
 use App\Modules\Tariffs\Application\TariffSelector;
@@ -34,7 +35,7 @@ final readonly class CustomerCharging
     public function __construct(private CurrentTenant $tenant, private ConnectorSnapshotQuery $connectors, private PrepaidWallet $wallet) {}
 
     /** @return array<string, mixed> */
-    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null): array
+    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null, ?int $requestedBudget = null, int $pricingVersion = 1): array
     {
         $user = User::query()->where('public_id', $subject)->firstOrFail();
         $accounts = app(ChargingAccounts::class);
@@ -60,13 +61,19 @@ final readonly class CustomerCharging
             throw new DomainException('Mobile prepaid charging currently requires one all-day energy, session or energy-flow time price without discounts or extra fees.');
         }
         $snapshot = app(TariffSnapshotFactory::class)->create($version, $connector, $at)['snapshot'];
+        $fee = app(PlatformFees::class)->current();
+        if ($fee['enabled'] && $pricingVersion < 2) {
+            throw new DomainException('Update the app to review the platform fee before starting a new session.');
+        }
+        $snapshot['platform_fee'] = $fee;
         $balance = $this->wallet->summary($subject, 'live', $payer);
-        $budget = min((int) $balance['available_minor'], (int) config('mobile_charging.maximum_reservation_minor'));
-        $budget = $this->wallet->sessionCap($payer, $subject, $vehicleId, $budget);
+        $available = $this->wallet->sessionCap($payer, $subject, $vehicleId, (int) $balance['available_minor']);
+        $policy = app(ChargingBudgets::class)->current();
+        $budget = app(ChargingBudgets::class)->select($available, $requestedBudget);
         if ($budget <= 0) {
             throw new DomainException('The selected wallet has no available charging budget. Ask its owner to fund it or review your spending limit.');
         }
-        $minimum = app(TariffEngine::class)->rate($snapshot, new RatingInput(0, 0, 0, 0, $at));
+        $minimum = app(TariffEngine::class)->rate($snapshot, new RatingInput($line->dimension->value === 'session' ? 1 : 0, 0, 0, 0, $at));
         if ($minimum->totalMinor > $budget) {
             throw new DomainException('Your available charging budget is below the session fee.');
         }
@@ -74,7 +81,7 @@ final readonly class CustomerCharging
             'subject_id' => $subject, 'connector_id' => $connector->connectorId,
             'charging_account_id' => $accountId, 'vehicle_id' => $vehicleId, 'payer_account_id' => $payer, 'prepaid_account_id' => $balance['id'],
             'tariff_version_id' => $version->getKey(), 'budget_minor' => $budget,
-            'disclosure' => ['target' => $target, 'tariff' => $snapshot, 'attribution' => [
+            'disclosure' => ['target' => $target, 'tariff' => $snapshot, 'budget_policy' => $policy, 'attribution' => [
                 'driver_id' => $subject, 'driver_name' => $user->name, 'account_id' => $accountId, 'account_name' => $account->name,
                 'vehicle' => $vehicle, 'payer' => $payer === null ? 'Personal prepaid wallet' : $account->name.' prepaid wallet',
                 'wallet_id' => $balance['id'], 'limit_period' => 'per_session']],
@@ -96,6 +103,8 @@ final readonly class CustomerCharging
                 },
             ])->all(),
             'estimated_preauthorization' => ['amount_minor' => $budget, 'currency' => 'PHP'],
+            'budget_policy' => [...$policy, 'available_minor' => min($available, $policy['maximum_minor'])],
+            'platform_fee' => $fee,
             'expires_at' => $quote->expires_at->toISOString(),
         ], 'payment_methods' => [['id' => 'prepaid_wallet', 'label' => $quote->disclosure['attribution']['payer'].' (PHP)', 'is_default' => true]]];
     }
@@ -146,7 +155,17 @@ final readonly class CustomerCharging
             if ($current === null || $current->getKey() !== $quote->tariff_version_id) {
                 throw new DomainException('The price changed. Review a fresh quote before starting.');
             }
+            $fee = app(PlatformFees::class)->current();
+            $quotedFee = $quote->disclosure['tariff']['platform_fee'] ?? ['id' => null, 'enabled' => false];
+            if (($fee['id'] !== ($quotedFee['id'] ?? null) && ($fee['enabled'] || ($quotedFee['enabled'] ?? false)))
+                || (isset($quote->disclosure['budget_policy']) && $quote->disclosure['budget_policy'] != app(ChargingBudgets::class)->current())) {
+                throw new DomainException('Charging settings changed. Review a fresh quote before starting.');
+            }
             $result = app(RemoteStartService::class)->request($connectorId, 'mobile-start-'.hash('sha256', $subject.':'.$key), (string) $quote->tariff_version_id);
+            // The approved quote, including its fee, must reach every meter calculation and final CDR.
+            $snapshot = $quote->disclosure['tariff'];
+            $result->session->forceFill(['tariff_snapshot' => $snapshot,
+                'tariff_snapshot_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES))])->save();
             $this->wallet->reserve($subject, 'live', (string) $result->session->getKey(), (int) $quote->budget_minor, $quote->payer_account_id, $quote->vehicle_id);
             CustomerChargingSession::query()->create([
                 'subject_id' => $subject, 'session_id' => $result->session->getKey(), 'quote_id' => $quoteId,
@@ -254,6 +273,8 @@ final readonly class CustomerCharging
             'battery_reported_at' => $battery?->sampled_at->toISOString(),
             'currency' => $session->currency, 'estimated_cost_minor' => $session->estimated_cost_minor === null ? null : (int) $session->estimated_cost_minor,
             'final_cost_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor,
+            'platform_fee_minor' => $session->platform_fee_minor === null ? null : (int) $session->platform_fee_minor,
+            'charging_total_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor - (int) ($session->platform_fee_minor ?? 0),
             'requested_at' => $session->requested_at->toISOString(), 'started_at' => $session->started_at?->toISOString(),
             'stopped_at' => $session->stopped_at?->toISOString(), 'start_deadline_at' => $session->start_deadline_at?->toISOString(),
             'updated_at' => $session->updated_at?->toISOString(), 'aggregate_version' => (int) $session->aggregate_version,

@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charger_scanner_view.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_budget_dialog.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
 
 class ChargingStartScreen extends StatefulWidget {
@@ -103,6 +104,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             dependencies: widget.dependencies,
             fallbackVehicleId: _preparedVehicleId,
             onConfirm: _confirmStart,
+            onBudget: _changeBudget,
             onBack: () {
               charging.resetStartFlow();
               setState(() {
@@ -330,7 +332,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     }
   }
 
-  Future<void> _prepare(String code) async {
+  Future<void> _prepare(String code, {int? budgetMinor}) async {
     if (widget.dependencies.accounts?.selected == null) {
       await widget.dependencies.accounts?.load();
     }
@@ -338,6 +340,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
         _vehicleId ?? widget.dependencies.vehicles.defaultVehicle?.id;
     final prepared = await widget.dependencies.charging.prepare(
       rawCode: code,
+      budgetMinor: budgetMinor,
       vehicleId: vehicleId == '' ? null : vehicleId,
     );
     if (mounted) {
@@ -345,6 +348,17 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
         _preparedHere = prepared;
         _preparedVehicleId = vehicleId;
       });
+    }
+  }
+
+  Future<void> _changeBudget() async {
+    final preparation = widget.dependencies.charging.preparation!;
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (_) => ChargingBudgetDialog(quote: preparation.quote),
+    );
+    if (amount != null && mounted) {
+      await _prepare(preparation.target.connectorId, budgetMinor: amount);
     }
   }
 
@@ -425,12 +439,14 @@ class _ChargeReview extends StatelessWidget {
   const _ChargeReview({
     required this.dependencies,
     required this.onConfirm,
+    required this.onBudget,
     required this.onBack,
     this.fallbackVehicleId,
   });
 
   final AppDependencies dependencies;
   final VoidCallback onConfirm;
+  final VoidCallback onBudget;
   final VoidCallback onBack;
   final String? fallbackVehicleId;
 
@@ -545,10 +561,26 @@ class _ChargeReview extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (quote.platformFee['enabled'] == true)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Platform fee · tax included'),
+                    subtitle: Text(
+                      'Once per completed session with charging usage. Waived when charging costs less than ${formatMoney(Money(minorUnits: quote.platformFee['waiver_threshold_minor'] as int, currency: quote.currency))}. Included within your budget.',
+                    ),
+                    trailing: Text(
+                      formatMoney(
+                        Money(
+                          minorUnits: quote.platformFee['amount_minor'] as int,
+                          currency: quote.currency,
+                        ),
+                      ),
+                    ),
+                  ),
                 Divider(color: context.vtsaColors.border),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Reserved charging budget'),
+                  title: const Text('Charging budget'),
                   subtitle: const Text(
                     'Held in your wallet until final readings are checked. Unused funds are released. A network interruption can delay the charger stopping; unresolved charges require review.',
                   ),
@@ -557,6 +589,12 @@ class _ChargeReview extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
+                if (quote.budgetPolicy.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: onBudget,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Change budget'),
+                  ),
               ],
             ),
           ),

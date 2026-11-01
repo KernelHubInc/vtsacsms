@@ -19,11 +19,17 @@ final class ApiChargingRepository implements ChargingRepository {
   Future<ChargePreparation> prepare({
     required ChargerCode code,
     String? vehicleId,
+    int? budgetMinor,
   }) async {
     try {
       final response = await _client.dio.post<Map<String, dynamic>>(
         '/api/v1/mobile/charging/prepare',
-        data: {'charger_code': code.value, 'vehicle_id': ?vehicleId},
+        data: {
+          'charger_code': code.value,
+          'vehicle_id': ?vehicleId,
+          'budget_minor': ?budgetMinor,
+          'pricing_version': 2,
+        },
         options: _options(),
       );
       return ChargePreparation.fromJson(

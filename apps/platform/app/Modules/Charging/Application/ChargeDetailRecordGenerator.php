@@ -122,6 +122,8 @@ final readonly class ChargeDetailRecordGenerator
             $this->cdrs->transition($cdr, ChargeDetailRecordState::Finalized, 'cdr_evidence_finalized');
             $locked->forceFill([
                 'final_cost_minor' => $billable ? $rating->totalMinor : null,
+                'platform_fee_minor' => $billable ? $rating->platformFeeMinor : null,
+                'platform_fee_tax_minor' => $billable ? $rating->platformFeeTaxMinor : null,
                 'estimated_cost_minor' => $billable ? $rating->totalMinor : $locked->estimated_cost_minor,
                 'finalization_outcome' => $outcome,
             ])->save();

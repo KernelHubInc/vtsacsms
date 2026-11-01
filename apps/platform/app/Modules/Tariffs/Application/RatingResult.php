@@ -18,6 +18,8 @@ final readonly class RatingResult
         public int $totalMinor,
         public array $lines,
         public array $discounts,
+        public int $platformFeeMinor = 0,
+        public int $platformFeeTaxMinor = 0,
     ) {}
 
     /** @return array<string, mixed> */
@@ -31,6 +33,9 @@ final readonly class RatingResult
             'total_minor' => $this->totalMinor,
             'lines' => $this->lines,
             'discounts' => $this->discounts,
+            'charging_total_minor' => $this->totalMinor - $this->platformFeeMinor,
+            'platform_fee_minor' => $this->platformFeeMinor,
+            'platform_fee_tax_minor' => $this->platformFeeTaxMinor,
         ];
     }
 }

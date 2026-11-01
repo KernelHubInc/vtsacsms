@@ -175,6 +175,8 @@ final class TariffQuote {
     required this.taxInclusive,
     this.taxRateBasisPoints = 0,
     required this.lines,
+    this.budgetPolicy = const {},
+    this.platformFee = const {},
     required this.estimatedPreauthorization,
     required this.expiresAt,
   });
@@ -189,6 +191,12 @@ final class TariffQuote {
     lines: (json['lines']! as List<Object?>)
         .map((item) => TariffLine.fromJson(item! as Map<String, dynamic>))
         .toList(growable: false),
+    budgetPolicy: Map<String, dynamic>.from(
+      json['budget_policy'] as Map? ?? const {},
+    ),
+    platformFee: Map<String, dynamic>.from(
+      json['platform_fee'] as Map? ?? const {},
+    ),
     estimatedPreauthorization: Money.fromJson(
       json['estimated_preauthorization']! as Map<String, dynamic>,
     ),
@@ -202,6 +210,8 @@ final class TariffQuote {
   final bool taxInclusive;
   final int taxRateBasisPoints;
   final List<TariffLine> lines;
+  final Map<String, dynamic> budgetPolicy;
+  final Map<String, dynamic> platformFee;
   final Money estimatedPreauthorization;
   final DateTime expiresAt;
 }
@@ -304,6 +314,8 @@ final class ChargingSession {
     this.batteryReportedAt,
     this.estimatedCost,
     this.finalCost,
+    this.platformFee,
+    this.chargingTotal,
     this.startDeadlineAt,
     this.failureReason,
     this.anomalyFlags = const [],
@@ -340,6 +352,8 @@ final class ChargingSession {
           : DateTime.parse(json['battery_reported_at']! as String).toUtc(),
       estimatedCost: money('estimated_cost_minor'),
       finalCost: money('final_cost_minor'),
+      platformFee: money('platform_fee_minor'),
+      chargingTotal: money('charging_total_minor'),
       requestedAt: DateTime.parse(json['requested_at']! as String).toUtc(),
       startedAt: json['started_at'] == null
           ? null
@@ -388,6 +402,8 @@ final class ChargingSession {
   final DateTime? batteryReportedAt;
   final Money? estimatedCost;
   final Money? finalCost;
+  final Money? platformFee;
+  final Money? chargingTotal;
   final DateTime requestedAt;
   final DateTime? startedAt;
   final DateTime? stoppedAt;

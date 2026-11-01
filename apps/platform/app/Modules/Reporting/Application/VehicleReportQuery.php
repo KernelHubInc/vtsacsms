@@ -44,6 +44,8 @@ final readonly class VehicleReportQuery
                 's.requested_at as requested_at_utc', 's.started_at as started_at_utc', 's.stopped_at as stopped_at_utc',
                 's.energy_wh', 's.duration_seconds', 's.currency', 's.estimated_cost_minor', 's.final_cost_minor',
                 'c.payment_state', 'c.settled_at as settled_at_utc', 's.failure_reason',
+                DB::raw('CASE WHEN s.final_cost_minor IS NULL THEN NULL ELSE COALESCE(s.platform_fee_minor, 0) END as platform_fee_minor'),
+                DB::raw('s.final_cost_minor - COALESCE(s.platform_fee_minor, 0) as charging_total_minor'),
             ],
             default => [],
         };
@@ -64,6 +66,8 @@ final readonly class VehicleReportQuery
                 DB::raw('SUM(s.final_cost_minor) as final_cost_minor'),
                 DB::raw('SUM(CASE WHEN s.final_cost_minor IS NULL THEN 1 ELSE 0 END) as unpriced_sessions'),
                 DB::raw('MAX(s.stopped_at) as last_stopped_at_utc'),
+                DB::raw('SUM(CASE WHEN s.final_cost_minor IS NULL THEN NULL ELSE COALESCE(s.platform_fee_minor, 0) END) as platform_fee_minor'),
+                DB::raw('SUM(s.final_cost_minor - COALESCE(s.platform_fee_minor, 0)) as charging_total_minor'),
             ];
         } else {
             $query->orderBy($type === 'vehicles' ? 'v.id' : 's.id');
@@ -77,6 +81,8 @@ final readonly class VehicleReportQuery
         };
         if ($type !== 'vehicles') {
             $headers[] = 'energy_kwh';
+            $headers[] = 'platform_fee_minor';
+            $headers[] = 'charging_total_minor';
         }
 
         return ['headers' => $headers, 'rows' => $this->rows($query->select($columns), $headers)];

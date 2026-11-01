@@ -20,6 +20,8 @@ use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\PrepaidChargingMonitor;
 use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
+use App\Modules\Charging\Domain\Models\ChargingBudgetSetting;
+use App\Modules\Charging\Domain\Models\ChargingQuote;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
@@ -36,6 +38,7 @@ use App\Modules\Organizations\Domain\ChargingAccountRole;
 use App\Modules\Organizations\Domain\Models\Membership;
 use App\Modules\Tariffs\Application\PortalPricing;
 use App\Modules\Tariffs\Application\TariffManagementService;
+use App\Modules\Tariffs\Domain\Models\PlatformFeePolicy;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use Carbon\CarbonImmutable;
 use DomainException;
@@ -684,6 +687,127 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $sessionId);
         $token = $this->postJson('/api/v1/auth/login', ['email' => $other->email, 'password' => 'password', 'tenant_id' => $tenant->getKey(), 'device_name' => 'Other test'])->assertOk()->json('data.token');
         $this->getJson('/api/v1/mobile/charging-sessions', ['Authorization' => 'Bearer '.$token, 'X-Charging-Account-ID' => $account])->assertNotFound();
+    }
+
+    public function test_budget_fee_quote_snapshot_stop_settlement_and_receipt_agree(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('fee-charging');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 99900);
+            ChargingBudgetSetting::query()->create([
+                'minimum_minor' => 10000, 'default_minor' => 50000, 'maximum_minor' => 200000,
+                'presets' => [20000, 50000, 100000, 200000], 'allow_custom_amount' => true,
+            ]);
+            $fee = PlatformFeePolicy::query()->create([
+                'enabled' => true, 'amount_minor' => 500, 'waiver_threshold_minor' => 10000,
+                'tax_rate_basis_points' => 0, 'beneficiary' => 'Test platform', 'effective_at' => now('UTC'),
+            ]);
+            $service = app(CustomerCharging::class);
+            try {
+                $service->prepare($actor->public_id, (string) $connector->getKey());
+                self::fail('Legacy client did not disclose the fee');
+            } catch (DomainException $exception) {
+                self::assertStringContainsString('Update the app', $exception->getMessage());
+            }
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey(), requestedBudget: 50000, pricingVersion: 2);
+            self::assertSame(500, $quote['quote']['platform_fee']['amount_minor']);
+            self::assertSame(50000, $quote['quote']['estimated_preauthorization']['amount_minor']);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'fee-session-start');
+            self::assertSame($fee->id, $session->tariff_snapshot['platform_fee']['id']);
+            // A later fee policy must not change an active session's agreed price.
+            $this->travel(1)->seconds();
+            PlatformFeePolicy::query()->create([
+                'enabled' => true, 'amount_minor' => 1000, 'waiver_threshold_minor' => 10000,
+                'tax_rate_basis_points' => 0, 'beneficiary' => 'Test platform', 'effective_at' => now('UTC'),
+            ]);
+            $this->event((string) $tenant->id, $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 991, 'meter_start_wh' => 0, 'authorization_status' => 'Accepted']);
+            $this->travel(50)->hours();
+            app(MeterValueService::class)->record($session->refresh(), (string) Str::ulid(), [
+                ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 320000],
+            ], CarbonImmutable::now('UTC'));
+            $this->event((string) $tenant->id, $connector, 'stop_transaction', ['protocol_transaction_id' => 991, 'meter_stop_wh' => 320000, 'reason' => 'Remote', 'samples' => []]);
+            self::assertSame(32500, $session->refresh()->final_cost_minor);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            $wallet = app(PrepaidWallet::class)->summary($actor->public_id, 'live');
+            self::assertSame(67500, $wallet['available_minor']);
+            self::assertSame(0, $wallet['reserved_minor']);
+            $summary = ChargingEmailDelivery::query()->firstOrFail()->summary;
+            self::assertSame(500, $summary['platform_fee_minor']);
+            $receipt = app(ChargingReceiptPdf::class)->details($summary);
+            self::assertSame('PHP 320.00', $receipt['charging_amount']);
+            self::assertSame('PHP 5.00', $receipt['platform_fee']);
+            self::assertSame('PHP 325.00', $receipt['amount']);
+            self::assertSame(500, $service->present($session)['platform_fee_minor']);
+        });
+    }
+
+    public function test_platform_fee_is_included_in_early_stop_budget(): void
+    {
+        config(['mobile_charging.maximum_reservation_minor' => 50000]);
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('fee-early-stop');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
+            $connector = $this->fixture($actor);
+            app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 49900);
+            PlatformFeePolicy::query()->create([
+                'enabled' => true, 'amount_minor' => 500, 'waiver_threshold_minor' => 10000,
+                'tax_rate_basis_points' => 0, 'beneficiary' => 'Test platform', 'effective_at' => now('UTC'),
+            ]);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->id, pricingVersion: 2);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->id, 'fee-buffer-stop');
+            $this->event((string) $tenant->id, $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 992, 'meter_start_wh' => 0, 'authorization_status' => 'Accepted']);
+            $session->refresh()->forceFill(['energy_wh' => 494900, 'estimated_cost_minor' => 49990])->save();
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            self::assertSame('stopping', $session->refresh()->state->value);
+            self::assertSame(1, ChargerCommand::query()->where('session_id', $session->id)->where('type', 'remote_stop')->count());
+            self::assertSame(50000, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            $this->assertDatabaseCount('charging_email_deliveries', 0);
+        });
+    }
+
+    public function test_budget_policy_comparison_tolerates_jsonb_key_order(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('budget-jsonb-order');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $prepared = $service->prepare($actor->public_id, (string) $connector->id);
+            $quote = ChargingQuote::query()->whereKey($prepared['quote']['id'])->firstOrFail();
+            $disclosure = $quote->disclosure;
+            $disclosure['budget_policy'] = array_reverse($disclosure['budget_policy'], true);
+            $quote->update(['disclosure' => $disclosure]);
+            $session = $service->start($actor->public_id, (string) $quote->id, (string) $connector->id, 'jsonb-budget-start');
+            self::assertTrue($session->exists);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
+    public function test_changed_budget_policy_rejects_unused_quote_without_reserving_funds(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('budget-recheck');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            ChargingBudgetSetting::query()->create([
+                'minimum_minor' => 1, 'default_minor' => 50, 'maximum_minor' => 50,
+                'presets' => [50], 'allow_custom_amount' => true,
+            ]);
+            try {
+                $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->id, 'changed-policy-start');
+                self::fail('Stale quote accepted');
+            } catch (DomainException $exception) {
+                self::assertStringContainsString('settings changed', $exception->getMessage());
+            }
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(0, ChargerCommand::query()->count());
+        });
     }
 
     private function fixture(User $actor): Connector

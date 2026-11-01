@@ -63,6 +63,22 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "budget_minor": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 100000000,
+                    "description": "Optional customer-selected total reservation in PHP centavos, including any platform fee."
+                  },
+                  "pricing_version": {
+                    "type": "integer",
+                    "enum": [
+                      2
+                    ],
+                    "description": "Declares support for displaying the platform fee. Required when an enabled fee applies."
                   }
                 },
                 "required": [
@@ -672,6 +688,20 @@
             "type": "boolean",
             "description": "A durable customer cancellation awaits charger confirmation; it does not mean stopped or funds released.",
             "default": false
+          },
+          "platform_fee_minor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "charging_total_minor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
           }
         },
         "required": [
@@ -833,6 +863,83 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 10000
+              },
+              "budget_policy": {
+                "type": "object",
+                "properties": {
+                  "minimum_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "default_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "maximum_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "available_minor": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "presets": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "allow_custom_amount": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "platform_fee": {
+                "type": "object",
+                "description": "Frozen inclusive fee; disabled until tax and beneficiary are confirmed. Threshold compares the tax-inclusive charging total before this fee. No usage means no fee.",
+                "properties": {
+                  "id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "amount_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "waiver_threshold_minor": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "tax_rate_basis_points": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 10000
+                  },
+                  "beneficiary": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "effective_at": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "required": [

@@ -65,6 +65,8 @@
         @endif
     </form>
 
+    @include('filament.platform.pages.charging-commercial-settings')
+
     <form wire:submit="saveMapSettings" class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
         <div class="border-b border-gray-200 p-5 dark:border-white/10">
             <div class="flex flex-wrap items-start justify-between gap-4">

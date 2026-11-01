@@ -22,7 +22,8 @@ final class CustomerChargingRequest extends FormRequest
     public function rules(): array
     {
         return match ($this->route()?->getActionMethod()) {
-            'prepare' => ['charger_code' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{6,120}$/'], 'vehicle_id' => ['nullable', 'ulid']],
+            'prepare' => ['charger_code' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{6,120}$/'], 'vehicle_id' => ['nullable', 'ulid'],
+                'budget_minor' => ['nullable', 'integer', 'between:1,100000000'], 'pricing_version' => ['nullable', 'integer', 'in:2']],
             'start' => [
                 'quote_id' => ['required', 'ulid'], 'connector_id' => ['required', 'ulid'],
                 'payment_method_id' => ['required', 'in:prepaid_wallet'],

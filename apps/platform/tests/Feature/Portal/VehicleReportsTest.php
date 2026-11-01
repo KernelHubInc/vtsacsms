@@ -223,6 +223,23 @@ final class VehicleReportsTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_fee_breakdown_is_preserved_in_session_and_aggregate_exports(): void
+    {
+        $tenant = $this->createTenant('fee-report');
+        $admin = $this->createUser();
+        $this->withinTenant($tenant, $admin, function () use ($tenant, $admin): void {
+            $this->grant($tenant, $admin);
+            $vehicle = $this->vehicle($admin);
+            $this->chargingSession($admin, $vehicle, Site::factory()->create(), [], ['final_cost_minor' => 32500, 'platform_fee_minor' => 500, 'platform_fee_tax_minor' => 54]);
+            foreach (['vehicle_sessions', 'vehicle_usage', 'vehicle_models'] as $type) {
+                $rows = $this->rows($type, $admin);
+                self::assertSame('500', $rows[0]['platform_fee_minor']);
+                self::assertSame('32000', $rows[0]['charging_total_minor']);
+                self::assertSame('32500', $rows[0]['final_cost_minor']);
+            }
+        });
+    }
+
     public function test_all_vehicle_pdf_types_render_and_whole_register_access_is_in_download_fingerprint(): void
     {
         $tenant = $this->createTenant('vehicle-pdf');

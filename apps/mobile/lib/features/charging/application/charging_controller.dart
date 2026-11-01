@@ -141,7 +141,11 @@ final class ChargingController extends ChangeNotifier {
     }
   }
 
-  Future<bool> prepare({required String rawCode, String? vehicleId}) async {
+  Future<bool> prepare({
+    required String rawCode,
+    String? vehicleId,
+    int? budgetMinor,
+  }) async {
     if (!_isAuthenticated() || !_network.isOnline || _mutationInFlight) {
       return false;
     }
@@ -177,6 +181,7 @@ final class ChargingController extends ChangeNotifier {
       final result = await _repository.prepare(
         code: code,
         vehicleId: vehicleId,
+        budgetMinor: budgetMinor,
       );
       if (!_isCurrent(request) ||
           !_isAuthenticated() ||

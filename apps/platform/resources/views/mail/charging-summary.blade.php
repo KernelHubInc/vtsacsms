@@ -14,7 +14,7 @@
 </td></tr></table>
 <h2 style="font-size:18px;color:#12366b;margin:0 0 12px;">Your charging session</h2>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;font-size:14px;line-height:1.5;">
-@foreach (['Station' => $receipt['station'], 'Connector' => $receipt['connector'], 'Started' => $receipt['started'], 'Stopped' => $receipt['stopped'], 'Duration' => $receipt['duration'], 'Energy delivered' => $receipt['energy']] as $label => $value)
+@foreach (['Charging' => $receipt['charging_amount'], 'Platform fee (tax included)' => $receipt['platform_fee'], 'Station' => $receipt['station'], 'Connector' => $receipt['connector'], 'Started' => $receipt['started'], 'Stopped' => $receipt['stopped'], 'Duration' => $receipt['duration'], 'Energy delivered' => $receipt['energy']] as $label => $value)
 <tr><td class="detail-label" style="width:36%;padding:7px 12px 7px 0;color:#66758a;vertical-align:top;">{{ $label }}</td>
 <td class="detail-value" style="padding:7px 0;color:#17243a;text-align:right;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;">{{ $value }}</td></tr>
 @endforeach

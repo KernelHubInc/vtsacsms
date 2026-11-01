@@ -71,6 +71,22 @@ final class TariffEngine
             $total = min($total, $maximum);
         }
 
+        $fee = $snapshot['platform_fee'] ?? [];
+        $feeMinor = 0;
+        $feeTax = 0;
+        if (is_array($fee) && ($fee['enabled'] ?? false) === true
+            && ($input->energyWh > 0 || $input->energyFlowSeconds > 0)
+            && $total >= (int) $fee['waiver_threshold_minor']) {
+            $feeMinor = (int) $fee['amount_minor'];
+            $feeTax = $this->multiplyAndDivide($feeMinor, (int) $fee['tax_rate_basis_points'], 10000 + (int) $fee['tax_rate_basis_points']);
+            $subtotal = $this->safeAdd($subtotal, $taxTreatment === TaxTreatment::Exclusive ? $feeMinor - $feeTax : $feeMinor);
+            $taxMinor = $this->safeAdd($taxMinor, $feeTax);
+            $total = $this->safeAdd($total, $feeMinor);
+            $lines[] = ['dimension' => 'platform_fee', 'quantity' => 1, 'unit_quantity' => 1,
+                'price_minor' => $feeMinor, 'amount_minor' => $feeMinor, 'tax_minor' => $feeTax,
+                'beneficiary' => (string) $fee['beneficiary']];
+        }
+
         return new RatingResult(
             $currency,
             $subtotal,
@@ -79,6 +95,8 @@ final class TariffEngine
             $total,
             $lines,
             $discountLines,
+            $feeMinor,
+            $feeTax,
         );
     }
 

@@ -227,3 +227,7 @@ privacy, retention limits and rollout.
 ## Public consumer enrollment (2026-10-30)
 
 Organizations exposes `ConsumerEnrollment` to the Identity registration workflow. It resolves only the configured active consumer fleet organization and fixed `consumer-driver` role in the requested signup tenant, then writes membership and role assignment inside the registration transaction. Tenancy exposes `RegistrationTenantQuery::isActive`. The HTTP controller no longer writes Organizations tables directly. Demo fallback is limited to its existing non-production environment guard; production uses explicit registration configuration and never enables demo mode. Assets still owns initial vehicle creation through `DriverVehicles`. See [mobile registration operations](../runbooks/mobile-registration-and-discovery.md).
+
+## Charging commercial settings
+
+Charging owns `charging_budget_settings` and the final fee projections on sessions. Tariffs owns append-only `platform_fee_policies` and rates the policy frozen in the session tariff snapshot. Billing allocates an explicit platform fee before sharing charging revenue; Notifications and Reporting consume the itemized final amounts. See [ADR 0028](decisions/0028-charging-budgets-and-platform-fees.md) and the [operator runbook](../runbooks/charging-budgets-and-fees.md).

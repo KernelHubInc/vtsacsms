@@ -2,6 +2,8 @@ Power Solutions — Charging receipt
 
 Your charging session is complete. Your PDF receipt is attached.
 
+Charging: {{ $receipt['charging_amount'] }}
+Platform fee (tax included): {{ $receipt['platform_fee'] }}
 Total paid: {{ $receipt['amount'] }}
 Station: {{ $receipt['station'] }}
 Connector: {{ $receipt['connector'] }}

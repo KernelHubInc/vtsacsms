@@ -140,6 +140,8 @@ final readonly class PrepaidChargingMonitor
             'energy_wh' => (int) $cdr->energy_wh,
             'duration_seconds' => (int) $cdr->duration_seconds,
             'amount_minor' => (int) $cdr->total_minor,
+            'platform_fee_minor' => (int) ($cdr->snapshot['rating']['platform_fee_minor'] ?? 0),
+            'platform_fee_tax_minor' => (int) ($cdr->snapshot['rating']['platform_fee_tax_minor'] ?? 0),
             'currency' => (string) $cdr->currency,
             'payment_method' => (string) ($owner->quote->disclosure['attribution']['payer'] ?? 'Prepaid wallet'),
         ]);

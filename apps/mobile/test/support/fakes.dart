@@ -288,6 +288,7 @@ final class FakeChargingRepository implements ChargingRepository {
   AppFailure? getSessionFailure;
   Completer<ChargingHistoryPage>? historyCompleter;
   int prepareCalls = 0;
+  int? lastPreparedBudget;
   String? lastPreparedCode;
   int startCalls = 0;
   int stopCalls = 0;
@@ -351,8 +352,10 @@ final class FakeChargingRepository implements ChargingRepository {
   Future<ChargePreparation> prepare({
     required ChargerCode code,
     String? vehicleId,
+    int? budgetMinor,
   }) async {
     prepareCalls++;
+    lastPreparedBudget = budgetMinor;
     lastPreparedCode = code.value;
     if (prepareFailure case final failure?) {
       throw failure;

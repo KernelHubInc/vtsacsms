@@ -28,6 +28,8 @@ final class ChargingReceiptPdf
             'energy' => number_format($energy / 1000, 3).' kWh',
             'duration' => sprintf('%d min %02d sec', intdiv($duration, 60), $duration % 60),
             'amount' => (string) $summary['currency'].' '.number_format(intdiv($amount, 100)).'.'.str_pad((string) ($amount % 100), 2, '0', STR_PAD_LEFT),
+            'charging_amount' => $this->money($amount - (int) ($summary['platform_fee_minor'] ?? 0), (string) $summary['currency']),
+            'platform_fee' => $this->money((int) ($summary['platform_fee_minor'] ?? 0), (string) $summary['currency']),
             'payment_method' => (string) $summary['payment_method'],
         ];
     }
@@ -48,6 +50,11 @@ final class ChargingReceiptPdf
             'isPhpEnabled' => false,
             'defaultFont' => 'DejaVu Sans',
         ])->output();
+    }
+
+    private function money(int $minor, string $currency): string
+    {
+        return $currency.' '.number_format(intdiv($minor, 100)).'.'.str_pad((string) ($minor % 100), 2, '0', STR_PAD_LEFT);
     }
 
     private function time(int|string|null $value): string

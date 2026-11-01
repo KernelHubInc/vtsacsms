@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Platform\Pages;
 
 use App\Models\User;
+use App\Modules\Charging\Application\ChargingBudgets;
 use App\Modules\Integrations\Application\MapConfigurationResolver;
 use App\Modules\Integrations\Application\MapSettingsData;
 use App\Modules\Integrations\Application\MapSettingsManager;
@@ -13,8 +14,10 @@ use App\Modules\Integrations\Domain\MapSurface;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Payments\Application\Qr\TopupLimits;
+use App\Modules\Tariffs\Application\PlatformFees;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use BackedEnum;
+use Carbon\CarbonImmutable;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Livewire\Attributes\Locked;
@@ -42,12 +45,29 @@ final class SystemSettings extends Page
 
     public bool $topupAllowCustom = true;
 
+    /** @var array<string, mixed> */
+    public array $budgetSettings = [];
+
+    /** @var array<string, mixed> */
+    public array $feeSettings = [];
+
     #[Locked]
     public string $tenantId = '';
 
     public function mount(MapConfigurationResolver $maps, TopupLimits $limits, CurrentTenant $tenant): void
     {
         $this->tenantId = $tenant->get()->tenantId;
+        $budget = app(ChargingBudgets::class)->current();
+        $this->budgetSettings = [
+            'minimum' => $this->money($budget['minimum_minor']), 'default' => $this->money($budget['default_minor']),
+            'maximum' => $this->money($budget['maximum_minor']), 'presets' => array_map($this->money(...), $budget['presets']),
+            'allow_custom_amount' => $budget['allow_custom_amount'],
+        ];
+        $fee = app(PlatformFees::class)->current();
+        $this->feeSettings = ['enabled' => $fee['enabled'], 'amount' => $this->money($fee['amount_minor']),
+            'waiver_threshold' => $this->money($fee['waiver_threshold_minor']),
+            'tax_rate' => $fee['tax_rate_basis_points'] === null ? '' : $this->money($fee['tax_rate_basis_points']),
+            'beneficiary' => $fee['beneficiary'] ?? '', 'effective_at' => ''];
         $amounts = $limits->settings();
         $this->topupMinimum = $this->money($amounts['minimum_minor']);
         $this->topupMaximum = $this->money($amounts['maximum_minor']);
@@ -171,6 +191,68 @@ final class SystemSettings extends Page
         $this->resetValidation();
     }
 
+    public function saveChargingBudgets(ChargingBudgets $budgets, CurrentTenant $tenant): void
+    {
+        abort_unless($this->canManage(), 403);
+        abort_unless($this->tenantId === $tenant->get()->tenantId, 409);
+        $money = ['required', 'string', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'];
+        $this->validate([
+            'budgetSettings.minimum' => $money, 'budgetSettings.default' => $money, 'budgetSettings.maximum' => $money,
+            'budgetSettings.presets' => ['present', 'array', 'list'], 'budgetSettings.presets.*' => $money,
+            'budgetSettings.allow_custom_amount' => ['required', 'boolean'],
+        ]);
+        /** @var User $user */
+        $user = auth()->user();
+        $budgets->update($user, [
+            'minimum_minor' => $this->minor($this->budgetSettings['minimum']),
+            'default_minor' => $this->minor($this->budgetSettings['default']),
+            'maximum_minor' => $this->minor($this->budgetSettings['maximum']),
+            'presets' => array_map($this->minor(...), $this->budgetSettings['presets']),
+            'allow_custom_amount' => $this->budgetSettings['allow_custom_amount'],
+        ]);
+        Notification::make()->title('Charging budgets saved')->body('New quotes use these settings. Existing sessions keep their reserved budget.')->success()->send();
+    }
+
+    public function addBudgetPreset(): void
+    {
+        abort_unless($this->canManage(), 403);
+        $this->budgetSettings['presets'][] = '';
+    }
+
+    public function removeBudgetPreset(int $index): void
+    {
+        abort_unless($this->canManage(), 403);
+        unset($this->budgetSettings['presets'][$index]);
+        $this->budgetSettings['presets'] = array_values($this->budgetSettings['presets']);
+        $this->resetValidation();
+    }
+
+    public function publishPlatformFee(PlatformFees $fees, CurrentTenant $tenant): void
+    {
+        abort_unless($this->canManage(), 403);
+        abort_unless($this->tenantId === $tenant->get()->tenantId, 409);
+        $money = ['required', 'string', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'];
+        $this->validate([
+            'feeSettings.enabled' => ['required', 'boolean'], 'feeSettings.amount' => $money,
+            'feeSettings.waiver_threshold' => $money,
+            'feeSettings.tax_rate' => ['nullable', 'regex:/^\d{1,3}(?:\.\d{1,2})?$/'],
+            'feeSettings.beneficiary' => ['nullable', 'string', 'max:120'],
+            'feeSettings.effective_at' => ['nullable', 'date_format:Y-m-d\TH:i'],
+        ]);
+        /** @var User $user */
+        $user = auth()->user();
+        $fees->publish($user, [
+            'enabled' => $this->feeSettings['enabled'], 'amount_minor' => $this->minor($this->feeSettings['amount']),
+            'waiver_threshold_minor' => $this->minor($this->feeSettings['waiver_threshold']),
+            'tax_rate_basis_points' => empty($this->feeSettings['tax_rate']) && $this->feeSettings['tax_rate'] !== '0'
+                ? null : $this->minor($this->feeSettings['tax_rate']),
+            'beneficiary' => trim($this->feeSettings['beneficiary']) ?: null,
+            'effective_at' => $this->feeSettings['effective_at'] === '' ? now('UTC')->toISOString()
+                : CarbonImmutable::parse($this->feeSettings['effective_at'], 'Asia/Manila')->utc()->toISOString(),
+        ]);
+        Notification::make()->title('Platform fee policy published')->body('The effective date applies to new quotes only. Existing sessions keep their price.')->success()->send();
+    }
+
     private function minor(string $amount): int
     {
         $parts = explode('.', $amount);
@@ -198,6 +280,8 @@ final class SystemSettings extends Page
         $admin = $maps->forSurface(MapSurface::Admin);
 
         return [
+            'scheduledFees' => app(PlatformFees::class)->scheduled(),
+            'activeFee' => app(PlatformFees::class)->current(),
             'providerOptions' => collect(MapProvider::cases())
                 ->mapWithKeys(fn (MapProvider $provider): array => [$provider->value => $provider->label()])
                 ->all(),

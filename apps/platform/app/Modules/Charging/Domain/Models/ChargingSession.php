@@ -49,6 +49,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $parking_seconds
  * @property int $idle_seconds
  * @property int|null $estimated_cost_minor
+ * @property int|null $platform_fee_minor
+ * @property int|null $platform_fee_tax_minor
  * @property int|null $final_cost_minor
  * @property string|null $finalization_outcome
  * @property string|null $failure_reason
@@ -95,6 +97,8 @@ final class ChargingSession extends Model
         return [
             'origin' => ChargingSessionOrigin::class,
             'state' => ChargingSessionState::class,
+            'platform_fee_minor' => 'integer',
+            'platform_fee_tax_minor' => 'integer',
             'energy_flow_seconds' => 'integer',
             'energy_flow_evidence_complete' => 'boolean',
             'authorization_status' => AuthorizationStatus::class,

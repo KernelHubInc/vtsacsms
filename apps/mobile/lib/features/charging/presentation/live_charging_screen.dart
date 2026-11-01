@@ -395,6 +395,18 @@ class _Metrics extends StatelessWidget {
                     : 'FINAL COST',
                 value: formatMoney(session.finalCost ?? session.estimatedCost),
               ),
+              if (session.platformFee != null)
+                _Metric(
+                  width: width,
+                  label: 'PLATFORM FEE - TAX INCLUDED',
+                  value: formatMoney(session.platformFee),
+                ),
+              if (session.chargingTotal != null)
+                _Metric(
+                  width: width,
+                  label: 'CHARGING',
+                  value: formatMoney(session.chargingTotal),
+                ),
             ],
           );
         },

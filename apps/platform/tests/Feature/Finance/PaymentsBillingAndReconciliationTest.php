@@ -263,6 +263,27 @@ final class PaymentsBillingAndReconciliationTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_explicit_platform_fee_is_not_shared_with_operator_and_allocation_is_idempotent(): void
+    {
+        $tenant = $this->createTenant('fee-allocation');
+        $actor = $this->createUser();
+        $this->withinTenant($tenant, $actor, function (): void {
+            [, $cdr] = $this->finalizedCdr(32500, 500);
+            $profile = BillingProfile::query()->create(['user_id' => (string) Str::ulid(), 'profile_type' => 'individual',
+                'legal_name' => 'Synthetic Driver', 'email' => 'driver@example.invalid', 'country_code' => 'PH', 'is_default' => true]);
+            $invoice = app(InvoiceService::class)->issueForChargeDetailRecord((string) $cdr->id, $profile);
+            $rule = RevenueShareRule::query()->create(['operator_organization_id' => (string) Str::ulid(),
+                'site_host_organization_id' => null, 'platform_basis_points' => 1000,
+                'operator_basis_points' => 9000, 'site_host_basis_points' => 0, 'effective_from' => now('UTC'), 'is_active' => true]);
+            app(RevenueShareService::class)->allocate($invoice, $rule);
+            app(RevenueShareService::class)->allocate($invoice, $rule);
+            $transaction = LedgerTransaction::query()->where('idempotency_key', 'revenue-share-'.$invoice->id.'-'.$rule->id)->firstOrFail();
+            $entries = LedgerEntry::query()->where('ledger_transaction_id', $transaction->id)->get();
+            self::assertSame(32500, (int) $entries->sum('debit_minor'));
+            self::assertSame([3700, 28800], $entries->pluck('credit_minor')->filter()->map(fn ($amount): int => (int) $amount)->sort()->values()->all());
+        });
+    }
+
     /** @return array{PaymentIntent, PaymentProviderConfig} */
     private function authorizedIntent(string $token, ?string $billableId = null, ?string $billingProfileId = null, ?string $userId = null): array
     {
@@ -278,7 +299,7 @@ final class PaymentsBillingAndReconciliationTest extends TenantSecurityTestCase
     }
 
     /** @return array{ChargingSession, ChargeDetailRecord} */
-    private function finalizedCdr(int $totalMinor): array
+    private function finalizedCdr(int $totalMinor, int $platformFeeMinor = 0): array
     {
         $session = ChargingSession::query()->create(['site_id' => (string) Str::ulid(), 'operator_id' => null,
             'charging_station_id' => (string) Str::ulid(), 'evse_id' => (string) Str::ulid(), 'connector_id' => (string) Str::ulid(),
@@ -289,7 +310,7 @@ final class PaymentsBillingAndReconciliationTest extends TenantSecurityTestCase
             'started_at' => now('UTC')->subHour(), 'stopped_at' => now('UTC'), 'energy_wh' => 10000,
             'duration_seconds' => 3600, 'parking_seconds' => 0, 'idle_seconds' => 0, 'final_cost_minor' => $totalMinor,
             'finalization_outcome' => 'complete', 'anomaly_flags' => [], 'aggregate_version' => 1]);
-        $snapshot = ['session_id' => (string) $session->getKey(), 'rating' => ['total_minor' => $totalMinor]];
+        $snapshot = ['session_id' => (string) $session->getKey(), 'rating' => ['total_minor' => $totalMinor, 'platform_fee_minor' => $platformFeeMinor]];
         $cdr = ChargeDetailRecord::query()->create(['session_id' => $session->getKey(), 'version' => 1,
             'state' => ChargeDetailRecordState::Finalized, 'snapshot' => $snapshot,
             'snapshot_hash' => hash('sha256', json_encode($snapshot, JSON_THROW_ON_ERROR)), 'currency' => 'PHP',

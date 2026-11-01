@@ -41,6 +41,8 @@
         <h2>Your charging session</h2>
         <table>
             @foreach ([
+                'Charging' => $receipt['charging_amount'],
+                'Platform fee (tax included)' => $receipt['platform_fee'],
                 'Reference' => $receipt['reference'],
                 'Station' => $receipt['station'],
                 'Connector' => $receipt['connector'],

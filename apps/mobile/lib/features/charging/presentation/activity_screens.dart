@@ -216,6 +216,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     label: 'Final cost',
                     value: formatMoney(session.finalCost),
                   ),
+                  if (session.chargingTotal != null)
+                    _Fact(
+                      label: 'Charging',
+                      value: formatMoney(session.chargingTotal),
+                    ),
+                  if (session.platformFee != null)
+                    _Fact(
+                      label: 'Platform fee (tax included)',
+                      value: formatMoney(session.platformFee),
+                    ),
                   _Fact(
                     label: 'Payment',
                     value: session.paymentState.name.replaceAllMapped(

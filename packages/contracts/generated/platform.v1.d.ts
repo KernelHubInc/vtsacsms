@@ -2325,6 +2325,25 @@ export interface components {
                 /** Format: date-time */
                 expires_at: string;
                 tax_rate_basis_points: number;
+                budget_policy?: {
+                    minimum_minor?: number;
+                    default_minor?: number;
+                    maximum_minor?: number;
+                    available_minor?: number;
+                    presets?: number[];
+                    allow_custom_amount?: boolean;
+                };
+                /** @description Frozen inclusive fee; disabled until tax and beneficiary are confirmed. Threshold compares the tax-inclusive charging total before this fee. No usage means no fee. */
+                platform_fee?: {
+                    id?: string | null;
+                    enabled?: boolean;
+                    amount_minor?: number;
+                    waiver_threshold_minor?: number;
+                    tax_rate_basis_points?: number | null;
+                    beneficiary?: string | null;
+                    /** Format: date-time */
+                    effective_at?: string | null;
+                };
             };
             payment_methods: {
                 /** @enum {string} */
@@ -2376,6 +2395,8 @@ export interface components {
              * @default false
              */
             cancellation_requested: boolean;
+            platform_fee_minor?: number | null;
+            charging_total_minor?: number | null;
         };
     };
     responses: {
@@ -3501,6 +3522,13 @@ export interface operations {
                 "application/json": {
                     charger_code: string;
                     vehicle_id?: string | null;
+                    /** @description Optional customer-selected total reservation in PHP centavos, including any platform fee. */
+                    budget_minor?: number | null;
+                    /**
+                     * @description Declares support for displaying the platform fee. Required when an enabled fee applies.
+                     * @enum {integer}
+                     */
+                    pricing_version?: 2;
                 };
             };
         };

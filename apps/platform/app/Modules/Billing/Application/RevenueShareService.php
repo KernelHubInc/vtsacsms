@@ -19,8 +19,17 @@ final readonly class RevenueShareService
             throw new InvalidArgumentException('Revenue share basis points must total 10,000.');
         }
         $total = (int) $invoice->total_minor;
-        $platform = intdiv($total * (int) $rule->platform_basis_points, 10000);
-        $operator = intdiv($total * (int) $rule->operator_basis_points, 10000);
+        $invoice->loadMissing('lines.ratedCharge');
+        $fee = 0;
+        foreach ($invoice->lines as $line) {
+            $fee += (int) ($line->ratedCharge?->source_snapshot['rating']['platform_fee_minor'] ?? 0);
+        }
+        if ($fee < 0 || $fee > $total) {
+            throw new InvalidArgumentException('Platform fee evidence is outside the invoice total.');
+        }
+        $charging = $total - $fee;
+        $platform = $fee + intdiv($charging * (int) $rule->platform_basis_points, 10000);
+        $operator = intdiv($charging * (int) $rule->operator_basis_points, 10000);
         $siteHost = $total - $platform - $operator;
         $gross = $this->ledger->account('4000-CHARGING-GROSS', 'Gross charging revenue', 'revenue', (string) $invoice->currency);
         $postings = [new LedgerPosting($gross, debitMinor: $total)];

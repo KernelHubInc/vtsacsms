@@ -35,7 +35,7 @@ final readonly class PortalExportRowsQuery
                     'session_id', 'site_id', 'station_id', 'evse_id', 'connector_id', 'state',
                     'requested_at_utc', 'started_at_utc', 'stopped_at_utc', 'energy_wh',
                     'duration_seconds', 'currency', 'estimated_cost_minor', 'final_cost_minor',
-                    'failure_reason',
+                    'failure_reason', 'platform_fee_minor', 'platform_fee_tax_minor', 'charging_total_minor',
                 ],
                 'rows' => $this->sessionRows($user, $filters),
             ],
@@ -67,7 +67,7 @@ final readonly class PortalExportRowsQuery
             ->select([
                 'id', 'site_id', 'charging_station_id', 'evse_id', 'connector_id', 'state',
                 'requested_at', 'started_at', 'stopped_at', 'energy_wh', 'duration_seconds',
-                'currency', 'estimated_cost_minor', 'final_cost_minor', 'failure_reason',
+                'currency', 'estimated_cost_minor', 'final_cost_minor', 'failure_reason', 'platform_fee_minor', 'platform_fee_tax_minor',
             ]);
         $this->applyDateRange($query, $filters, 'requested_at');
 
@@ -80,6 +80,9 @@ final readonly class PortalExportRowsQuery
                 (int) $row->duration_seconds, $this->nullableString($row->currency),
                 $this->nullableInt($row->estimated_cost_minor), $this->nullableInt($row->final_cost_minor),
                 $this->nullableString($row->failure_reason),
+                $row->final_cost_minor === null ? null : (int) ($row->platform_fee_minor ?? 0),
+                $row->final_cost_minor === null ? null : (int) ($row->platform_fee_tax_minor ?? 0),
+                $row->final_cost_minor === null ? null : (int) $row->final_cost_minor - (int) ($row->platform_fee_minor ?? 0),
             ];
         }
     }

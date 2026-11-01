@@ -154,7 +154,7 @@ void main() {
 
     expect(find.text('REVIEW BEFORE START'), findsOneWidget);
     expect(find.text('Standard charging'), findsOneWidget);
-    expect(find.text('Reserved charging budget'), findsOneWidget);
+    expect(find.text('Charging budget'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Visa ending 4242'), 240);
     expect(find.text('Visa ending 4242'), findsOneWidget);
   });

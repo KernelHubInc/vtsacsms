@@ -74,13 +74,13 @@ final class PortalPdfReport
     {
         return match ($type) {
             'audit' => [1 => 'Time (UTC)', 3 => 'Actor ID', 4 => 'Action', 5 => 'Record type', 6 => 'Record ID', 7 => 'Result', 8 => 'Correlation ID'],
-            'sessions' => [0 => 'Session ID', 5 => 'State', 7 => 'Started (UTC)', 8 => 'Stopped (UTC)', 9 => 'Energy (kWh)', 10 => 'Duration (min)', 11 => 'Currency', 13 => 'Final amount', 14 => 'Reason'],
+            'sessions' => [0 => 'Session ID', 5 => 'State', 7 => 'Started (UTC)', 8 => 'Stopped (UTC)', 9 => 'Energy (kWh)', 10 => 'Duration (min)', 11 => 'Currency', 17 => 'Charging', 15 => 'Platform fee', 13 => 'Final amount'],
             'assets' => [2 => 'Site', 1 => 'Code', 3 => 'Status', 9 => 'Stations', 6 => 'Address', 4 => 'Timezone'],
             'finance' => [0 => 'Payment ID', 1 => 'Session ID', 2 => 'State', 3 => 'Currency', 6 => 'Captured', 7 => 'Refunded', 8 => 'Created (UTC)'],
             'vehicles' => [0 => 'Vehicle ID', 1 => 'Vehicle', 2 => 'Brand', 3 => 'Model', 5 => 'Personal owner', 7 => 'Shared account', 9 => 'Account type', 10 => 'Registered (UTC)'],
-            'vehicle_sessions' => [0 => 'Session ID', 2 => 'Vehicle / brand / model', 5 => 'Driver / account', 9 => 'Site / charger', 13 => 'State / payment', 15 => 'Started (UTC)', 16 => 'Stopped (UTC)', 17 => 'kWh', 18 => 'Minutes', 19 => 'Currency', 21 => 'Final amount'],
-            'vehicle_usage' => [0 => 'Vehicle ID', 1 => 'Vehicle', 2 => 'Brand', 3 => 'Model', 4 => 'Currency', 5 => 'Sessions', 7 => 'kWh', 8 => 'Minutes', 9 => 'Known final charges', 10 => 'Unpriced sessions', 11 => 'Last stop (UTC)'],
-            'vehicle_models' => [0 => 'Brand', 1 => 'Model', 2 => 'Currency', 3 => 'Sessions', 4 => 'Vehicles', 5 => 'kWh', 6 => 'Minutes', 7 => 'Known final charges', 8 => 'Unpriced sessions', 9 => 'Last stop (UTC)'],
+            'vehicle_sessions' => [0 => 'Session ID', 2 => 'Vehicle / brand / model', 5 => 'Driver / account', 9 => 'Site / charger', 13 => 'State / payment', 15 => 'Started (UTC)', 16 => 'Stopped (UTC)', 17 => 'kWh', 18 => 'Minutes', 19 => 'Currency', 27 => 'Charging', 26 => 'Platform fee', 21 => 'Final amount'],
+            'vehicle_usage' => [0 => 'Vehicle ID', 1 => 'Vehicle', 2 => 'Brand', 3 => 'Model', 4 => 'Currency', 5 => 'Sessions', 7 => 'kWh', 8 => 'Minutes', 9 => 'Known final charges', 10 => 'Unpriced sessions', 11 => 'Last stop (UTC)', 13 => 'Platform fee'],
+            'vehicle_models' => [0 => 'Brand', 1 => 'Model', 2 => 'Currency', 3 => 'Sessions', 4 => 'Vehicles', 5 => 'kWh', 6 => 'Minutes', 7 => 'Known final charges', 8 => 'Unpriced sessions', 9 => 'Last stop (UTC)', 11 => 'Platform fee'],
             default => [],
         };
     }
