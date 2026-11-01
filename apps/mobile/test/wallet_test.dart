@@ -4,8 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
+import 'package:vtsa_mobile/features/wallet/topup_amount_dialog.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_screen.dart';
+
+import 'driver_journey_design_test.dart' show preview;
+import 'support/test_fonts.dart';
 
 final class TestWallet implements WalletRepository {
   bool enabled = true;
@@ -13,6 +18,9 @@ final class TestWallet implements WalletRepository {
   bool failCreate = false;
   int minimumMinor = 100;
   int reads = 0;
+  List<int>? presets;
+  bool allowCustom = true;
+  AppFailure? createFailure;
   Map<String, dynamic>? response;
   String book = 'simulated';
   final keys = <String>[];
@@ -35,6 +43,8 @@ final class TestWallet implements WalletRepository {
     'reserved_minor': 0,
     'minimum_minor': minimumMinor,
     'maximum_minor': 100000,
+    if (presets != null) 'preset_amounts_minor': presets,
+    'allow_custom_amount': allowCustom,
     'history': {'items': <Map<String, dynamic>>[], 'next_cursor': null},
   };
   @override
@@ -52,6 +62,7 @@ final class TestWallet implements WalletRepository {
   Future<Map<String, dynamic>> create(int amountMinor, String key) async {
     keys.add(key);
     amounts.add(amountMinor);
+    if (createFailure != null) throw createFailure!;
     if (failCreate) {
       throw const AppFailure(
         kind: FailureKind.unknown,
@@ -63,6 +74,203 @@ final class TestWallet implements WalletRepository {
 }
 
 void main() {
+  setUpAll(loadTestFonts);
+
+  for (final (width, height, scale, dark) in [
+    (390.0, 844.0, 1.0, false),
+    (320.0, 640.0, 1.6, false),
+    (390.0, 844.0, 1.0, true),
+    (1024.0, 900.0, 1.0, false),
+  ]) {
+    testWidgets('top-up selector fits $width at $scale; dark=$dark', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, height);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repository = TestWallet()
+        ..book = 'live'
+        ..minimumMinor = 20000
+        ..presets = [20000, 30000, 40000, 50000, 60000, 70000, 80000];
+      final wallet = await repository.summary();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('driver-preview'),
+          child: MaterialApp(
+            theme: dark ? VtsaTheme.dark() : VtsaTheme.light(),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => TopupAmountDialog(
+                      repository: repository,
+                      wallet: wallet,
+                    ),
+                  ),
+                  child: const Text('Open top-up'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open top-up'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await preview(tester, 'topup-$width-$scale-$dark');
+      await tester.ensureVisible(find.text('Other amount'));
+      await tester.tap(find.text('Other amount'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '1000000.00');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with PHP 1000000.00'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Enter no more than PHP 1000.00.'), findsOneWidget);
+      await preview(tester, 'topup-error-$width-$scale-$dark');
+      expect(repository.amounts, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  Future<void> openAmounts(WidgetTester tester, TestWallet repository) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WalletScreen(repository: repository, allowRealPayments: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add money'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('presets expand beyond six and submit the chosen amount', (
+    tester,
+  ) async {
+    final repository = TestWallet()
+      ..book = 'live'
+      ..presets = [20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000];
+    await openAmounts(tester, repository);
+    expect(find.text('Other amount'), findsOneWidget);
+    expect(find.text('PHP 800.00'), findsNothing);
+    await tester.tap(find.text('More amounts (2)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('PHP 800.00'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(
+            find.ancestor(
+              of: find.text('PHP 800.00'),
+              matching: find.byType(ChoiceChip),
+            ),
+          )
+          .selected,
+      isTrue,
+    );
+    await tester.tap(find.text('Continue with PHP 800.00'));
+    await tester.pumpAndSettle();
+    expect(repository.amounts, [80000]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'custom entry has inline minimum validation and updates Continue',
+    (tester) async {
+      final repository = TestWallet()
+        ..book = 'live'
+        ..presets = [20000, 50000]
+        ..minimumMinor = 20000;
+      await openAmounts(tester, repository);
+      await tester.tap(find.text('Other amount'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '100');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with PHP 100.00'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter at least PHP 200.00.'), findsOneWidget);
+      expect(find.textContaining('Retry keeps'), findsNothing);
+      expect(repository.amounts, isEmpty);
+      await tester.enterText(find.byType(TextField), '250.50');
+      await tester.pumpAndSettle();
+      expect(find.text('Enter at least PHP 200.00.'), findsNothing);
+      await tester.tap(find.text('Continue with PHP 250.50'));
+      await tester.pumpAndSettle();
+      expect(repository.amounts, [25050]);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('preset-only policy hides custom entry and requires a choice', (
+    tester,
+  ) async {
+    final repository = TestWallet()
+      ..book = 'live'
+      ..presets = [50000]
+      ..allowCustom = false;
+    await openAmounts(tester, repository);
+    expect(find.text('Other amount'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a top-up amount.'), findsOneWidget);
+    expect(repository.amounts, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('opening Add money refreshes admin settings', (tester) async {
+    final repository = TestWallet()
+      ..book = 'live'
+      ..presets = [20000];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WalletScreen(repository: repository, allowRealPayments: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    repository.presets = [50000];
+    repository.allowCustom = false;
+    await tester.tap(find.text('Add money'));
+    await tester.pumpAndSettle();
+    expect(find.text('PHP 500.00'), findsOneWidget);
+    expect(find.text('PHP 200.00'), findsNothing);
+    expect(find.text('Other amount'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a policy rejection reloads options and allows a new selection', (
+    tester,
+  ) async {
+    final repository = TestWallet()
+      ..book = 'live'
+      ..presets = [20000]
+      ..createFailure = const AppFailure(
+        kind: FailureKind.validation,
+        code: 'INVALID_TOPUP_AMOUNT',
+        message: 'Refresh Wallet to see the latest options.',
+      );
+    await openAmounts(tester, repository);
+    await tester.tap(find.text('PHP 200.00'));
+    await tester.pumpAndSettle();
+    repository.presets = [50000];
+    await tester.tap(find.text('Continue with PHP 200.00'));
+    await tester.pumpAndSettle();
+    expect(find.text('PHP 500.00'), findsOneWidget);
+    expect(find.text('Retry same request'), findsNothing);
+    repository.createFailure = null;
+    await tester.tap(find.text('PHP 500.00'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with PHP 500.00'));
+    await tester.pumpAndSettle();
+    expect(repository.amounts, [20000, 50000]);
+    expect(repository.keys[0], isNot(repository.keys[1]));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('live pending QR renders a payment code', (tester) async {
     final repository = TestWallet();
     final row = <String, dynamic>{
@@ -292,12 +500,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('PHP 100.00'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '1.00');
-    await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Enter an amount within the displayed limits.'),
-      findsOneWidget,
-    );
+    await tester.tap(find.textContaining('Continue with'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter at least PHP 100.00.'), findsOneWidget);
     expect(repository.keys, isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
   });
@@ -317,7 +523,8 @@ void main() {
       await tester.tap(find.text('Create test top-up'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '123.45');
-      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Continue with'));
       await tester.pumpAndSettle();
       expect(find.text('Connection interrupted'), findsOneWidget);
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);

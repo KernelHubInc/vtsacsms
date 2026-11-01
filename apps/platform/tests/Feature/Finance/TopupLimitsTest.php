@@ -9,6 +9,7 @@ use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Payments\Application\Qr\QrTopups;
 use App\Modules\Payments\Application\Qr\TopupLimits;
 use App\Modules\Payments\Application\Qr\WalletException;
+use App\Modules\Payments\Domain\Models\WalletTopupSetting;
 use Filament\Facades\Filament;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -17,6 +18,92 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class TopupLimitsTest extends TenantSecurityTestCase
 {
+    public function test_view_only_administrators_cannot_change_topup_settings(): void
+    {
+        $tenant = $this->createTenant('view-only-presets');
+        $user = $this->createUser();
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $membership = $this->createMembership($tenant, $user);
+            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'viewer', [PermissionKey::TenantSettingsView]));
+            foreach ([['addTopupPreset'], ['removeTopupPreset', 0], ['moveTopupPreset', 0, 1], ['saveTopupLimits']] as $action) {
+                Livewire::test(SystemSettings::class)->call(...$action)->assertForbidden();
+            }
+            $this->assertDatabaseCount('wallet_topup_settings', 0);
+        });
+    }
+
+    public function test_dynamic_presets_are_ordered_audited_and_enforced_without_changing_existing_requests(): void
+    {
+        config()->set(['wallet.minimum_minor' => 100, 'wallet.maximum_minor' => 500000,
+            'wallet.mode' => 'simulated', 'features.simulated_payments' => true, 'kyc.required_for_wallet' => false]);
+        $tenant = $this->createTenant('dynamic-presets');
+        $other = $this->createTenant('isolated-presets');
+        $user = $this->createUser();
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $membership = $this->createMembership($tenant, $user);
+            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'settings', [PermissionKey::TenantSettingsView, PermissionKey::TenantSettingsManage]));
+            $page = Livewire::test(SystemSettings::class)
+                ->set('topupMinimum', '200.00')->set('topupMaximum', '2000.00')
+                ->set('topupPresets', [
+                    ['amount' => '200.00', 'enabled' => true],
+                    ['amount' => '500.00', 'enabled' => false],
+                    ['amount' => '1000.00', 'enabled' => true],
+                ])->set('topupAllowCustom', false)
+                ->call('moveTopupPreset', 2, -1)->call('saveTopupLimits')->assertHasNoErrors();
+            $this->assertSame([20000, 100000], app(TopupLimits::class)->current()['preset_amounts_minor']);
+            $this->assertFalse(app(TopupLimits::class)->current()['allow_custom_amount']);
+            $this->assertSame(100000, WalletTopupSetting::query()->firstOrFail()->presets[1]['amount_minor']);
+            foreach ([10000, 50000, 30000, 200001] as $amount) {
+                try {
+                    app(QrTopups::class)->create($user->public_id, $amount, (string) Str::ulid());
+                    $this->fail('An unlisted or out-of-range amount was accepted.');
+                } catch (WalletException $exception) {
+                    $this->assertSame('INVALID_TOPUP_AMOUNT', $exception->errorCode);
+                }
+            }
+            $key = (string) Str::ulid();
+            $order = app(QrTopups::class)->create($user->public_id, 20000, $key);
+            $page->call('removeTopupPreset', 0)->call('saveTopupLimits')->assertHasNoErrors();
+            $this->assertSame($order->id, app(QrTopups::class)->create($user->public_id, 20000, $key)->id);
+            $this->assertDatabaseHas('audit_events', ['tenant_id' => $tenant->id, 'action' => 'payments.wallet_topup_limits.updated']);
+            $page->set('topupAllowCustom', true)->call('saveTopupLimits')->assertHasNoErrors();
+            $this->assertSame(25000, app(QrTopups::class)->create($user->public_id, 25000, (string) Str::ulid())->amount_minor);
+        });
+        $this->withinTenant($other, $user, function (): void {
+            $this->assertTrue(app(TopupLimits::class)->current()['allow_custom_amount']);
+            $this->assertSame([20000, 50000, 100000, 200000], app(TopupLimits::class)->current()['preset_amounts_minor']);
+        });
+    }
+
+    public function test_admin_validates_presets_and_supports_more_than_a_fixed_number_of_buttons(): void
+    {
+        $tenant = $this->createTenant('preset-validation');
+        $user = $this->createUser();
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $membership = $this->createMembership($tenant, $user);
+            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'settings', [PermissionKey::TenantSettingsView, PermissionKey::TenantSettingsManage]));
+            $page = Livewire::test(SystemSettings::class)->set('topupMinimum', '1.00')->set('topupMaximum', '2000.00');
+            $page->set('topupPresets', [['amount' => '200', 'enabled' => true], ['amount' => '200.00', 'enabled' => true]])
+                ->call('saveTopupLimits')->assertHasErrors(['topupPresets.0.amount_minor']);
+            foreach (['0', '2000.01', '-1', '1.001', 'hello'] as $amount) {
+                $page->set('topupPresets', [['amount' => $amount, 'enabled' => true]])->call('saveTopupLimits')->assertHasErrors();
+            }
+            $page->set('topupPresets', [])->set('topupAllowCustom', false)->call('saveTopupLimits')->assertHasErrors(['topupPresets']);
+            $page->set('topupPresets', [['amount' => '200', 'enabled' => false]])->call('saveTopupLimits')->assertHasErrors(['topupPresets']);
+            $presets = array_map(fn (int $amount): array => ['amount' => (string) $amount, 'enabled' => true], range(1, 120));
+            $page->set('topupPresets', $presets)->call('saveTopupLimits')->assertHasNoErrors();
+            $this->assertCount(120, app(TopupLimits::class)->current()['preset_amounts_minor']);
+            $page->call('addTopupPreset')->assertCount('topupPresets', 121)
+                ->call('removeTopupPreset', 120)->assertCount('topupPresets', 120);
+        });
+    }
+
     public function test_admin_limits_are_tenant_scoped_audited_and_enforced_for_new_topups(): void
     {
         config()->set(['wallet.minimum_minor' => 100, 'wallet.maximum_minor' => 100,
@@ -41,7 +128,7 @@ final class TopupLimitsTest extends TenantSecurityTestCase
                 ->call('saveTopupLimits')
                 ->assertHasNoErrors();
 
-            $this->assertSame(['minimum_minor' => 10000, 'maximum_minor' => 50000], app(TopupLimits::class)->current());
+            $this->assertSame(['minimum_minor' => 10000, 'maximum_minor' => 50000, 'preset_amounts_minor' => [], 'allow_custom_amount' => true], app(TopupLimits::class)->current());
             $this->assertDatabaseHas('audit_events', ['tenant_id' => $tenant->getKey(), 'action' => 'payments.wallet_topup_limits.updated']);
 
             try {
@@ -64,7 +151,7 @@ final class TopupLimitsTest extends TenantSecurityTestCase
         });
 
         $this->withinTenant($other, $user, function (): void {
-            $this->assertSame(['minimum_minor' => 100, 'maximum_minor' => 100], app(TopupLimits::class)->current());
+            $this->assertSame(['minimum_minor' => 100, 'maximum_minor' => 100, 'preset_amounts_minor' => [], 'allow_custom_amount' => true], app(TopupLimits::class)->current());
             $this->assertFalse(SystemSettings::canAccess());
         });
     }

@@ -95,7 +95,7 @@ final class PrepaidWalletTest extends TenantSecurityTestCase
             return (string) $this->postJson('/api/v1/auth/login', ['email' => $actor->email, 'password' => 'password', 'tenant_id' => $scope->getKey(), 'device_name' => 'Wallet test'])->assertOk()->json('data.token');
         };
         $token = $login($user, $tenant);
-        $this->withToken($token)->getJson('/api/v1/wallet')->assertOk()->assertJsonPath('data.mode', 'simulated')->assertHeader('Cache-Control', 'no-store, private');
+        $this->withToken($token)->getJson('/api/v1/wallet')->assertOk()->assertJsonPath('data.mode', 'simulated')->assertJsonStructure(['data' => ['preset_amounts_minor', 'allow_custom_amount']])->assertHeader('Cache-Control', 'no-store, private');
         $id = $this->postJson('/api/v1/wallet/topups', ['amount_minor' => 500, 'idempotency_key' => (string) Str::ulid()])->assertOk()->json('data.id');
         $this->postJson('/api/v1/wallet/topups', ['amount_minor' => 0, 'idempotency_key' => (string) Str::ulid()])->assertUnprocessable();
         $this->withToken($login($other, $tenant))->getJson('/api/v1/wallet/topups/'.$id)->assertNotFound();

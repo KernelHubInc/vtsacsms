@@ -50,6 +50,9 @@ final readonly class QrTopups
         if ($amount < $limits['minimum_minor'] || $amount > $limits['maximum_minor']) {
             throw new WalletException('INVALID_TOPUP_AMOUNT', 'Choose an amount within the displayed limits.', 422);
         }
+        if (! $limits['allow_custom_amount'] && ! in_array($amount, $limits['preset_amounts_minor'], true)) {
+            throw new WalletException('INVALID_TOPUP_AMOUNT', 'Choose one of the available top-up amounts. Refresh Wallet to see the latest options.', 422);
+        }
         // Persist the order before the network call. A retry always returns this same order.
         $topup = DB::transaction(function () use ($subject, $amount, $key, $book, $accountId): QrTopup {
             $row = QrTopup::query()->firstOrCreate(['subject_id' => $subject, 'book' => $book, 'idempotency_key' => $key],

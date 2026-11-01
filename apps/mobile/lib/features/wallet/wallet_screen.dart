@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
-import 'package:vtsa_mobile/core/ids/ulid_generator.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
+import 'package:vtsa_mobile/features/wallet/topup_amount_dialog.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -120,10 +120,15 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _add() async {
+    if (_loading) return;
+    await _load();
+    if (!mounted || _error != null || _wallet?['topups_enabled'] != true) {
+      return;
+    }
     final row = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) =>
-          _AmountDialog(repository: widget.repository!, wallet: _wallet!),
+          TopupAmountDialog(repository: widget.repository!, wallet: _wallet!),
     );
     if (row != null && mounted) await _open(row);
   }
@@ -296,98 +301,6 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
     );
   }
-}
-
-class _AmountDialog extends StatefulWidget {
-  const _AmountDialog({required this.repository, required this.wallet});
-  final WalletRepository repository;
-  final Map<String, dynamic> wallet;
-  @override
-  State<_AmountDialog> createState() => _AmountDialogState();
-}
-
-class _AmountDialogState extends State<_AmountDialog> {
-  final _amount = TextEditingController();
-  final _key = UlidGenerator().next();
-  bool _busy = false;
-  int? _submitted;
-  String? _error;
-  @override
-  void dispose() {
-    _amount.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final amount = _submitted ?? parseWalletAmount(_amount.text);
-    if (amount == null ||
-        amount < (widget.wallet['minimum_minor'] as int) ||
-        amount > (widget.wallet['maximum_minor'] as int)) {
-      setState(() => _error = 'Enter an amount within the displayed limits.');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-      _submitted = amount;
-    });
-    try {
-      final row = await widget.repository.create(amount, _key);
-      if (mounted) Navigator.pop(context, row);
-    } on Object catch (error) {
-      if (mounted) setState(() => _error = _message(error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.wallet['mode'] == 'simulated'
-          ? 'Test top-up'
-          : 'Add prepaid credit',
-    ),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${walletMoney(widget.wallet['minimum_minor'] as int)} – ${walletMoney(widget.wallet['maximum_minor'] as int)}',
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _amount,
-            enabled: !_busy && _submitted == null,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Amount in PHP',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!),
-            const Text(
-              'Retry keeps the same request. Check Top-ups before creating another request.',
-            ),
-          ],
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: _busy ? null : () => Navigator.pop(context),
-        child: const Text('Close'),
-      ),
-      VtsaButton(
-        label: _submitted == null ? 'Continue' : 'Retry same request',
-        onPressed: _busy ? null : _submit,
-        loading: _busy,
-      ),
-    ],
-  );
 }
 
 class WalletTopupScreen extends StatefulWidget {

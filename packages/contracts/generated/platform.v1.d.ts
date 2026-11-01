@@ -1743,6 +1743,10 @@ export interface components {
             topups_enabled: boolean;
             minimum_minor: number;
             maximum_minor: number;
+            /** @description Enabled PHP amounts in admin-defined order, within current limits. No fixed preset count. Older servers may omit this field. */
+            preset_amounts_minor?: number[];
+            /** @description Whether new requests may use other amounts within the limits. Defaults to true when omitted by an older server. Existing idempotent requests retain their original amount. */
+            allow_custom_amount?: boolean;
             history: {
                 next_cursor: string | null;
                 items: {

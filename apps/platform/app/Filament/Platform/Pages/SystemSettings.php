@@ -37,15 +37,24 @@ final class SystemSettings extends Page
 
     public string $topupMaximum = '';
 
+    /** @var list<array{amount:string,enabled:bool}> */
+    public array $topupPresets = [];
+
+    public bool $topupAllowCustom = true;
+
     #[Locked]
     public string $tenantId = '';
 
     public function mount(MapConfigurationResolver $maps, TopupLimits $limits, CurrentTenant $tenant): void
     {
         $this->tenantId = $tenant->get()->tenantId;
-        $amounts = $limits->current();
+        $amounts = $limits->settings();
         $this->topupMinimum = $this->money($amounts['minimum_minor']);
         $this->topupMaximum = $this->money($amounts['maximum_minor']);
+        $this->topupPresets = array_map(fn (array $preset): array => [
+            'amount' => $this->money($preset['amount_minor']), 'enabled' => $preset['enabled'],
+        ], $amounts['presets']);
+        $this->topupAllowCustom = $amounts['allow_custom_amount'];
         $default = $maps->forSurface(MapSurface::Default);
         $raw = $maps->rawSettings() ?? [];
 
@@ -114,17 +123,52 @@ final class SystemSettings extends Page
         $this->validate([
             'topupMinimum' => ['required', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'],
             'topupMaximum' => ['required', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'],
+            'topupPresets' => ['present', 'array', 'list'],
+            'topupPresets.*' => ['required', 'array:amount,enabled'],
+            'topupPresets.*.amount' => ['required', 'string', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/'],
+            'topupPresets.*.enabled' => ['required', 'boolean'],
+            'topupAllowCustom' => ['required', 'boolean'],
+        ], [
+            'topupPresets.*.amount.required' => 'Enter a PHP amount or remove this preset.',
+            'topupPresets.*.amount.regex' => 'Enter a PHP amount with no more than two decimal places.',
         ]);
 
         /** @var User $user */
         $user = auth()->user();
-        $limits->update($user, $this->minor($this->topupMinimum), $this->minor($this->topupMaximum));
+        $limits->update($user, $this->minor($this->topupMinimum), $this->minor($this->topupMaximum),
+            array_map(fn (array $preset): array => ['amount_minor' => $this->minor($preset['amount']), 'enabled' => (bool) $preset['enabled']], $this->topupPresets),
+            $this->topupAllowCustom);
 
         Notification::make()
-            ->title('Wallet top-up limits saved')
-            ->body('The mobile app will show the new range the next time Wallet refreshes. Existing requests keep their original amount.')
+            ->title('Wallet top-up settings saved')
+            ->body('Android and the browser app will load these settings when Wallet refreshes or Add money opens. Existing payment requests keep their original amount.')
             ->success()
             ->send();
+    }
+
+    public function addTopupPreset(): void
+    {
+        abort_unless($this->canManage(), 403);
+        $this->topupPresets[] = ['amount' => '', 'enabled' => true];
+    }
+
+    public function removeTopupPreset(int $index): void
+    {
+        abort_unless($this->canManage(), 403);
+        $presets = $this->topupPresets;
+        unset($presets[$index]);
+        $this->topupPresets = array_values($presets);
+        $this->resetValidation();
+    }
+
+    public function moveTopupPreset(int $index, int $direction): void
+    {
+        abort_unless($this->canManage(), 403);
+        if (! in_array($direction, [-1, 1], true) || ! isset($this->topupPresets[$index], $this->topupPresets[$index + $direction])) {
+            return;
+        }
+        [$this->topupPresets[$index], $this->topupPresets[$index + $direction]] = [$this->topupPresets[$index + $direction], $this->topupPresets[$index]];
+        $this->resetValidation();
     }
 
     private function minor(string $amount): int
