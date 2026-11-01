@@ -131,9 +131,7 @@ class _TopupAmountDialogState extends State<TopupAmountDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Minimum ${walletMoney(_minimum)} · Maximum ${walletMoney(_maximum)}',
-              ),
+              Text('Minimum ${walletMoney(_minimum)}'),
               const SizedBox(height: 16),
               if (presets.isNotEmpty) ...[
                 const Text('Choose an amount'),

@@ -15,6 +15,8 @@ Payments owns the tenant-wide top-up policy used by Personal, Business and Fleet
 
 Open **Wallet > Add money**, choose a preset or **Other amount**, review the amount on **Continue**, then follow the existing QR payment flow. The first six presets appear initially; **More amounts** reveals the rest. No amount is selected automatically. An empty preset list with Other amount enabled provides custom entry only.
 
+The top-up dialog label shows only the minimum amount. The maximum remains enforced; entering more than it shows an inline validation message.
+
 Android and the browser app share this Flutter screen and backend policy. Settings refresh when Wallet loads or Add money opens. The updated client must first be released; subsequent admin changes need no new app build. Older clients retain their custom input, but the backend still enforces any preset-only policy.
 
 ## API and payment behavior
