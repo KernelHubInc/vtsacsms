@@ -7,6 +7,16 @@ import 'package:vtsa_mobile/features/notices/driver_notices.dart';
 import 'package:vtsa_mobile/features/notices/driver_notices_screen.dart';
 
 void main() {
+  test('notification navigation is consumed once and cleared on logout', () {
+    final controller = DriverNoticesController(_Repository([]));
+    controller.requestOpen();
+    expect(controller.takeOpenRequest(), isTrue);
+    expect(controller.takeOpenRequest(), isFalse);
+    controller.requestOpen();
+    controller.clear();
+    expect(controller.takeOpenRequest(), isFalse);
+    controller.dispose();
+  });
   DriverNotice notice({String id = 'notice-1', bool showOnOpen = true}) =>
       DriverNotice(
         id: id,

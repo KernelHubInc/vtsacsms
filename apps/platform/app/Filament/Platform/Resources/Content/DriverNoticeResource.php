@@ -7,9 +7,11 @@ namespace App\Filament\Platform\Resources\Content;
 use App\Filament\Platform\Resources\Content\Pages\ManageDriverNotices;
 use App\Models\User;
 use App\Modules\CMS\Domain\Models\DriverNotice;
+use App\Modules\Notifications\Application\DriverNoticePush;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Tenancy\Application\CurrentTenant;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -52,6 +54,9 @@ final class DriverNoticeResource extends CmsResource
                 ->required()->rule('after:starts_at'),
             Toggle::make('show_on_open')->label('Show banner when app opens')->default(true)
                 ->helperText('The notice will also appear in the Updates list.'),
+            Toggle::make('send_push')->label('Send push notification')->default(false)
+                ->disabled(fn (): bool => ! self::canPublish())
+                ->helperText('Once per signed-in Android installation while published and within the dates above. Editing does not resend to devices already notified.'),
         ])->columns(2);
     }
 
@@ -64,7 +69,21 @@ final class DriverNoticeResource extends CmsResource
             TextColumn::make('starts_at')->dateTime()->sortable(),
             TextColumn::make('ends_at')->dateTime()->sortable(),
             IconColumn::make('show_on_open')->boolean(),
-        ])->recordActions([self::auditedEditAction()]);
+            IconColumn::make('send_push')->label('Push requested')->boolean(),
+        ])->recordActions([self::auditedEditAction(),
+            Action::make('pushDelivery')->label('Push delivery')->icon('heroicon-o-bell')
+                ->visible(fn (DriverNotice $record): bool => self::canViewAny()
+                    && $record->tenant_id === app(CurrentTenant::class)->get()->tenantId)
+                ->modalHeading('Notification delivery')->modalSubmitAction(false)->modalCancelActionLabel('Close')
+                ->modalContent(function (DriverNotice $record) {
+                    abort_unless(self::canViewAny() && $record->tenant_id === app(CurrentTenant::class)->get()->tenantId, 403);
+
+                    return view('filament.notifications.notice-push-delivery', [
+                        'enabled' => (bool) config('notice_push.enabled'),
+                        'report' => app(DriverNoticePush::class)->report($record->tenant_id, $record->id),
+                    ]);
+                }),
+        ]);
     }
 
     public static function getPages(): array
@@ -106,6 +125,7 @@ final class DriverNoticeResource extends CmsResource
             $data['tenant_id'] = app(CurrentTenant::class)->get()->tenantId;
             if (! self::canPublish()) {
                 $data['status'] = 'draft';
+                $data['send_push'] = false;
             }
 
             return $data;
@@ -118,6 +138,7 @@ final class DriverNoticeResource extends CmsResource
             unset($data['tenant_id']);
             if (! self::canPublish()) {
                 unset($data['status']);
+                unset($data['send_push']);
             }
 
             return $data;

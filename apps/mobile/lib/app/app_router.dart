@@ -27,6 +27,7 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     dependencies.bootstrap,
     dependencies.auth,
     ?dependencies.accounts,
+    ?dependencies.notices,
   ]),
   redirect: (context, state) {
     final ready = dependencies.bootstrap.isReady;
@@ -53,6 +54,9 @@ GoRouter createAppRouter(AppDependencies dependencies) => GoRouter(
     }
     if (!dependencies.bootstrap.onboardingComplete) {
       return state.matchedLocation == '/onboarding' ? null : '/onboarding';
+    }
+    if (dependencies.notices?.takeOpenRequest() == true) {
+      return '/updates';
     }
     if (state.matchedLocation == '/splash' ||
         state.matchedLocation == '/onboarding') {

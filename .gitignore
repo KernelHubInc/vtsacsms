@@ -45,3 +45,5 @@ Thumbs.db
 !/services/kyc-service/.env.example
 __pycache__/
 *.py[cod]
+/apps/mobile/android/app/google-services.json
+**/*service-account*.json

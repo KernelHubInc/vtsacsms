@@ -224,6 +224,10 @@ final class AppDependencies {
           onNotice: () async {
             await dependencies.notices?.refresh();
           },
+          onOpened: () async {
+            dependencies.notices?.requestOpen();
+            await dependencies.notices?.refresh();
+          },
         );
       } on Object {
         // A Firebase outage must not block sign-in, charging, or wallet access.

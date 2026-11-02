@@ -28,11 +28,13 @@ final class FirebaseNoticePushRegistration implements NoticePushRegistration {
     required this.client,
     required this.messaging,
     required this.onNotice,
+    this.onOpened,
   });
 
   final ApiClient client;
   final FirebaseMessaging messaging;
   final Future<void> Function() onNotice;
+  final Future<void> Function()? onOpened;
   StreamSubscription<String>? _registrations;
   StreamSubscription<RemoteMessage>? _openedMessages;
   StreamSubscription<RemoteMessage>? _foregroundMessages;
@@ -45,7 +47,7 @@ final class FirebaseNoticePushRegistration implements NoticePushRegistration {
       if (_active) unawaited(_sendInstallationId(installationId));
     }, onError: (Object _) {});
     _openedMessages ??= FirebaseMessaging.onMessageOpenedApp.listen((_) {
-      if (_active) unawaited(onNotice());
+      if (_active) unawaited((onOpened ?? onNotice)());
     });
     _foregroundMessages ??= FirebaseMessaging.onMessage.listen((_) {
       if (_active) unawaited(onNotice());
@@ -55,13 +57,14 @@ final class FirebaseNoticePushRegistration implements NoticePushRegistration {
       final permission = await messaging.requestPermission();
       if (permission.authorizationStatus != AuthorizationStatus.authorized &&
           permission.authorizationStatus != AuthorizationStatus.provisional) {
+        _active = false;
         await _removeServerRegistration();
         await messaging.unregister();
         return;
       }
       await messaging.register();
       final openingMessage = await messaging.getInitialMessage();
-      if (openingMessage != null && _active) await onNotice();
+      if (openingMessage != null && _active) await (onOpened ?? onNotice)();
     } on Object {
       // Notices still load from the API when Firebase or connectivity is unavailable.
     }
@@ -90,6 +93,7 @@ final class FirebaseNoticePushRegistration implements NoticePushRegistration {
   Future<void> unregister() async {
     if (!_active) return;
     _active = false;
+    await _removeServerRegistration();
     try {
       await messaging.unregister();
     } on Object {

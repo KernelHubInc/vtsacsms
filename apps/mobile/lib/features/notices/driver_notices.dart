@@ -70,6 +70,18 @@ final class DriverNoticesController extends ChangeNotifier {
   bool _failed = false;
   int _generation = 0;
   final Set<String> _dismissedBannerIds = {};
+  bool _openRequested = false;
+
+  void requestOpen() {
+    _openRequested = true;
+    notifyListeners();
+  }
+
+  bool takeOpenRequest() {
+    final requested = _openRequested;
+    _openRequested = false;
+    return requested;
+  }
 
   bool get loading => _loading;
   bool get failed => _failed;
@@ -113,6 +125,7 @@ final class DriverNoticesController extends ChangeNotifier {
   }
 
   void clear() {
+    _openRequested = false;
     _generation++;
     _items = const [];
     _loading = false;

@@ -4,6 +4,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Staging Firebase credentials must never be silently bundled into production builds.
+if (providers.environmentVariable("EVCS_FIREBASE_ENABLED").getOrElse("0") == "1") {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.vtsa.vtsa_mobile"
     compileSdk = flutter.compileSdkVersion

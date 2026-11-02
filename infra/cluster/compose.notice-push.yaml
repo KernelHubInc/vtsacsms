@@ -1,0 +1,19 @@
+# Optional overlay. The host credential must exist before starting these services.
+# Apply only to the environment that owns the Firebase project.
+services:
+  platform:
+    volumes:
+      - type: bind
+        source: ${NOTICE_PUSH_CREDENTIALS_HOST:?Private Firebase credential path is required}
+        target: /run/secrets/firebase-notice-push.json
+        read_only: true
+        bind:
+          create_host_path: false
+  scheduler:
+    volumes:
+      - type: bind
+        source: ${NOTICE_PUSH_CREDENTIALS_HOST:?Private Firebase credential path is required}
+        target: /run/secrets/firebase-notice-push.json
+        read_only: true
+        bind:
+          create_host_path: false

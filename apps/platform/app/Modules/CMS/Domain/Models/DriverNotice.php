@@ -25,6 +25,7 @@ final class DriverNotice extends CmsModel
     {
         return [
             'show_on_open' => 'boolean',
+            'send_push' => 'boolean',
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
         ];
