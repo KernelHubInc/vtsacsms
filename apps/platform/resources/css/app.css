@@ -69,7 +69,11 @@
     .site-header__inner { width: min(1240px, calc(100% - 2rem)); min-height: 76px; margin: auto; display: flex; align-items: center; gap: 2rem; }
     .brand { display: inline-flex; align-items: center; text-decoration: none; margin-right: auto; }
     .power-solutions-logo { display: inline-flex; align-items: center; flex: none; }
-    .power-solutions-logo img { display: block; width: auto; height: 48px; max-width: 100%; object-fit: contain; border-radius: 3px; background: #fff; }
+    .power-solutions-logo img { display: block; width: auto; height: 48px; max-width: 100%; object-fit: contain; }
+    .power-solutions-logo .brand-logo-dark { display: none; }
+    .dark .power-solutions-logo .brand-logo-light { display: none; }
+    .dark .power-solutions-logo .brand-logo-dark,
+    .power-solutions-logo--inverse .brand-logo-dark { display: block; }
     .brand--footer .power-solutions-logo img { height: 48px; }
     .desktop-nav { display: flex; align-items: center; gap: 1.5rem; }.desktop-nav a { font-size: .88rem; font-weight: 650; text-decoration: none; }.desktop-nav a:hover{text-decoration:underline;text-underline-offset:.4rem}
     .button { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: .75rem 1.1rem; background: var(--public-ink-soft); color: white; border: 1px solid rgba(8,27,53,.18); border-radius: 999px; font-weight: 760; text-decoration: none; box-shadow: 0 8px 24px rgba(8,27,53,.12); cursor: pointer; }

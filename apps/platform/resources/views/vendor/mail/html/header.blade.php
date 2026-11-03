@@ -2,7 +2,7 @@
 <td class="header">
 <a href="{{ $url }}" style="display: inline-block;">
 <img
-    src="{{ asset('branding/power-solutions-email-logo.png?v=20261103-padding') }}"
+    src="{{ asset('branding/power-solutions-email-logo.png?v=20261103-theme') }}"
     alt="Power Solutions"
     width="220"
     style="display: block; width: 220px; max-width: 100%; height: auto; border: 0;"

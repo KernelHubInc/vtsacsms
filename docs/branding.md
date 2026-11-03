@@ -8,7 +8,7 @@ The official client-supplied artwork (November 3, 2026) includes EVCS, POWER SOL
 
 ## Approved artwork
 
-`apps/platform/public/branding/power-solutions-logo-artwork.png` preserves the tightly cropped 1875 × 549 source artwork from the supplied JPG. The displayed `power-solutions-logo.png` is a 2003 × 677 PNG with 64 pixels of white clear space on every side, so the lettering and tiles do not touch the image edges. The original lettering, gradients, motif and byline are preserved without resampling; no logo text is reconstructed with system fonts. The large blank margins from the supplied JPG remain removed. The white plate also keeps the navy lettering readable on dark headers. Do not invert or recolor the artwork.
+`apps/platform/public/branding/power-solutions-logo-artwork.png` preserves the tightly cropped 1875 × 549 source artwork from the supplied JPG. Display assets are 2003 × 677 transparent PNGs with 64 pixels of clear space on every side. Their lettering, tile motif, layout and byline come from that original artwork. The export pipeline removes the white matte and its edge halo, and derives solid black and white variants from the same alpha mask. Keep the full-color version on light surfaces and solid white on navy or dark surfaces. Solid black is available for monochrome documents. Do not add a white background plate or recolor the approved variants.
 
 Use the complete horizontal logo for website headers, admin/operator panels, authentication, mobile pages, email and PDF receipts. Keep its aspect ratio. Compact launcher icons, favicons and PWA install icons use the original diagonal tile motif on a white square, with safe space for OS icon masks. Historical SVG URLs embed the current artwork for compatibility; new web views use the PNG directly.
 
@@ -46,7 +46,7 @@ Brand colors do not replace operational semantics. Available, preparing, chargin
 
 ## Light, dark, and splash usage
 
-Use the complete official PNG on both light and dark surfaces; its white plate keeps the navy lettering readable. The legacy dark asset filename is retained as a copy for compatibility. Navigable mobile screens use the shared deep-navy `PowerSolutionsAppBar` with the official horizontal logo, page hierarchy, automatic back navigation, and restrained turquoise/blue geometry. Startup and onboarding are the deliberate full-screen exceptions.
+The admin and operator panels use the color PNG in light mode and the white PNG in dark mode. Their system setting follows the operating-system appearance. The shared Flutter widget also follows theme brightness; an explicit inverse flag keeps white on fixed navy headers even in light mode. Public navy navigation, authentication side panels, password reset/invitation pages and the welcome-email navy header use white explicitly. Receipt emails and PDFs keep color on their light paper. The legacy dark asset filename now contains the white variant. Launcher and install icons retain their OS-safe white square background. Navigable mobile screens use the shared deep-navy `PowerSolutionsAppBar` with the official horizontal logo, page hierarchy, automatic back navigation, and restrained turquoise/blue geometry. Startup and onboarding are the deliberate full-screen exceptions.
 
 Splash and onboarding screens use the centered horizontal lockup over the code-native Power Solutions energy-path motif. The motif combines an abstract charging route with the rising rounded tiles from the brand mark; it is decorative, scalable, and hidden from assistive technology. Do not add artificial launch delays, and keep motion restrained for reduced-motion preferences.
 
@@ -61,7 +61,7 @@ Splash and onboarding screens use the centered horizontal lockup over the code-n
 - Android adaptive and legacy icons: `apps/mobile/android/app/src/main/res/`
 - iOS icons and launch art: `apps/mobile/ios/Runner/Assets.xcassets/`
 - Flutter Web favicon/PWA icons: `apps/mobile/web/`
-- Native raster export: `tools/generate_brand_assets.ps1` (`generate_brand_assets.py` remains a compatibility entry point)
+- Native raster export: `tools/generate_brand_assets.ps1` and `tools/BrandArtwork.cs` (`generate_brand_assets.py` remains a compatibility entry point)
 
 Run the generator after replacing master artwork:
 

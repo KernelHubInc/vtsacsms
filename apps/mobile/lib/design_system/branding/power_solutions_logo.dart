@@ -16,11 +16,16 @@ class PowerSolutionsLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useWhite = inverse || Theme.of(context).brightness == Brightness.dark;
     final asset = switch (variant) {
       PowerSolutionsLogoVariant.mark =>
-        'assets/branding/power-solutions-mark.png',
+        useWhite
+            ? 'assets/branding/power-solutions-mark-white.png'
+            : 'assets/branding/power-solutions-mark-transparent.png',
       PowerSolutionsLogoVariant.horizontal =>
-        'assets/branding/power-solutions-logo-horizontal.png',
+        useWhite
+            ? 'assets/branding/power-solutions-logo-horizontal-dark.png'
+            : 'assets/branding/power-solutions-logo-horizontal.png',
     };
 
     return Semantics(
@@ -36,7 +41,7 @@ class PowerSolutionsLogo extends StatelessWidget {
           errorBuilder: (context, error, stackTrace) => Text(
             'Power Solutions',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: inverse
+              color: useWhite
                   ? Colors.white
                   : Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w800,

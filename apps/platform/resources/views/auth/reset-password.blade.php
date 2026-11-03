@@ -10,7 +10,7 @@
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-900 antialiased">
     <main class="mx-auto max-w-lg px-5 py-10 sm:py-16">
-        <img src="{{ asset('branding/power-solutions-logo.png?v=20261103-padding') }}" alt="Power Solutions" class="mx-auto mb-10 h-10 max-w-full">
+        <img src="{{ asset('branding/power-solutions-logo-white.png?v=20261103-theme') }}" alt="Power Solutions" class="mx-auto mb-10 h-10 max-w-full">
         <section class="rounded-3xl bg-white p-7 shadow-xl sm:p-10">
             <h1 class="text-3xl font-semibold tracking-tight">{{ $completed ? 'Password updated' : 'Choose a new password' }}</h1>
             @if ($completed)

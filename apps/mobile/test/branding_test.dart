@@ -27,7 +27,9 @@ void main() {
       final image = frame.image;
       expect(image.width, greaterThanOrEqualTo(1800));
       expect(image.width / image.height, inInclusiveRange(2.9, 3.1));
-      final pixels = (await image.toByteData())!;
+      final pixels = (await image.toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      ))!;
       var first = image.height;
       var last = 0;
       var left = image.width;
@@ -52,6 +54,50 @@ void main() {
       expect(image.height - last - 1, inInclusiveRange(64, 68));
       expect(left, inInclusiveRange(64, 68));
       expect(image.width - right - 1, inInclusiveRange(64, 68));
+      expect(pixels.getUint8(3), 0);
+      expect(pixels.getUint8((image.width * image.height - 1) * 4 + 3), 0);
+
+      final monoImages = <ui.Image>[];
+      for (final name in [
+        'power-solutions-logo-horizontal-dark.png',
+        'power-solutions-logo-black.png',
+      ]) {
+        final monoCodec = await ui.instantiateImageCodec(
+          File('assets/branding/$name').readAsBytesSync(),
+        );
+        monoImages.add((await monoCodec.getNextFrame()).image);
+        monoCodec.dispose();
+      }
+      final white = (await monoImages[0].toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      ))!;
+      final black = (await monoImages[1].toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      ))!;
+      var visible = 0;
+      var alphaMatches = true;
+      var solidInks = true;
+      for (var offset = 0; offset < pixels.lengthInBytes; offset += 4) {
+        final alpha = pixels.getUint8(offset + 3);
+        alphaMatches =
+            alphaMatches &&
+            white.getUint8(offset + 3) == alpha &&
+            black.getUint8(offset + 3) == alpha;
+        if (alpha == 0) continue;
+        visible++;
+        for (var channel = 0; channel < 3; channel++) {
+          solidInks =
+              solidInks &&
+              white.getUint8(offset + channel) == 255 &&
+              black.getUint8(offset + channel) == 0;
+        }
+      }
+      expect(visible, greaterThan(100000));
+      expect(alphaMatches, isTrue);
+      expect(solidInks, isTrue);
+      for (final mono in monoImages) {
+        mono.dispose();
+      }
       image.dispose();
       codec.dispose();
     },
@@ -68,6 +114,49 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('Power Solutions'), findsOneWidget);
+  });
+
+  testWidgets('system appearance changes the logo between color and white', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: VtsaTheme.light(),
+        darkTheme: VtsaTheme.dark(),
+        themeMode: ThemeMode.system,
+        home: const Scaffold(body: PowerSolutionsLogo()),
+      ),
+    );
+    String imageAsset() =>
+        (tester.widget<Image>(find.byType(Image)).image as AssetImage)
+            .assetName;
+    expect(imageAsset(), 'assets/branding/power-solutions-logo-horizontal.png');
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(
+      imageAsset(),
+      'assets/branding/power-solutions-logo-horizontal-dark.png',
+    );
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(imageAsset(), 'assets/branding/power-solutions-logo-horizontal.png');
+  });
+
+  testWidgets('a navy surface keeps the white logo in light mode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: VtsaTheme.light(),
+        home: const Scaffold(body: PowerSolutionsLogo(inverse: true)),
+      ),
+    );
+    expect(
+      (tester.widget<Image>(find.byType(Image)).image as AssetImage).assetName,
+      'assets/branding/power-solutions-logo-horizontal-dark.png',
+    );
   });
 
   test(

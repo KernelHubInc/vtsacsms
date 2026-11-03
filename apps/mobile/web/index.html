@@ -53,6 +53,7 @@
       height: auto;
       width: 100%;
     }
+    .startup__logo .startup__logo-dark { display: none; }
 
     .startup h1 {
       font-size: 32px;
@@ -179,6 +180,8 @@
     }
 
     @media (prefers-color-scheme: dark) {
+      .startup__logo .startup__logo-light { display: none; }
+      .startup__logo .startup__logo-dark { display: block; }
       html, body { background: #07172c; }
       .startup {
         background:
@@ -195,7 +198,7 @@
   <noscript>JavaScript is required to use Power Solutions.</noscript>
   <div class="startup" id="flutter-startup" role="status" aria-live="polite">
     <div class="startup__content">
-      <div class="startup__logo" aria-hidden="true"><img src="assets/assets/branding/power-solutions-logo-horizontal.png" alt=""></div>
+      <div class="startup__logo" aria-hidden="true"><img class="startup__logo-light" src="assets/assets/branding/power-solutions-logo-horizontal.png" alt=""><img class="startup__logo-dark" src="assets/assets/branding/power-solutions-logo-horizontal-dark.png" alt=""></div>
       <h1>Starting Power Solutions</h1>
       <p id="flutter-startup-detail">Preparing the mobile experience.</p>
       <div class="startup__bar" aria-hidden="true"></div>

@@ -1,20 +1,21 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+Add-Type -Path (Join-Path $PSScriptRoot 'BrandArtwork.cs') -ReferencedAssemblies System.Drawing
 $repo = Split-Path $PSScriptRoot -Parent
 $branding = Join-Path $repo 'apps/platform/public/branding'
 $artwork = [System.Drawing.Bitmap]::new((Join-Path $branding 'power-solutions-logo-artwork.png'))
 $padding = 64
-$master = [System.Drawing.Bitmap]::new(($artwork.Width + 2*$padding), ($artwork.Height + 2*$padding))
-$logoCanvas = [System.Drawing.Graphics]::FromImage($master)
-$logoCanvas.Clear([System.Drawing.Color]::White)
-$logoCanvas.DrawImageUnscaled($artwork, $padding, $padding)
-$logoCanvas.Dispose()
+$master = [BrandArtwork]::Transparent($artwork, $padding)
+$white = [BrandArtwork]::Monochrome($master, [System.Drawing.Color]::White)
+$black = [BrandArtwork]::Monochrome($master, [System.Drawing.Color]::Black)
 $master.Save((Join-Path $branding 'power-solutions-logo.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$white.Save((Join-Path $branding 'power-solutions-logo-white.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$black.Save((Join-Path $branding 'power-solutions-logo-black.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 
-function Save-BrandImage($image, [string]$path, [int]$width, [int]$height) {
+function Save-BrandImage($image, [string]$path, [int]$width, [int]$height, [switch]$Transparent) {
     $target = [System.Drawing.Bitmap]::new($width, $height)
     $canvas = [System.Drawing.Graphics]::FromImage($target)
-    $canvas.Clear([System.Drawing.Color]::White)
+    $canvas.Clear($(if ($Transparent) { [System.Drawing.Color]::Transparent } else { [System.Drawing.Color]::White }))
     $canvas.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $canvas.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $scale = [Math]::Min($width / $image.Width, $height / $image.Height)
@@ -39,10 +40,19 @@ $canvas.DrawImage($motif, [int]((1024-$w)/2), [int]((1024-$h)/2), $w, $h)
 $canvas.Dispose()
 
 foreach ($name in @('power-solutions-logo-horizontal.png', 'power-solutions-logo-horizontal-dark.png')) {
-    Copy-Item -LiteralPath (Join-Path $branding 'power-solutions-logo.png') -Destination (Join-Path $branding $name) -Force
-    Copy-Item -LiteralPath (Join-Path $branding 'power-solutions-logo.png') -Destination (Join-Path $repo "apps/mobile/assets/branding/$name") -Force
+    $source = if ($name.EndsWith('-dark.png')) { 'power-solutions-logo-white.png' } else { 'power-solutions-logo.png' }
+    Copy-Item -LiteralPath (Join-Path $branding $source) -Destination (Join-Path $branding $name) -Force
+    Copy-Item -LiteralPath (Join-Path $branding $source) -Destination (Join-Path $repo "apps/mobile/assets/branding/$name") -Force
 }
-Save-BrandImage $master (Join-Path $branding 'power-solutions-email-logo.png') 1200 ([int][Math]::Round(1200*$master.Height/$master.Width))
+Copy-Item -LiteralPath (Join-Path $branding 'power-solutions-logo-black.png') -Destination (Join-Path $repo 'apps/mobile/assets/branding/power-solutions-logo-black.png') -Force
+Save-BrandImage $master (Join-Path $branding 'power-solutions-email-logo.png') 1200 ([int][Math]::Round(1200*$master.Height/$master.Width)) -Transparent
+Save-BrandImage $white (Join-Path $branding 'power-solutions-email-logo-white.png') 1200 ([int][Math]::Round(1200*$master.Height/$master.Width)) -Transparent
+$transparentMotif = [BrandArtwork]::Transparent($motif, 16)
+$whiteMotif = [BrandArtwork]::Monochrome($transparentMotif, [System.Drawing.Color]::White)
+foreach ($target in @($branding, (Join-Path $repo 'apps/mobile/assets/branding'))) {
+    Save-BrandImage $transparentMotif (Join-Path $target 'power-solutions-mark-transparent.png') 512 512 -Transparent
+    Save-BrandImage $whiteMotif (Join-Path $target 'power-solutions-mark-white.png') 512 512 -Transparent
+}
 Save-BrandImage $icon (Join-Path $branding 'power-solutions-mark.png') 512 512
 Save-BrandImage $icon (Join-Path $branding 'power-solutions-favicon.png') 64 64
 $png = [System.IO.File]::ReadAllBytes((Join-Path $branding 'power-solutions-favicon.png'))
@@ -76,11 +86,14 @@ foreach ($folder in @('AppIcon.appiconset', 'LaunchImage.imageset')) {
 # Historical URLs also display the new artwork for cached clients.
 $data=[Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $branding 'power-solutions-logo.png')))
 foreach ($name in @('horizontal', 'horizontal-dark', 'stacked', 'monochrome')) {
+    $png = switch ($name) { 'horizontal-dark' { 'power-solutions-logo-white.png' }; 'monochrome' { 'power-solutions-logo-black.png' }; default { 'power-solutions-logo.png' } }
+    $data=[Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $branding $png)))
     $svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+$master.Width+'" height="'+$master.Height+'" viewBox="0 0 '+$master.Width+' '+$master.Height+'"><image width="100%" height="100%" href="data:image/png;base64,'+$data+'"/></svg>'
     [System.IO.File]::WriteAllText((Join-Path $branding "power-solutions-logo-$name.svg"), $svg)
 }
+$data=[Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $branding 'power-solutions-logo.png')))
 [System.IO.File]::WriteAllText((Join-Path $branding 'power-solutions-social-card.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="white"/><image x="80" y="130" width="1040" height="370" href="data:image/png;base64,'+$data+'"/></svg>')
 $data=[Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $branding 'power-solutions-mark.png')))
 [System.IO.File]::WriteAllText((Join-Path $branding 'power-solutions-mark.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image width="512" height="512" href="data:image/png;base64,'+$data+'"/></svg>')
-$icon.Dispose(); $motif.Dispose(); $master.Dispose(); $artwork.Dispose()
+$icon.Dispose(); $motif.Dispose(); $master.Dispose(); $artwork.Dispose(); $white.Dispose(); $black.Dispose(); $transparentMotif.Dispose(); $whiteMotif.Dispose()
 Write-Output 'BRAND_ASSETS_EXPORTED'

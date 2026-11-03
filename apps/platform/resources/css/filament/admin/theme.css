@@ -28,7 +28,7 @@
 .fi-logo {
     max-width: min(18rem, 72vw);
     border-radius: .25rem;
-    background: #fff;
+    background: transparent;
     object-fit: contain;
     object-position: left center;
 }
@@ -65,8 +65,7 @@
 
 .fi-simple-header .fi-logo {
     border-radius: 0.875rem;
-    background: #fff;
-    padding: 0.65rem 1rem;
+    background: transparent;
 }
 
 .fi-sidebar .fi-sidebar-group-label {
