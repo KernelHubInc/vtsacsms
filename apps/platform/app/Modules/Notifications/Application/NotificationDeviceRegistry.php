@@ -11,11 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 final class NotificationDeviceRegistry
 {
-    public function register(User $user, MobileAccessToken $authToken, string $installationId): void
+    public function register(User $user, MobileAccessToken $authToken, string $installationId, string $platform = 'android'): void
     {
         $hash = hash('sha256', $installationId);
 
-        DB::transaction(function () use ($user, $authToken, $installationId, $hash): void {
+        DB::transaction(function () use ($user, $authToken, $installationId, $hash, $platform): void {
             // One Firebase installation belongs to only the most recently signed-in tenant.
             NotificationDevice::query()->where('installation_hash', $hash)
                 ->where('auth_token_id', '!=', $authToken->getKey())->delete();
@@ -24,7 +24,7 @@ final class NotificationDeviceRegistry
                 ['tenant_id' => $authToken->tenant_id, 'auth_token_id' => $authToken->getKey()],
                 [
                     'user_id' => $user->getKey(),
-                    'platform' => 'android',
+                    'platform' => $platform,
                     'installation_hash' => $hash,
                     'installation_ciphertext' => $installationId,
                     'last_registered_at' => now('UTC'),

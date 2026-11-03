@@ -35,6 +35,7 @@ import 'package:vtsa_mobile/features/kyc/data/api_kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/notices/driver_notices.dart';
 import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
+import 'package:vtsa_mobile/features/notices/staging_web_push.dart';
 import 'package:vtsa_mobile/features/vehicles/application/vehicles_controller.dart';
 import 'package:vtsa_mobile/features/vehicles/data/api_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
@@ -213,14 +214,25 @@ final class AppDependencies {
     );
     late final AppDependencies dependencies;
     NoticePushRegistration noticePush = const NoopNoticePushRegistration();
-    if (!kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        localEnvironment.name == AppEnvironmentName.staging) {
+    if ((kIsWeb || defaultTargetPlatform == TargetPlatform.android) &&
+        localEnvironment.name == AppEnvironmentName.staging &&
+        (!kIsWeb || Uri.base.host == 'staging.evcspowersolutions.com')) {
       try {
-        await Firebase.initializeApp();
+        await Firebase.initializeApp(
+          options: kIsWeb ? stagingWebFirebase : null,
+        );
         noticePush = FirebaseNoticePushRegistration(
           client: client,
           messaging: FirebaseMessaging.instance,
+          isBrowser: kIsWeb,
+          webOptedIn: preferences.getBool('web_notice_push_enabled') ?? false,
+          saveWebPreference: (enabled) async {
+            await preferences.setBool('web_notice_push_enabled', enabled);
+          },
+          vapidKey: kIsWeb ? stagingWebVapidKey : null,
+          serviceWorkerScriptPath: kIsWeb
+              ? '/mobile/push/firebase-messaging-sw.js'
+              : null,
           onNotice: () async {
             await dependencies.notices?.refresh();
           },
@@ -229,6 +241,10 @@ final class AppDependencies {
             await dependencies.notices?.refresh();
           },
         );
+        if (kIsWeb && !await FirebaseMessaging.instance.isSupported()) {
+          (noticePush as FirebaseNoticePushRegistration).status =
+              NoticePushStatus.unsupported;
+        }
       } on Object {
         // A Firebase outage must not block sign-in, charging, or wallet access.
       }

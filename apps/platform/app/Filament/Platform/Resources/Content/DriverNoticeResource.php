@@ -56,7 +56,7 @@ final class DriverNoticeResource extends CmsResource
                 ->helperText('The notice will also appear in the Updates list.'),
             Toggle::make('send_push')->label('Send push notification')->default(false)
                 ->disabled(fn (): bool => ! self::canPublish())
-                ->helperText('Once per signed-in Android installation while published and within the dates above. Editing does not resend to devices already notified.'),
+                ->helperText('Once per signed-in Android or browser installation while published and within the dates above. Editing does not resend to devices already notified.'),
         ])->columns(2);
     }
 

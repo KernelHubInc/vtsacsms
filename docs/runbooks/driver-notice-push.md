@@ -2,7 +2,7 @@
 
 ## Scope and ownership
 
-Android staging is the first enabled target. Browser push still needs a Firebase web application, VAPID configuration, and a messaging service worker. iOS needs APNs setup. A staging credential must not be reused implicitly for production.
+Android staging supports the native APK and the `/mobile/` PWA in Android Chrome. Native iOS still needs APNs setup; iOS browser acceptance testing is outside this release. A staging credential must not be reused implicitly for production.
 
 CMS owns the notice, publication dates and explicit `send_push` selection. Its `PushNoticeQuery` provides active content to Notifications without cross-context writes. Identity's `PushRecipientQuery` checks the mobile token, security version, enabled and verified identity, and current membership. Notifications owns encrypted installation registrations and durable delivery records. No wallet, charging or settlement behavior changes.
 
@@ -44,7 +44,17 @@ Firebase Messaging 17 uses `register()` / `onRegistered` installation IDs. The H
 5. Enable **Send push notification**, then set status to **Published** and save.
 6. Open **Push delivery** on that notice to inspect counts and the latest 100 attempts.
 
-Existing notices default to push off. CMS edit permission permits drafts; CMS publish permission is required to publish or enable push. Delivery is tenant-scoped to signed-in, verified, active Android installations that have granted OS permission. There is no site-specific audience filter in this release. Each installation is sent at most one accepted push per notice; editing or republishing does not resend an accepted notification. Create a new notice for an intentional new announcement. Devices that register later can receive a still-active opted-in notice.
+Existing notices default to push off. CMS edit permission permits drafts; CMS publish permission is required to publish or enable push. Delivery is tenant-scoped to signed-in, verified, active Android or browser installations that have granted notification permission. There is no site-specific audience filter in this release. Each installation is sent at most one accepted push per notice; editing or republishing does not resend an accepted notification. Create a new notice for an intentional new announcement. Devices that register later can receive a still-active opted-in notice.
+
+## Android Chrome / PWA setup
+
+The provided Firebase Web app and public VAPID key are in `staging_web_push.dart`. These are public client values, not the Admin SDK credential. Analytics is not initialized. Initialization is restricted to the staging build on `staging.evcspowersolutions.com`.
+
+After verified sign-in, open **Updates → Stay informed → Enable notifications**, then allow Chrome's permission request. Registration is never prompted automatically on first visit. A previous opt-in is restored without prompting; **Turn off notifications** removes the backend registration and FCM registration and persists the opt-out. Chrome site settings are needed to reverse a browser-level block. Logout revokes the session-bound server registration. The APK and browser are separate installations and may each receive a notice if both are opted in.
+
+The Firebase JS 13.0.0 worker is served at `/mobile/push/firebase-messaging-sw.js`, with its own `/mobile/push/` scope so it does not replace the existing app worker. It must be served as JavaScript over HTTPS, without authentication or an HTML fallback, and the CDN scripts must be allowed by the site's content security policy. FCM displays background notification payloads once; foreground delivery refreshes Updates. Tapping a background notification opens `/mobile/#/updates`, subject to normal login/onboarding guards. Browser delivery uses the webpush payload and the same per-tenant delivery ledger and retries as Android.
+
+To test: open the staging PWA in Android Chrome, sign in, enable notifications, put Chrome in the background, and publish an explicitly approved test notice. Confirm both the admin's `accepted` status and actual phone display. Delivery can be delayed or prevented by device connectivity, Chrome/Android notification settings, battery restrictions, or force-stopping the browser. No browser subscription or live test notice is created automatically during deployment.
 
 ## Delivery semantics and privacy
 
@@ -69,3 +79,9 @@ The private credential is stored at `/etc/vtsa-csms/secrets/staging/firebase-not
 APK 1.0.38 (build 39) uses the staging endpoint and Firebase project. Its signing certificate matches APK 1.0.37. The existing `/demo/Power-Solutions-Demo.apk` download now points to this build. APK SHA-256: `006c05b9081f1bef443437fb3c3d3da81ae70951acb990b70b6f1568b8ca7c6e`.
 
 Server OAuth/FCM validation, timer execution, database/Redis readiness, and the downloaded APK checksum were verified. A real-phone foreground/background notification test remains a user acceptance step; deployment did not publish or send a test announcement.
+
+### Browser notification follow-up — 3 November 2026
+
+Staging now runs backend snapshot `notice-f10a289711cb4f91` and browser release `webpush-3c188b1118aee7f1`. Backend source hashes, the verified PostgreSQL backup and Compose rollback commands are in `/opt/vtsa-releases/notice-f10a289711cb4f91/deployed.json`. The PWA release is under `/var/www/staging-mobile/releases/`; its previous target is `20261101-089790a9`. Browser publishing verifies hashes before switching the `current` symlink and restores the previous target if public verification fails.
+
+The public JavaScript and worker checksums, JavaScript content type, Firebase validation-only request, staging timer and database/Redis readiness passed. Production containers were unchanged. No migration or APK update was required for this follow-up. Automated checks covered browser opt-in, denial, opt-out failure/retry, backend registration failure, tenant isolation, web payload delivery and opening Updates after sign-in. The full backend and mobile suites passed before the final focused navigation checks and browser build. Actual background display on Android remains a physical-device acceptance check.

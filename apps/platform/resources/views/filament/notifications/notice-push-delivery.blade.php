@@ -21,7 +21,7 @@
                     <td class="p-2">{{ $delivery['attempted_at'] ?? 'Not attempted' }}</td><td class="p-2">{{ $delivery['error_code'] ?? '—' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="4" class="p-4">No deliveries yet. Check publication dates, push selection, and signed-in Android devices with notification permission.</td></tr>
+                <tr><td colspan="4" class="p-4">No deliveries yet. Check publication dates, push selection, and signed-in Android or browser devices with notification permission.</td></tr>
             @endforelse
             </tbody>
         </table>

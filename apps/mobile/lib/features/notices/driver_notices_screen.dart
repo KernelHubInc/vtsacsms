@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/notices/driver_notices.dart';
+import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
+import 'package:vtsa_mobile/features/notices/web_push_card.dart';
 
 class DriverNoticesScreen extends StatelessWidget {
-  const DriverNoticesScreen({required this.controller, super.key});
+  const DriverNoticesScreen({required this.controller, this.push, super.key});
 
   final DriverNoticesController? controller;
+  final NoticePushRegistration? push;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +38,12 @@ class DriverNoticesScreen extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 20),
+                          if (push
+                              case final FirebaseNoticePushRegistration
+                                  browserPush when browserPush.isBrowser) ...[
+                            WebPushCard(push: browserPush),
+                            const SizedBox(height: 16),
+                          ],
                           if (notices.failed)
                             Card(
                               child: Padding(

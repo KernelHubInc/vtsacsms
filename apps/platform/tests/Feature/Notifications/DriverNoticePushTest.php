@@ -79,6 +79,23 @@ final class DriverNoticePushTest extends TenantSecurityTestCase
         Http::assertNothingSent();
     }
 
+    public function test_browser_recipient_receives_a_web_payload_and_tenant_safe_link(): void
+    {
+        config(['app.url' => 'https://staging.evcspowersolutions.com']);
+        $tenant = $this->createTenant('push-browser');
+        $device = $this->device($tenant);
+        $device->update(['platform' => 'web']);
+        $notice = $this->notice($tenant);
+        $push = app(DriverNoticePush::class);
+        $this->assertSame(1, $push->deliver((string) $tenant->getKey()));
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), 'messages:send')
+            && $request['message']['fid'] === $device->installation_ciphertext
+            && $request['message']['webpush']['fcm_options']['link'] === 'https://staging.evcspowersolutions.com/mobile/#/updates'
+            && ! isset($request['message']['android']));
+        $this->assertDatabaseHas('notice_push_deliveries', ['notice_id' => $notice->id, 'status' => 'accepted']);
+        $this->assertSame(0, $push->deliver((string) $tenant->getKey()));
+    }
+
     public function test_configuration_check_uses_validation_only_and_does_not_create_deliveries(): void
     {
         $this->assertSame(0, Artisan::call('notifications:send-driver-notices', ['--check' => true]));

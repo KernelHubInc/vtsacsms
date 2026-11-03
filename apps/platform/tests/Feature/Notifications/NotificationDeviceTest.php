@@ -43,7 +43,7 @@ final class NotificationDeviceTest extends TenantSecurityTestCase
         $user = $this->createUser();
         $this->withinTenant($first, $user, fn () => $this->createMembership($first, $user));
         $this->withinTenant($second, $user, fn () => $this->createMembership($second, $user));
-        $body = ['platform' => 'android', 'installation_id' => str_repeat('b', 40)];
+        $body = ['platform' => 'web', 'installation_id' => str_repeat('b', 40)];
 
         $this->withToken($this->login($user, $first))
             ->putJson('/api/v1/mobile/notification-device', $body)->assertNoContent();
@@ -52,6 +52,7 @@ final class NotificationDeviceTest extends TenantSecurityTestCase
 
         $this->assertDatabaseCount('notification_devices', 1);
         $this->assertSame((string) $second->getKey(), NotificationDevice::query()->firstOrFail()->tenant_id);
+        $this->assertSame('web', NotificationDevice::query()->firstOrFail()->platform);
     }
 
     public function test_sign_out_removes_the_device_registration(): void

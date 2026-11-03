@@ -21,7 +21,7 @@ final class NotificationDeviceController extends Controller
         $authToken = $user->currentAccessToken();
         abort_unless($authToken instanceof MobileAccessToken, 403);
 
-        $registry->register($user, $authToken, (string) $request->validated('installation_id'));
+        $registry->register($user, $authToken, (string) $request->validated('installation_id'), (string) $request->validated('platform'));
 
         return response()->json([], 204);
     }

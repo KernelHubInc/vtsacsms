@@ -74,7 +74,7 @@ final class FirebaseNoticeSender
     /** @param array{title: string, message: string, category: string, ttl: int} $notice
      * @return array{status: string, error: ?string, delay: int}
      */
-    public function send(string $installationId, string $noticeId, array $notice): array
+    public function send(string $installationId, string $noticeId, array $notice, string $platform = 'android'): array
     {
         $this->authenticate();
         try {
@@ -84,9 +84,14 @@ final class FirebaseNoticeSender
                         'fid' => $installationId,
                         'notification' => ['title' => $notice['title'], 'body' => $notice['message']],
                         'data' => ['notice_id' => $noticeId, 'category' => $notice['category'], 'type' => 'driver_notice'],
-                        'android' => ['priority' => 'high', 'ttl' => $notice['ttl'].'s',
+                        ...($platform === 'web' ? ['webpush' => [
+                            'headers' => ['TTL' => (string) $notice['ttl'], 'Urgency' => 'high'],
+                            'notification' => ['tag' => 'notice-'.$noticeId,
+                                'icon' => rtrim((string) config('app.url'), '/').'/mobile/icons/Icon-192.png'],
+                            'fcm_options' => ['link' => rtrim((string) config('app.url'), '/').'/mobile/#/updates'],
+                        ]] : ['android' => ['priority' => 'high', 'ttl' => $notice['ttl'].'s',
                             'restricted_package_name' => config('notice_push.android_package'),
-                            'notification' => ['tag' => 'notice-'.$noticeId, 'channel_id' => 'driver_notices']],
+                            'notification' => ['tag' => 'notice-'.$noticeId, 'channel_id' => 'driver_notices']]]),
                     ],
                 ]);
         } catch (ConnectionException) {

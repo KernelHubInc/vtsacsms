@@ -18,7 +18,7 @@ final class RegisterNotificationDeviceRequest extends FormRequest
     {
         return [
             'installation_id' => ['required', 'string', 'min:10', 'max:512'],
-            'platform' => ['required', 'in:android'],
+            'platform' => ['required', 'in:android,web'],
         ];
     }
 }
