@@ -83,7 +83,11 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
   }
 
   void changed() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        if (controller?.enabled != true) step = _Step.overview;
+      });
+    }
   }
 
   Future<void> discardLostCapture() async {
@@ -386,7 +390,7 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
                 step = _Step.consent;
               }),
             ),
-          if (status == KycStatus.pendingUpload)
+          if (kyc.enabled && status == KycStatus.pendingUpload)
             VtsaButton(
               label: 'Continue with photos',
               onPressed: () => setState(() => step = _Step.capture),

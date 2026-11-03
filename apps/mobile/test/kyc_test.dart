@@ -17,6 +17,7 @@ class FakeKycRepository implements KycRepository {
   final uploaded = <String>{};
   final starts = <Map<String, dynamic>>[];
   bool unavailable = false;
+  bool enabled = true;
   bool uploadFails = false;
   int submits = 0;
 
@@ -25,7 +26,7 @@ class FakeKycRepository implements KycRepository {
     'status': state,
     'document_type': 'passport',
     'evidence': uploaded.map((kind) => {'kind': kind}).toList(),
-    'enabled': true,
+    'enabled': enabled,
     'documents': {
       'passport': {
         'label': 'Passport',

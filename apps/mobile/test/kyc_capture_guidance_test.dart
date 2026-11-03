@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:camera/camera.dart' show CameraPreview;
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 import 'package:vtsa_mobile/features/kyc/domain/live_challenge.dart';
 import 'package:vtsa_mobile/features/kyc/presentation/capture_guide.dart';
@@ -119,9 +121,17 @@ Map<String, dynamic> prompt({
 
 class LiveRepository extends FakeKycRepository {
   int liveStarts = 0;
+  bool disabledOnStart = false;
   @override
   Future<Map<String, dynamic>> startLive(String id) async {
     liveStarts++;
+    if (disabledOnStart) {
+      throw const AppFailure(
+        kind: FailureKind.notFound,
+        message: 'Disabled',
+        code: 'KYC_DISABLED',
+      );
+    }
     return prompt();
   }
 }
@@ -185,6 +195,102 @@ void main() {
   });
   tearDown(() {
     CameraPlatform.instance = previous;
+  });
+
+  testWidgets(
+    'disabled KYC blocks camera access and offers a useful return action',
+    (tester) async {
+      final repository = LiveRepository()..enabled = false;
+      await tester.pumpWidget(
+        app(LiveCaptureScreen(repository: repository, verificationId: 'test')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open camera'));
+      await tester.pumpAndSettle();
+      expect(camera.lens, isNull);
+      expect(camera.photos, 0);
+      expect(repository.liveStarts, 0);
+      expect(find.text('Return to verification'), findsOneWidget);
+      expect(find.text('Reopen camera'), findsNothing);
+      expect(find.textContaining('temporarily unavailable'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'KYC disabled between preview and start closes the camera without retrying it',
+    (tester) async {
+      final repository = LiveRepository()..disabledOnStart = true;
+      await tester.pumpWidget(
+        app(LiveCaptureScreen(repository: repository, verificationId: 'test')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open camera'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('I’m ready — start live check'));
+      await tester.pumpAndSettle();
+      expect(camera.closed, 1);
+      expect(camera.photos, 0);
+      expect(find.text('Return to verification'), findsOneWidget);
+      expect(find.text('Reopen camera'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'existing draft cannot continue to photos while KYC is disabled',
+    (tester) async {
+      final repository = FakeKycRepository()
+        ..state = 'PENDING_UPLOAD'
+        ..enabled = false;
+      await tester.pumpWidget(app(KycScreen(repository: repository)));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with photos'), findsNothing);
+      expect(
+        find.text('Identity verification is not enabled yet.'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('face guide fills the viewport for a wide camera stream', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      app(const PhotoCaptureScreen(kind: 'selfie', passport: false)),
+    );
+    await tester.pumpAndSettle();
+    final viewport = tester.widget<CaptureViewport>(
+      find.byType(CaptureViewport),
+    );
+    viewport.camera!.value = viewport.camera!.value.copyWith(
+      deviceOrientation: DeviceOrientation.landscapeLeft,
+    );
+    await tester.pumpAndSettle();
+    final guide = tester.getSize(find.byType(CaptureGuide));
+    expect(guide.width, 390);
+    expect(guide.height, greaterThan(500));
+    final previewSize = tester.getSize(find.byType(CameraPreview));
+    expect(previewSize.width / previewSize.height, closeTo(4 / 3, .001));
+    expect(
+      tester
+          .widget<FittedBox>(
+            find.ancestor(
+              of: find.byType(CameraPreview),
+              matching: find.byType(FittedBox),
+            ),
+          )
+          .fit,
+      BoxFit.cover,
+    );
+    expect(tester.takeException(), isNull);
+    await preview(tester, 'wide-camera-face-guide');
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('live camera waits for readiness and stops on interruption', (

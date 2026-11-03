@@ -183,3 +183,12 @@ docker compose --env-file .env.app.staging -f infra/cluster/compose.app.yaml -f 
 7. Roll back application images with `KYC_ENABLED=false` if necessary; preserve additive tables and evidence/outbox volumes. Never run a destructive downgrade or remove volumes to roll back. Reconcile pending callbacks after recovery.
 
 No automatic staging or production deployment is added. Provider commercial onboarding, certified face/liveness assurance, legal retention, IAM/secret provisioning, backup encryption/erasure and physical device camera acceptance remain operator/provider responsibilities.
+# Camera and configuration recovery — 3 November 2026
+
+The face viewport fills its visible area without stretching the camera image. Browser video uses the camera plugin's cover sizing directly; native previews retain orientation handling and are clipped with cover sizing. The positioning oval remains in the visible viewport. Document previews continue to show the full image so document edges are not cropped. Neither the oval nor its color substitutes for server liveness checks.
+
+The live-capture page checks the authenticated KYC status before opening the camera. If KYC is disabled, existing drafts cannot continue to photos, the camera is not opened, and the user sees a service-unavailable message with a return action. If it is disabled after opening the preview, the camera is disposed and the app does not offer a misleading camera retry.
+
+The staging incident was configuration loss during application release replacement: `/opt/vtsa-csms/.env.staging` retained the enabled private processor configuration, while the running platform had none of those KYC variables. Restore only the matching staging values, validate request/callback secrets against the staging processor without printing them, verify private HTTPS readiness, and preflight Laravel before replacement. The recovered settings were also persisted in `/etc/vtsa-csms/staging.env` for subsequent standard deployments. Preserve KYC settings in custom Compose release plans and verify `config('kyc.enabled')` after configuration caching; application readiness alone does not prove KYC is enabled.
+
+Staging remains manual-review mode. Production was found disabled, with no deployed production processor or private KYC configuration. Do not connect production to staging's processor or credentials. Production KYC requires the isolated setup and acceptance steps in `kyc-hostinger.md` before enablement.

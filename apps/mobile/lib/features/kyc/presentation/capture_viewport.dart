@@ -1,8 +1,9 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Keep the guide on the camera image so rotation and letterboxing cannot
-/// position it over pixels that are absent from the captured photo.
+/// Face previews fill the guide without stretching the camera image.
 class CaptureViewport extends StatelessWidget {
   const CaptureViewport({
     required this.guide,
@@ -27,7 +28,46 @@ class CaptureViewport extends StatelessWidget {
         child: ColoredBox(
           color: const Color(0xff102b4a),
           child: camera?.value.isInitialized == true
-              ? Center(child: CameraPreview(camera!, child: guide))
+              ? face
+                    ? ClipRect(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (kIsWeb)
+                              // The web camera already fits its video with cover.
+                              // CameraPreview's native orientation swap can letterbox it.
+                              camera!.buildPreview()
+                            else
+                              ValueListenableBuilder<CameraValue>(
+                                valueListenable: camera!,
+                                builder: (context, value, _) {
+                                  final orientation =
+                                      value.previewPauseOrientation ??
+                                      value.lockedCaptureOrientation ??
+                                      value.deviceOrientation;
+                                  final landscape =
+                                      orientation ==
+                                          DeviceOrientation.landscapeLeft ||
+                                      orientation ==
+                                          DeviceOrientation.landscapeRight;
+                                  final ratio = landscape
+                                      ? value.aspectRatio
+                                      : 1 / value.aspectRatio;
+                                  return FittedBox(
+                                    fit: BoxFit.cover,
+                                    child: SizedBox(
+                                      width: 720,
+                                      height: 720 / ratio,
+                                      child: CameraPreview(camera!),
+                                    ),
+                                  );
+                                },
+                              ),
+                            guide,
+                          ],
+                        ),
+                      )
+                    : Center(child: CameraPreview(camera!, child: guide))
               : Stack(
                   fit: StackFit.expand,
                   children: [

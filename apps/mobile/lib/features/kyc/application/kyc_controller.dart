@@ -39,7 +39,13 @@ final class KycController extends ChangeNotifier {
       }
       return true;
     } on AppFailure catch (failure) {
-      error = failure.message;
+      if (failure.code == 'KYC_DISABLED') {
+        enabled = false;
+        error =
+            'Identity verification is temporarily unavailable. Please check again later.';
+      } else {
+        error = failure.message;
+      }
       return false;
     } catch (_) {
       error = 'Verification is temporarily unavailable. Please try again.';

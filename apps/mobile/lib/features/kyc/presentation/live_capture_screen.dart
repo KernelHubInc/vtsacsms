@@ -32,6 +32,7 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
   bool running = false;
   bool opening = false;
   bool checking = false;
+  bool serviceDisabled = false;
   int generation = 0;
 
   @override
@@ -74,9 +75,19 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
       error = null;
       challenge = null;
       checking = false;
+      serviceDisabled = false;
     });
     CameraController? created;
     try {
+      final status = await widget.repository.status();
+      if (!active()) return;
+      if (status['enabled'] != true) {
+        throw const AppFailure(
+          kind: FailureKind.server,
+          message: 'Identity verification is temporarily unavailable.',
+          code: 'KYC_DISABLED',
+        );
+      }
       final devices = await availableCameras();
       if (!active()) return;
       final front = devices
@@ -94,6 +105,12 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
       await created.initialize();
       if (!active()) return;
       setState(() => opening = false);
+    } on AppFailure catch (failure) {
+      if (active()) {
+        serviceDisabled = failure.code == 'KYC_DISABLED';
+        error = liveFailureMessage(failure);
+        await stop();
+      }
     } catch (_) {
       if (active()) {
         error =
@@ -166,7 +183,12 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
         );
       }
     } on AppFailure catch (failure) {
-      if (active()) setState(() => error = liveFailureMessage(failure));
+      if (active()) {
+        setState(() {
+          serviceDisabled = failure.code == 'KYC_DISABLED';
+          error = liveFailureMessage(failure);
+        });
+      }
     } catch (_) {
       if (active()) {
         setState(
@@ -210,7 +232,12 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
                   ),
                 ),
               ),
-            if (!running)
+            if (serviceDisabled)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Return to verification'),
+              ),
+            if (!running && !serviceDisabled)
               FilledButton(
                 onPressed: opening
                     ? null
@@ -353,6 +380,8 @@ class LivePrompt extends StatelessWidget {
 
 String liveFailureMessage(AppFailure failure) {
   final message = switch (failure.code) {
+    'KYC_DISABLED' =>
+      'Identity verification is temporarily unavailable. Return to the verification page and check again later. Reopening your camera will not resolve this.',
     'LIVE_CHALLENGE_EXPIRED' =>
       'The movement took too long. Restart and follow each prompt as it appears.',
     'LIVE_CHALLENGE_CONFLICT' || 'LIVE_FRAME_REPLAY' =>
