@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,49 @@ import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 
 void main() {
+  test(
+    'official logo is shared with the website and tightly cropped',
+    () async {
+      final bytes = File(
+        'assets/branding/power-solutions-logo-horizontal.png',
+      ).readAsBytesSync();
+      expect(
+        bytes,
+        orderedEquals(
+          File(
+            '../platform/public/branding/power-solutions-logo.png',
+          ).readAsBytesSync(),
+        ),
+      );
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      expect(image.width, greaterThanOrEqualTo(1800));
+      expect(image.width / image.height, inInclusiveRange(3.3, 3.6));
+      final pixels = (await image.toByteData())!;
+      var first = image.height;
+      var last = 0;
+      for (var y = 0; y < image.height; y++) {
+        for (var x = 0; x < image.width; x++) {
+          final offset = (y * image.width + x) * 4;
+          final channels = [
+            pixels.getUint8(offset),
+            pixels.getUint8(offset + 1),
+            pixels.getUint8(offset + 2),
+          ]..sort();
+          if (channels.first < 200 && channels.last - channels.first > 25) {
+            if (y < first) first = y;
+            if (y > last) last = y;
+          }
+        }
+      }
+      expect(first, lessThanOrEqualTo(4));
+      expect(image.height - last - 1, lessThanOrEqualTo(4));
+      image.dispose();
+      codec.dispose();
+    },
+  );
+
   testWidgets('Power Solutions logo exposes a text alternative', (
     tester,
   ) async {

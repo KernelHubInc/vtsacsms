@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive"><meta name="referrer" content="no-referrer"><title>Operator invitation · Power Solutions</title>@vite(['resources/css/app.css'])</head>
 <body class="min-h-screen bg-slate-950 text-slate-900 antialiased">
     <main class="mx-auto max-w-lg px-5 py-12">
-        <img src="{{ asset('branding/power-solutions-logo-horizontal-dark.svg') }}" alt="Power Solutions" class="mx-auto mb-8 h-10 max-w-full">
+        <img src="{{ asset('branding/power-solutions-logo.png') }}" alt="Power Solutions" class="mx-auto mb-8 h-10 max-w-full">
         <section class="rounded-3xl bg-white p-7 shadow-xl sm:p-10">
             <h1 class="text-3xl font-semibold tracking-tight">{{ $completed ? 'Your invitation is accepted' : 'Welcome to your operator workspace' }}</h1>
             @if ($completed)

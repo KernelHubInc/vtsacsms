@@ -24,8 +24,8 @@
     <meta name="twitter:description" content="{{ $description }}">
     <meta name="twitter:image" content="{{ $socialImage }}">
     <meta name="theme-color" content="#12366B">
-    <link rel="icon" href="{{ asset('branding/power-solutions-favicon.png') }}" type="image/png">
-    <link rel="apple-touch-icon" href="{{ asset('branding/power-solutions-apple-touch-icon.png') }}">
+    <link rel="icon" href="{{ asset('branding/power-solutions-favicon.png?v=20261103') }}" type="image/png">
+    <link rel="apple-touch-icon" href="{{ asset('branding/power-solutions-apple-touch-icon.png?v=20261103') }}">
     <title>{{ $title }}</title>
     <script type="application/ld+json">{!! json_encode([
         '@context' => 'https://schema.org',

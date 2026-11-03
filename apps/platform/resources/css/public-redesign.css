@@ -1,7 +1,7 @@
 @layer components {
     .public-site .site-header { background: #081b35; border-bottom: 1px solid rgba(255,255,255,.13); backdrop-filter: none; color: #eef8ff; }
     .public-site .site-header__inner { width: min(1312px, calc(100% - 3rem)); min-height: 80px; gap: clamp(1rem, 3vw, 3rem); }
-    .public-site .site-header .power-solutions-logo img { height: 37px; }
+    .public-site .site-header .power-solutions-logo img { height: 48px; }
     .public-site .desktop-nav { margin-left: auto; gap: clamp(1rem, 2.2vw, 2rem); }
     .public-site .desktop-nav a { color: #ccdde9; font-size: .875rem; font-weight: 500; }
     .public-site .desktop-nav a:hover { color: #fff; }
@@ -195,7 +195,7 @@
     .station-detail__facts > div { grid-template-columns: 1fr; gap: .15rem; }
     .public-site .site-header__inner,.home-wrap { width: calc(100% - 3rem); }
     .public-site .site-header__inner { min-height: 80px; }
-    .public-site .site-header .power-solutions-logo img { height: 32px; }
+    .public-site .site-header .power-solutions-logo img { height: 40px; }
     .public-site .mobile-menu { margin-left: auto; }
     .public-site .site-footer__grid { grid-template-columns: repeat(2, 1fr); }
     .home-hero__intro { padding-block: 2.5rem 2.25rem; }

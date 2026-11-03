@@ -111,7 +111,7 @@ final class InfrastructureTest extends TestCase
             ->assertSee('Charging operations,')
             ->assertSee('Enter your email address')
             ->assertSee('Enter your password')
-            ->assertSee('branding/power-solutions-mark.svg', false)
+            ->assertSee('branding/power-solutions-logo.png', false)
             ->assertSee('branding/admin-login/charging-destination.png', false)
             ->assertSee('wire:submit="authenticate"', false)
             ->assertDontSee('VTSA Platform Administration');
@@ -128,8 +128,7 @@ final class InfrastructureTest extends TestCase
 
     public function test_power_solutions_assets_and_tokens_are_centralized(): void
     {
-        $this->assertFileExists(public_path('branding/power-solutions-logo-horizontal.svg'));
-        $this->assertFileExists(public_path('branding/power-solutions-logo-horizontal-dark.svg'));
+        $this->assertFileExists(public_path('branding/power-solutions-logo.png'));
         $this->assertFileExists(public_path('branding/power-solutions-email-logo.png'));
         $this->assertFileExists(public_path('branding/power-solutions-favicon.png'));
 

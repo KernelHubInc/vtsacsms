@@ -19,8 +19,6 @@ class PowerSolutionsLogo extends StatelessWidget {
     final asset = switch (variant) {
       PowerSolutionsLogoVariant.mark =>
         'assets/branding/power-solutions-mark.png',
-      PowerSolutionsLogoVariant.horizontal when inverse =>
-        'assets/branding/power-solutions-logo-horizontal-dark.png',
       PowerSolutionsLogoVariant.horizontal =>
         'assets/branding/power-solutions-logo-horizontal.png',
     };
@@ -28,18 +26,21 @@ class PowerSolutionsLogo extends StatelessWidget {
     return Semantics(
       label: 'Power Solutions',
       image: true,
-      child: Image.asset(
-        asset,
-        height: height,
-        fit: BoxFit.contain,
-        excludeFromSemantics: true,
-        errorBuilder: (context, error, stackTrace) => Text(
-          'Power Solutions',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: inverse
-                ? Colors.white
-                : Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w800,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: Image.asset(
+          asset,
+          height: height,
+          fit: BoxFit.contain,
+          excludeFromSemantics: true,
+          errorBuilder: (context, error, stackTrace) => Text(
+            'Power Solutions',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: inverse
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),

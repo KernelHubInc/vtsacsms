@@ -13,9 +13,8 @@
 
     <aside class="ps-admin-login-brand" aria-label="Power Solutions">
         <div class="ps-admin-login-identity">
-            <img src="{{ asset('branding/power-solutions-mark.svg') }}" alt="" width="40" height="40">
+            <img src="{{ asset('branding/power-solutions-logo.png') }}" alt="Power Solutions" width="240" height="70">
             <div>
-                <strong>Power Solutions</strong>
                 <span>{{ $workspace }}</span>
             </div>
         </div>

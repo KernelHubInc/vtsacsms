@@ -4,21 +4,15 @@
 
 The customer-facing product name is **Power Solutions**. Use it in title case in normal copy. `VTSA`, `VSTA`, and `VTSA CSMS` remain only in internal technical identifiers, historical architecture records, immutable demo identifiers, package namespaces, and integration keys where changing them would break compatibility.
 
-The company line visible in the supplied Canva reference is not part of the primary product lockup. It may appear only in an approved legal or company-information context.
+The official client-supplied artwork (November 3, 2026) includes EVCS, POWER SOLUTIONS and the company line **by VTSA International**. Keep the complete lockup intact. The former normalized Canva approximation is superseded.
 
-## Approved logo variants
+## Approved artwork
 
-| Variant | Use | Minimum rendered size |
-| --- | --- | --- |
-| Horizontal | Headers, authentication, navigation, documents | 136 px wide |
-| Horizontal dark | Deep navy or dark surfaces | 136 px wide |
-| Stacked | Square or centered presentation areas | 96 px wide |
-| Mark | Favicon, app icon, compact navigation, splash | 24 px |
-| Monochrome | Single-color print and constrained output | 136 px wide |
+`apps/platform/public/branding/power-solutions-logo.png` is the tightly cropped 1875 × 549 PNG master from the supplied JPG. The original lettering, gradients, motif and byline are preserved; no logo text is reconstructed with system fonts. Empty top and bottom margins are removed with a two-pixel safety edge. The supplied white background stays white, which also provides a consistent light plate on dark headers. Do not invert or recolor the artwork.
 
-Keep clear space around every lockup equal to at least one small tile in the mark. Preserve aspect ratio, never stretch, outline, rotate, shadow, filter, recolor, or rearrange the logo. Use an explicit light or dark variant instead of a CSS filter. The logo alternative text is `Power Solutions`; decorative marks use an empty alternative.
+Use the complete horizontal logo for website headers, admin/operator panels, authentication, mobile pages, email and PDF receipts. Keep its aspect ratio. Compact launcher icons, favicons and PWA install icons use the original diagonal tile motif on a white square, with safe space for OS icon masks. Historical SVG URLs embed the current artwork for compatibility; new web views use the PNG directly.
 
-The repository did not contain a lossless Canva export. The normalized vector family follows the supplied Canva design reference and approved colors. If the client later supplies production master artwork, replace the normalized files without changing their public filenames, then run the asset generator and the complete visual regression checks.
+The logo alternative text is `Power Solutions`; decorative duplicates use an empty alternative. Functional icons and third-party marks remain separate from the product logo.
 
 ## Color tokens
 
@@ -52,13 +46,13 @@ Brand colors do not replace operational semantics. Available, preparing, chargin
 
 ## Light, dark, and splash usage
 
-Use the standard horizontal asset on white and soft surfaces. Use the dark-background asset on navy and dark surfaces. Navigable mobile screens use the shared deep-navy `PowerSolutionsAppBar` with the inverse horizontal logo, page hierarchy, automatic back navigation, and restrained turquoise/blue geometry. Startup and onboarding are the deliberate full-screen exceptions.
+Use the complete official PNG on both light and dark surfaces; its white plate keeps the navy lettering readable. The legacy dark asset filename is retained as a copy for compatibility. Navigable mobile screens use the shared deep-navy `PowerSolutionsAppBar` with the official horizontal logo, page hierarchy, automatic back navigation, and restrained turquoise/blue geometry. Startup and onboarding are the deliberate full-screen exceptions.
 
 Splash and onboarding screens use the centered horizontal lockup over the code-native Power Solutions energy-path motif. The motif combines an abstract charging route with the rising rounded tiles from the brand mark; it is decorative, scalable, and hidden from assistive technology. Do not add artificial launch delays, and keep motion restrained for reduced-motion preferences.
 
 ## Asset locations
 
-- Web SVG and raster metadata assets: `apps/platform/public/branding/`
+- Web PNG master, compatibility SVGs and raster metadata assets: `apps/platform/public/branding/`
 - Shared Blade logo component: `apps/platform/resources/views/components/brand/logo.blade.php`
 - Flutter raster assets: `apps/mobile/assets/branding/`
 - Flutter reusable logo widget: `apps/mobile/lib/design_system/branding/power_solutions_logo.dart`
@@ -67,12 +61,12 @@ Splash and onboarding screens use the centered horizontal lockup over the code-n
 - Android adaptive and legacy icons: `apps/mobile/android/app/src/main/res/`
 - iOS icons and launch art: `apps/mobile/ios/Runner/Assets.xcassets/`
 - Flutter Web favicon/PWA icons: `apps/mobile/web/`
-- Deterministic raster generator: `tools/generate_brand_assets.py`
+- Native raster export: `tools/generate_brand_assets.ps1` (`generate_brand_assets.py` remains a compatibility entry point)
 
 Run the generator after replacing master artwork:
 
 ```powershell
-python tools/generate_brand_assets.py
+powershell -NoProfile -File tools/generate_brand_assets.ps1
 ```
 
 Inspect favicon, sidebar, authentication, splash, and print sizes after regeneration. Do not alter map-provider attribution, third-party payment marks, operational status semantics, or legal copy as part of a visual refresh.

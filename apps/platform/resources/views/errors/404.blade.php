@@ -6,7 +6,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="theme-color" content="#12366b">
     <title>Page not found | Power Solutions</title>
-    <link rel="icon" href="{{ asset('branding/power-solutions-favicon.png') }}">
+    <link rel="icon" href="{{ asset('branding/power-solutions-favicon.png?v=20261103') }}">
     {{-- Keep error recovery independent of the asset build and application layout. --}}
     <style>
         :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #12366b; background: #f5f8fb; }
@@ -34,7 +34,7 @@
     <div class="error-page">
         <header>
             <a class="brand" href="{{ url('/') }}" aria-label="Power Solutions homepage">
-                <img src="{{ asset('branding/power-solutions-logo-horizontal.svg') }}" alt="Power Solutions" width="670" height="150">
+                <img src="{{ asset('branding/power-solutions-logo.png') }}" alt="Power Solutions" width="640" height="190">
             </a>
         </header>
         <main id="main-content">

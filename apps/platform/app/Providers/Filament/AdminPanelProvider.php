@@ -64,10 +64,10 @@ final class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login(Login::class)
             ->brandName('Power Solutions Administration')
-            ->brandLogo(asset('branding/power-solutions-logo-horizontal.svg'))
-            ->darkModeBrandLogo(asset('branding/power-solutions-logo-horizontal-dark.svg'))
+            ->brandLogo(asset('branding/power-solutions-logo.png'))
+            ->darkModeBrandLogo(asset('branding/power-solutions-logo.png'))
             ->brandLogoHeight('2.75rem')
-            ->favicon(asset('branding/power-solutions-favicon.png'))
+            ->favicon(asset('branding/power-solutions-favicon.png?v=20261103'))
             ->navigationGroups(['Charging network', 'Maintenance', 'Procurement', 'Inventory', 'Finance', 'Support', 'Reports', 'Content studio', 'Platform governance', 'Identity and audit'])
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->colors([

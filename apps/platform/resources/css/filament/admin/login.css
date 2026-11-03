@@ -41,14 +41,16 @@
 .ps-admin-login-identity {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
     line-height: 1.15;
 }
 
 .ps-admin-login-identity img {
     flex: none;
-    width: 40px;
-    height: 40px;
+    width: min(240px, 100%);
+    height: auto;
+    border-radius: 3px;
 }
 
 .ps-admin-login-identity div {

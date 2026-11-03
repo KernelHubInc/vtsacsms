@@ -34,7 +34,7 @@ class PowerSolutionsAppBar extends StatelessWidget
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const PowerSolutionsLogo(height: 27, inverse: true),
+        const PowerSolutionsLogo(height: 36, inverse: true),
         const SizedBox(height: 6),
         if (eyebrow != null) ...[
           Text(

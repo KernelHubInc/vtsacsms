@@ -16,7 +16,7 @@ final class NotFoundPageTest extends TestCase
         $this->get('/missing-power-solutions-page?token=private-value')
             ->assertNotFound()
             ->assertSee('Page not found | Power Solutions')
-            ->assertSee('power-solutions-logo-horizontal.svg')
+            ->assertSee('power-solutions-logo.png')
             ->assertSee('Go back to homepage')
             ->assertSee('Error 404.')
             ->assertSee('id="error-title">Page <span>not found.</span>', false)
