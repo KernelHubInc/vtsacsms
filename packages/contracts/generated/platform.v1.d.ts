@@ -650,6 +650,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mobile/notification-device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register an opted-in Firebase installation for the current mobile token
+         * @description Requires an active verified identity. The same installation transfers to its most recently authenticated tenant. Registration identifiers are encrypted and never returned.
+         */
+        put: operations["registerNoticeDevice"];
+        post?: never;
+        /** Remove the notification registration for the current mobile token */
+        delete: operations["unregisterNoticeDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -4404,6 +4425,55 @@ export interface operations {
             };
             422: components["responses"]["ValidationError"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    registerNoticeDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    platform: "android" | "web";
+                    installation_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Installation registered idempotently. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    unregisterNoticeDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registration removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listIdentityDevices: {

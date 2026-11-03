@@ -2649,6 +2649,77 @@
         }
       }
     },
+    "/api/v1/mobile/notification-device": {
+      "put": {
+        "operationId": "registerNoticeDevice",
+        "summary": "Register an opted-in Firebase installation for the current mobile token",
+        "description": "Requires an active verified identity. The same installation transfers to its most recently authenticated tenant. Registration identifiers are encrypted and never returned.",
+        "tags": [
+          "Identity"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "platform",
+                  "installation_id"
+                ],
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "android",
+                      "web"
+                    ]
+                  },
+                  "installation_id": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 512,
+                    "writeOnly": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Installation registered idempotently."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unregisterNoticeDevice",
+        "summary": "Remove the notification registration for the current mobile token",
+        "tags": [
+          "Identity"
+        ],
+        "responses": {
+          "204": {
+            "description": "Registration removed."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/api/v1/devices": {
       "get": {
         "operationId": "listIdentityDevices",
