@@ -34,7 +34,7 @@
     <div class="error-page">
         <header>
             <a class="brand" href="{{ url('/') }}" aria-label="Power Solutions homepage">
-                <img src="{{ asset('branding/power-solutions-logo.png') }}" alt="Power Solutions" width="640" height="190">
+                <img src="{{ asset('branding/power-solutions-logo.png?v=20261103-padding') }}" alt="Power Solutions" width="640" height="190">
             </a>
         </header>
         <main id="main-content">

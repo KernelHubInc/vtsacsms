@@ -15,8 +15,8 @@ final class AdminThemeTest extends TestCase
         foreach (['admin', 'operator'] as $panelId) {
             $panel = Filament::getPanel($panelId);
 
-            self::assertSame(asset('branding/power-solutions-logo.png'), $panel->getBrandLogo());
-            self::assertSame(asset('branding/power-solutions-logo.png'), $panel->getDarkModeBrandLogo());
+            self::assertSame(asset('branding/power-solutions-logo.png?v=20261103-padding'), $panel->getBrandLogo());
+            self::assertSame(asset('branding/power-solutions-logo.png?v=20261103-padding'), $panel->getDarkModeBrandLogo());
             self::assertSame(ThemeMode::System, $panel->getDefaultThemeMode());
         }
     }
