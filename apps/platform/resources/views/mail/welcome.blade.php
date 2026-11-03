@@ -3,7 +3,7 @@
 @section('preheader', 'Welcome to Power Solutions. Verify your email and get ready for your first charge.')
 @section('brand-header')
 <div style="border-top:6px solid #45cfc7;background:#12366b;padding:24px 32px;">
-<img src="{{ rtrim(config('app.url'), '/') }}/branding/power-solutions-email-logo.png?v=20261103" width="230" alt="Power Solutions" style="display:block;width:230px;max-width:100%;height:auto;border:0;background:#ffffff;border-radius:4px;padding:8px;">
+<img src="{{ rtrim(config('app.url'), '/') }}/branding/power-solutions-email-logo.png?v=20261103-padding" width="230" alt="Power Solutions" style="display:block;width:230px;max-width:100%;height:auto;border:0;background:#ffffff;border-radius:4px;padding:8px;">
 </div>
 @endsection
 @section('body')

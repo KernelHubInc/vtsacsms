@@ -2,7 +2,14 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $repo = Split-Path $PSScriptRoot -Parent
 $branding = Join-Path $repo 'apps/platform/public/branding'
-$master = [System.Drawing.Bitmap]::new((Join-Path $branding 'power-solutions-logo.png'))
+$artwork = [System.Drawing.Bitmap]::new((Join-Path $branding 'power-solutions-logo-artwork.png'))
+$padding = 64
+$master = [System.Drawing.Bitmap]::new(($artwork.Width + 2*$padding), ($artwork.Height + 2*$padding))
+$logoCanvas = [System.Drawing.Graphics]::FromImage($master)
+$logoCanvas.Clear([System.Drawing.Color]::White)
+$logoCanvas.DrawImageUnscaled($artwork, $padding, $padding)
+$logoCanvas.Dispose()
+$master.Save((Join-Path $branding 'power-solutions-logo.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 
 function Save-BrandImage($image, [string]$path, [int]$width, [int]$height) {
     $target = [System.Drawing.Bitmap]::new($width, $height)
@@ -21,7 +28,7 @@ function Save-BrandImage($image, [string]$path, [int]$width, [int]$height) {
 }
 
 # Compact icons use the supplied tile motif; full lockups retain the company line.
-$motif = $master.Clone([System.Drawing.Rectangle]::new(0, 0, [int]($master.Width * .215), [int]($master.Height * .9)), $master.PixelFormat)
+$motif = $artwork.Clone([System.Drawing.Rectangle]::new(0, 0, [int]($artwork.Width * .215), [int]($artwork.Height * .9)), $artwork.PixelFormat)
 $icon = [System.Drawing.Bitmap]::new(1024, 1024)
 $canvas = [System.Drawing.Graphics]::FromImage($icon)
 $canvas.Clear([System.Drawing.Color]::White)
@@ -75,5 +82,5 @@ foreach ($name in @('horizontal', 'horizontal-dark', 'stacked', 'monochrome')) {
 [System.IO.File]::WriteAllText((Join-Path $branding 'power-solutions-social-card.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="white"/><image x="80" y="130" width="1040" height="370" href="data:image/png;base64,'+$data+'"/></svg>')
 $data=[Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Join-Path $branding 'power-solutions-mark.png')))
 [System.IO.File]::WriteAllText((Join-Path $branding 'power-solutions-mark.svg'), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image width="512" height="512" href="data:image/png;base64,'+$data+'"/></svg>')
-$icon.Dispose(); $motif.Dispose(); $master.Dispose()
+$icon.Dispose(); $motif.Dispose(); $master.Dispose(); $artwork.Dispose()
 Write-Output 'BRAND_ASSETS_EXPORTED'

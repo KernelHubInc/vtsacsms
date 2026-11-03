@@ -9,7 +9,7 @@ import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
 
 void main() {
   test(
-    'official logo is shared with the website and tightly cropped',
+    'official logo is shared with the website and has balanced clear space',
     () async {
       final bytes = File(
         'assets/branding/power-solutions-logo-horizontal.png',
@@ -26,10 +26,12 @@ void main() {
       final frame = await codec.getNextFrame();
       final image = frame.image;
       expect(image.width, greaterThanOrEqualTo(1800));
-      expect(image.width / image.height, inInclusiveRange(3.3, 3.6));
+      expect(image.width / image.height, inInclusiveRange(2.9, 3.1));
       final pixels = (await image.toByteData())!;
       var first = image.height;
       var last = 0;
+      var left = image.width;
+      var right = 0;
       for (var y = 0; y < image.height; y++) {
         for (var x = 0; x < image.width; x++) {
           final offset = (y * image.width + x) * 4;
@@ -41,11 +43,15 @@ void main() {
           if (channels.first < 200 && channels.last - channels.first > 25) {
             if (y < first) first = y;
             if (y > last) last = y;
+            if (x < left) left = x;
+            if (x > right) right = x;
           }
         }
       }
-      expect(first, lessThanOrEqualTo(4));
-      expect(image.height - last - 1, lessThanOrEqualTo(4));
+      expect(first, inInclusiveRange(64, 68));
+      expect(image.height - last - 1, inInclusiveRange(64, 68));
+      expect(left, inInclusiveRange(64, 68));
+      expect(image.width - right - 1, inInclusiveRange(64, 68));
       image.dispose();
       codec.dispose();
     },

@@ -8,7 +8,7 @@ The official client-supplied artwork (November 3, 2026) includes EVCS, POWER SOL
 
 ## Approved artwork
 
-`apps/platform/public/branding/power-solutions-logo.png` is the tightly cropped 1875 � 549 PNG master from the supplied JPG. The original lettering, gradients, motif and byline are preserved; no logo text is reconstructed with system fonts. Empty top and bottom margins are removed with a two-pixel safety edge. The supplied white background stays white, which also provides a consistent light plate on dark headers. Do not invert or recolor the artwork.
+`apps/platform/public/branding/power-solutions-logo-artwork.png` preserves the tightly cropped 1875 × 549 source artwork from the supplied JPG. The displayed `power-solutions-logo.png` is a 2003 × 677 PNG with 64 pixels of white clear space on every side, so the lettering and tiles do not touch the image edges. The original lettering, gradients, motif and byline are preserved without resampling; no logo text is reconstructed with system fonts. The large blank margins from the supplied JPG remain removed. The white plate also keeps the navy lettering readable on dark headers. Do not invert or recolor the artwork.
 
 Use the complete horizontal logo for website headers, admin/operator panels, authentication, mobile pages, email and PDF receipts. Keep its aspect ratio. Compact launcher icons, favicons and PWA install icons use the original diagonal tile motif on a white square, with safe space for OS icon masks. Historical SVG URLs embed the current artwork for compatibility; new web views use the PNG directly.
 
