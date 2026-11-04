@@ -41,6 +41,7 @@ final class ChargingSessionResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->poll('2s')
             ->columns([
                 TextColumn::make('id')->label('Session')->copyable()->searchable(),
                 TextColumn::make('state')->badge()->sortable(),

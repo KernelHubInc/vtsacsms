@@ -29,7 +29,7 @@ final class DiscoveryController extends ChangeNotifier {
   ({double latitude, double longitude, int radiusM})? _lastNearby;
 
   void startAutoRefresh({bool Function()? canRefresh}) {
-    _refreshTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+    _refreshTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
       final canLoad = canRefresh?.call() ?? true;
       if (!canLoad ||
           (_loadedAt != null &&

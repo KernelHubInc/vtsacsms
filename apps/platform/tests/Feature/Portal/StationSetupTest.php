@@ -52,6 +52,7 @@ final class StationSetupTest extends TenantSecurityTestCase
                 ->filterTable('historical_records', true)
                 ->assertCanSeeTableRecords([$site, $retiredSite]);
             Livewire::test(ListChargingStations::class)
+                ->assertSee('wire:poll.2s', false)
                 ->assertCanSeeTableRecords([$station])
                 ->assertCanNotSeeTableRecords([$retiredStation])
                 ->filterTable('historical_records', true)
@@ -78,6 +79,7 @@ final class StationSetupTest extends TenantSecurityTestCase
                 'connected_at' => now(), 'last_event_at' => now(), 'last_seen_at' => now(),
             ]);
             Livewire::test(SetupChargingStation::class, ['record' => $station->getKey()])
+                ->assertSee('wire:poll.2s.visible', false)
                 ->assertSee('Guided station setup')->assertSee('Prepare the site')
                 ->assertSee('Next step')->assertSee('Operator instructions')
                 ->assertSee('Connected, waiting for a plug status');

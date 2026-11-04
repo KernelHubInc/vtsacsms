@@ -19,7 +19,7 @@
             $attentionTotal = $d['attention_count'] + $d['waiting'] + $d['review'] + $d['payment_exceptions'] + ($d['maintenance_visible'] ? $d['sla_breaches'] : 0);
             $topSitePeak = max(1, $d['top_sites'][0]['energy_wh'] ?? 0);
         @endphp
-        <div class="ps-ops" wire:poll.15s>
+        <div class="ps-ops" wire:poll.2s.visible>
             <header class="ps-ops-intro">
                 <div>
                     <h2>Operations overview</h2>

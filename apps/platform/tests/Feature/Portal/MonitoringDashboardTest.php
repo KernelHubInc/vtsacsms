@@ -113,7 +113,7 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
             $site = (string) $visible->evse->station->site_id;
             $role = $this->createRole($tenant, 'scoped', [PermissionKey::PlatformPanelAccess, PermissionKey::ReportingView, PermissionKey::LocationView, PermissionKey::AssetView, PermissionKey::ChargingSessionView, PermissionKey::PaymentView]);
             $membership = $this->createMembership($tenant, $user);
-            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'panel', [PermissionKey::PlatformPanelAccess]));
+            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'panel', [PermissionKey::PlatformPanelAccess, PermissionKey::OperatorPanelAccess]));
             $this->assignDirectly($tenant, $membership, $role, new ResourceScope(ScopeType::Site, $site));
             $data = app(MonitoringDashboardQuery::class)->read($user);
             self::assertSame(1, $data['station_count']);
@@ -130,7 +130,9 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
             return $site;
         });
         $this->actingAs($user)->get('/admin')->assertOk()->assertSee('Operations overview')->assertSee('Confirmed wallet top-ups')
+            ->assertSee('wire:poll.2s.visible', false)
             ->assertSee('Connector status')->assertSee('Needs attention')->assertSee('Station management')->assertDontSee('ps-eyebrow');
+        $this->get('/operator')->assertOk()->assertSee('wire:poll.2s.visible', false);
         $this->withinTenant($tenant, $user, function () use ($site): void {
             Livewire::test(Dashboard::class)->set('site', $site)->set('days', 30)->set('search', 'nothing-matches')
                 ->assertSee('No stations match your filters')->assertSee('Last 30 days')->call('nextStations')->assertSee('page 1 of 1');

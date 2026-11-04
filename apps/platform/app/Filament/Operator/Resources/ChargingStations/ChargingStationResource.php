@@ -106,7 +106,7 @@ final class ChargingStationResource extends Resource
             })
             ->select('charging_stations.*', 'connection.connected as ocpp_connected', 'connection.last_seen_at as ocpp_last_seen_at'));
 
-        return $table->poll('5s')->columns([
+        return $table->poll('2s')->columns([
             TextColumn::make('name')->searchable()->sortable(),
             TextColumn::make('site.name')->label('Site')->sortable(),
             TextColumn::make('charge_point_identity')->searchable(),

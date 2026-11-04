@@ -20,7 +20,7 @@ final class ChargingController extends ChangeNotifier {
     required bool Function() isAuthenticated,
     UlidGenerator? ids,
     DateTime Function()? now,
-    Duration pollInterval = const Duration(seconds: 5),
+    Duration pollInterval = const Duration(seconds: 2),
   }) => ChargingController._(
     repository,
     store,

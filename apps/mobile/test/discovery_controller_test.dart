@@ -75,7 +75,7 @@ void main() {
   );
 
   testWidgets(
-    'refreshes nearby availability and stops when paused or disposed',
+    'refreshes nearby availability every two seconds and stops when paused or disposed',
     (tester) async {
       final repository = _PollingStationRepository();
       final controller = DiscoveryController(repository);
@@ -83,19 +83,19 @@ void main() {
       var online = true;
       controller.startAutoRefresh(canRefresh: () => online);
       expect(repository.calls, 1);
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 2));
       expect(repository.calls, 2);
       expect(controller.stations, isEmpty);
       expect(controller.isLoading, isFalse);
       online = false;
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 2));
       expect(repository.calls, 2);
       controller.stopAutoRefresh();
       online = true;
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 2));
       expect(repository.calls, 2);
       controller.startAutoRefresh();
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 2));
       expect(repository.calls, 3);
       controller.dispose();
       await tester.pump(const Duration(seconds: 10));

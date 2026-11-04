@@ -79,7 +79,7 @@
             <p class="mt-4 text-sm text-gray-500">Unknown opening hours do not mean closed. Pricing and setup checks do not prove a successful physical charge.</p>
         </x-filament::section>
         <x-filament::section heading="Device connection" id="device-connection">
-            <div class="space-y-4" wire:poll.15s>
+            <div class="space-y-4" wire:poll.2s.visible>
                 <x-filament::badge :color="$setup['connection'] === 'online' ? 'success' : 'gray'">{{ ucfirst($setup['connection']) }}</x-filament::badge>
                 <p class="text-sm">Last device message (UTC): {{ $setup['last_seen'] }}</p>
                 <p class="text-sm">Required final WebSocket path: <code class="break-all">/ocpp/{{ $setup['identity'] }}</code></p>

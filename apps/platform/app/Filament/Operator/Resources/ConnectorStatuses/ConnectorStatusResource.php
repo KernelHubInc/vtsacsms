@@ -36,7 +36,7 @@ final class ConnectorStatusResource extends Resource
     {
         $connectorStates = null;
 
-        return $table->poll('5s')->columns([
+        return $table->poll('2s')->columns([
             TextColumn::make('connector_id')->label('Connector')->copyable()->searchable(),
             TextColumn::make('live_status')->label('Current status')->badge()
                 ->state(function (ConnectorStatus $record, $livewire) use (&$connectorStates): string {

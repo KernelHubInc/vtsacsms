@@ -51,6 +51,41 @@ void main() {
     await push.dispose();
   });
 
+  testWidgets(
+    'payment resolution reaches the app within two seconds without push',
+    (tester) async {
+      controller.dispose();
+      controller = ChargingController(
+        repository: repository,
+        store: store,
+        realtime: realtime,
+        network: network,
+        push: push,
+        ownerId: () => 'driver-1',
+        isAuthenticated: () => authenticated,
+      );
+      repository.active = sampleChargingSession(
+        state: ChargingSessionState.completed,
+        paymentState: PaymentState.requiresAction,
+      );
+      await controller.restoreAuthoritativeSession();
+      expect(controller.phase, ChargingFlowPhase.paymentProcessing);
+      final id = controller.session!.id;
+      repository.sessions[id] = sampleChargingSession(
+        id: id,
+        state: ChargingSessionState.completed,
+        paymentState: PaymentState.notRequired,
+        aggregateVersion: controller.session!.aggregateVersion + 1,
+      );
+      await tester.pump(const Duration(seconds: 2));
+      expect(controller.phase, ChargingFlowPhase.completed);
+      expect(controller.hasUnfinishedSession, isFalse);
+      expect(repository.startCalls, 0);
+      expect(repository.stopCalls, 0);
+      expect(await store.read('driver-1'), isNull);
+    },
+  );
+
   test(
     'a saved cancellation stays recoverable without releasing an uncertain session',
     () async {
