@@ -1,5 +1,17 @@
 # Mobile prepaid charging: staging
 
+## Automatic stopping candidate (2026-11-05)
+
+The driver does not confirm or repeat a budget-limit stop. The server's ten-second monitor forecasts the frozen price/fee at maximum connector power, adding meter age and recent observed queue delay to its existing 90-second allowance. It requests stopping before the reserved session budget is consumed and records the forecast in Activity log (`charging.command.state_changed`, reason `prepaid_stop_forecast`). Native and browser clients already display `stopping`; no new APK is needed for this backend change.
+
+Service-created stops now pass a narrowly scoped authorization check against their tenant, command, transaction, customer and accepted quote. No service-created start or general service job is permitted by this exception. Expired undispatched/rejected automatic stops may retry after 30 seconds, up to three attempts. Accepted/uncertain stops require fresh positive W or two increasing Wh readings on the current online connection after a 60-second confirmation window. The app may be closed throughout this workflow.
+
+Inspect Session diagnostics/Operator charging-session anomalies and Activity log for `remote_stop_unconfirmed` / `automatic_stop_unconfirmed` if physical completion remains unknown. This is an operator issue; it does not ask the driver to approve another stop or mark an otherwise unsettled payment as failed. Clean final charger evidence triggers normal automatic wallet settlement and receipt. Preserve the existing over-budget/incomplete-evidence review protection.
+
+Before production, perform the explicitly requested staging acceptance: fund/choose an authorized low budget, start one physical session, allow the monitor to request stopping without pressing Stop, verify the command has `dispatched_at` and an accepted response, then verify physical end evidence, final Wh/cost, one wallet debit/release and receipt status. Record the session/command references and any timing delays. Stop the test using the charger's supported physical controls if it fails to respond. Do not claim an exact offline peso cutoff or simulate final evidence to pass the test. Production promotion waits for this real-charger result. See [ADR 0029](../architecture/decisions/0029-automatic-prepaid-stop-recovery.md).
+
+The production primary's `worker` profile now starts both the general worker and a dedicated `charging-worker`; App02 must run neither production worker nor scheduler. Include both worker services in primary deployments. Existing isolated staging workers on App02 remain separate.
+
 ## Wallet limit, automatic stop and email confirmation
 
 The amount shown as the estimated preauthorization is the session's reserved budget, not the wallet's entire balance. The backend computes the minimum of the available wallet balance, any account/vehicle spending cap and `MOBILE_CHARGING_MAXIMUM_RESERVATION_MINOR`. Staging is currently configured for 100 centavos (PHP 1) per session. To rehearse a PHP 500 budget, set the staging-only maximum to 50,000 centavos, recreate the web service and confirm the fresh quote displays that budget. Do not change a published tariff to reach the limit without an operator-approved price test.

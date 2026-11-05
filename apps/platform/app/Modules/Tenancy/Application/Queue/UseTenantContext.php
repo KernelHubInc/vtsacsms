@@ -27,18 +27,24 @@ final readonly class UseTenantContext
             ->where('status', TenantStatus::Active->value)
             ->exists();
 
-        if (! $tenantIsActive || ! $this->actorIsAuthorized($envelope)) {
+        if (! $tenantIsActive) {
             throw new InvalidTenantJobContext;
         }
 
         $this->currentTenant->establish($envelope->toTenantContext());
-        Log::shareContext([
-            'tenant_id' => $envelope->tenantId,
-            'job_id' => $envelope->jobId,
-            'correlation_id' => $envelope->correlationId,
-        ]);
-
         try {
+            $authorized = $envelope->actorType === ActorType::Service
+                ? $envelope->actorId === null && $job instanceof TenantServiceJob && $job->serviceContextIsAuthorized()
+                : $this->actorIsAuthorized($envelope);
+            if (! $authorized) {
+                throw new InvalidTenantJobContext;
+            }
+            Log::shareContext([
+                'tenant_id' => $envelope->tenantId,
+                'job_id' => $envelope->jobId,
+                'correlation_id' => $envelope->correlationId,
+            ]);
+
             return $next($job);
         } finally {
             $this->currentTenant->clear();

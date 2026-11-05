@@ -8,4 +8,7 @@ return [
     'quote_seconds' => 120,
     'meter_timeout_seconds' => 60,
     'stop_buffer_seconds' => 90,
+    'stop_retry_seconds' => 30,
+    'stop_confirmation_seconds' => 60,
+    'stop_maximum_attempts' => 3,
 ];

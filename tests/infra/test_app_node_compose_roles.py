@@ -55,9 +55,9 @@ class AppNodeComposeRolesTest(unittest.TestCase):
     def test_web_node_does_not_run_jobs_or_gateway_consumers(self):
         self.assertEqual(services(""), {"platform", "web"})
 
-    def test_primary_node_runs_the_single_worker_and_scheduler(self):
+    def test_primary_node_isolates_charging_jobs_from_reports(self):
         self.assertEqual(services("worker,scheduler"),
-                         {"platform", "web", "worker", "scheduler"})
+                         {"platform", "web", "worker", "charging-worker", "scheduler"})
 
     def test_ocpp_services_require_explicit_profile(self):
         self.assertEqual(services("ocpp"),
@@ -73,10 +73,12 @@ class AppNodeComposeRolesTest(unittest.TestCase):
             cwd=ROOT, env=env, capture_output=True, text=True, timeout=30, check=True,
         )
         configured = json.loads(result.stdout)["services"]
-        self.assertIn("--queue=charging,default,reports,invitations", configured["worker"]["command"])
+        self.assertIn("--queue=default,reports,invitations", configured["worker"]["command"])
+        self.assertIn("--queue=charging", configured["charging-worker"]["command"])
+        self.assertIn("--timeout=60", configured["charging-worker"]["command"])
         self.assertIn("--timeout=120", configured["worker"]["command"])
         self.assertEqual(configured["worker"]["environment"]["REDIS_QUEUE_RETRY_AFTER"], "180")
-        for name in ("worker", "scheduler", "ocpp-event-consumer",
+        for name in ("worker", "charging-worker", "scheduler", "ocpp-event-consumer",
                      "ocpp-authorization-consumer"):
             self.assertTrue(configured[name]["healthcheck"]["disable"], name)
 

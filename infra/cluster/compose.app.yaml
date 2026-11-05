@@ -136,7 +136,17 @@ services:
     profiles: [worker]
     healthcheck:
       disable: true
-    command: ["php", "artisan", "queue:work", "--queue=charging,default,reports,invitations", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    command: ["php", "artisan", "queue:work", "--queue=default,reports,invitations", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    depends_on:
+      platform:
+        condition: service_healthy
+
+  charging-worker:
+    <<: *platform-service
+    profiles: [worker]
+    healthcheck:
+      disable: true
+    command: ["php", "artisan", "queue:work", "--queue=charging", "--sleep=1", "--tries=1", "--timeout=60", "--max-time=3600"]
     depends_on:
       platform:
         condition: service_healthy

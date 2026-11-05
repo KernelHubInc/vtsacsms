@@ -82,6 +82,20 @@ final class QueueTenantContextTest extends TenantSecurityTestCase
         );
     }
 
+    public function test_service_identity_does_not_authorize_an_arbitrary_tenant_job(): void
+    {
+        $tenant = $this->createTenant('queue-service-denied');
+        $job = new FakeTenantAwareJob(new TenantJobEnvelope(
+            (string) Str::ulid(), 1, (string) $tenant->getKey(), ActorType::Service, null, (string) Str::ulid(),
+        ));
+        try {
+            app(UseTenantContext::class)->handle($job, fn () => $this->fail('Service job bypassed authorization.'));
+            $this->fail('Service context was not rejected.');
+        } catch (InvalidTenantJobContext) {
+            $this->assertFalse(app(CurrentTenant::class)->has());
+        }
+    }
+
     private function jobFor(string $tenantId, string $actorId): FakeTenantAwareJob
     {
         return new FakeTenantAwareJob(new TenantJobEnvelope(

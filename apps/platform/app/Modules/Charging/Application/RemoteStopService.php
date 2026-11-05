@@ -68,6 +68,10 @@ final readonly class RemoteStopService
                 ChargingSessionState::SuspendedByEv,
                 ChargingSessionState::SuspendedByEvse,
             ];
+            if (($spendingLimit || $cancelPendingStart) && $locked->state === ChargingSessionState::Stopping
+                && app(AutomaticStopRecovery::class)->retryable($locked)) {
+                $allowed[] = ChargingSessionState::Stopping;
+            }
             if (! in_array($locked->state, $allowed, true)) {
                 throw new DomainException('The charging session is not in a remotely stoppable state.');
             }
@@ -93,7 +97,7 @@ final readonly class RemoteStopService
                 'reason_code' => $cancelPendingStart ? 'driver.cancel_pending_start' : ($spendingLimit ? 'prepaid.spending_limit_or_stale_meter' : 'driver.remote_stop'),
                 'payload' => $payload,
                 'secret_payload' => null,
-                'expected_state' => ['session_state' => $previousState->value],
+                'expected_state' => ['session_state' => $previousState->value, 'energy_wh' => (int) $locked->energy_wh],
                 'expires_at' => $expiresAt,
             ]);
             $this->transitions->record('command', (string) $command->getKey(), null, ChargerCommandState::Requested->value, 'remote_stop_created');

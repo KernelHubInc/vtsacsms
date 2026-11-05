@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
+ * @property string $id
  * @property string $tenant_id
  * @property string $session_id
  * @property string $charging_station_id
@@ -63,5 +64,21 @@ final class ChargerCommand extends Model
     public function session(): BelongsTo
     {
         return $this->belongsTo(ChargingSession::class, 'session_id');
+    }
+
+    public function targetsTransaction(ChargingSession $session): bool
+    {
+        $transaction = $this->payload['transaction_id'] ?? null;
+
+        return $this->type === ChargerCommandType::RemoteStop
+            && $this->tenant_id === $session->tenant_id
+            && $this->session_id === (string) $session->getKey()
+            && $this->charging_station_id === $session->charging_station_id
+            && $this->connector_id === $session->connector_id
+            && $this->charge_point_identity === $session->charge_point_identity
+            && $this->ocpp_action === ($session->protocol === 'ocpp1.6' ? 'RemoteStopTransaction' : 'RequestStopTransaction')
+            && (is_int($transaction) || is_string($transaction))
+            && $session->protocol_transaction_id !== null
+            && (string) $transaction === $session->protocol_transaction_id;
     }
 }

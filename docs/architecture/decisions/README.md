@@ -34,6 +34,8 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 
 | [0028](0028-charging-budgets-and-platform-fees.md) | Customer charging budgets and disclosed platform fees | Accepted; fee activation pending accounting |
 
+| [0029](0029-automatic-prepaid-stop-recovery.md) | Automatic prepaid stop delivery and recovery | Implemented candidate; staging acceptance before production |
+
 ## ADR Template
 
 New records should include status, date, owners, context, decision, decision details, consequences, alternatives, risks/controls, and follow-up decisions. Use the next zero-padded number and a stable descriptive filename.

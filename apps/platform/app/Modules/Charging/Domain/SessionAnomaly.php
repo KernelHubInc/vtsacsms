@@ -14,5 +14,6 @@ enum SessionAnomaly: string
     case MissingStopMeter = 'missing_stop_meter';
     case OutOfOrderMeter = 'out_of_order_meter';
     case ReconstructedAfterReconnect = 'reconstructed_after_reconnect';
+    case RemoteStopUnconfirmed = 'remote_stop_unconfirmed';
     case TariffMissing = 'tariff_missing';
 }

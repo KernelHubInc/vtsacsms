@@ -30,7 +30,9 @@ The scheduled `charging:expire-operations` workflow re-checks persisted state un
 
 ## Unresolved decisions
 
-- Retry policy for `DELIVERY_UNKNOWN`, including which OCPP actions are safe to replay.
+Automatic prepaid stops now use the narrowly authorized service-job contract and bounded recovery described in [ADR 0029](decisions/0029-automatic-prepaid-stop-recovery.md). Each retry is a new intent for the same transaction; expired/terminal intents are never reopened. Acknowledged/ambiguous stops require fresh continuing-flow evidence before another attempt, and stop confirmation remains physical transaction evidence. This does not authorize replay of remote starts or unrelated commands.
+
+- Retry policy for `DELIVERY_UNKNOWN` outside the narrowly bounded automatic prepaid-stop case.
 - Production gateway service credential and command transport topology.
 - Per-operator command deadlines and maximum outstanding commands per charger.
 
