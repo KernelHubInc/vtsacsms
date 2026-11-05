@@ -13,6 +13,99 @@ import 'support/test_fonts.dart';
 
 void main() {
   setUpAll(loadTestFonts);
+
+  testWidgets(
+    'session clock ticks independently and uses confirmed final time',
+    (tester) async {
+      final session = sampleChargingSession(
+        state: ChargingSessionState.charging,
+        durationSeconds: 30,
+      );
+      final repository = FakeChargingRepository()
+        ..sessions[session.id] = session;
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      final charging = fixture.dependencies.charging;
+      await charging.recoverSession(session.id);
+      final initialTime = session.startedAt!.add(const Duration(seconds: 30));
+      var now = initialTime;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: LiveChargingScreen(
+            dependencies: fixture.dependencies,
+            sessionId: session.id,
+            now: () => now,
+          ),
+        ),
+      );
+      try {
+        await tester.pump();
+        expect(find.text('00:00:30'), findsOneWidget);
+        final cost = find.text('₱25.00');
+        expect(cost, findsOneWidget);
+
+        now = initialTime.add(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:31'), findsOneWidget);
+        expect(cost, findsOneWidget);
+        expect(charging.session!.durationSeconds, 30);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 30,
+          aggregateVersion: 2,
+        );
+        await charging.refresh();
+        now = initialTime.add(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:32'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 31,
+          aggregateVersion: 3,
+          anomalyFlags: const ['charger_disconnected'],
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:31'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 4));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('00:00:31'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 31,
+          aggregateVersion: 4,
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:34'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 5));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:35'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.completed,
+          durationSeconds: 33,
+          aggregateVersion: 5,
+          paymentState: PaymentState.captured,
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:33'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 7));
+        await tester.pump(const Duration(seconds: 3));
+        expect(find.text('00:00:33'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        fixture.dependencies.dispose();
+      }
+    },
+  );
   for (final width in [320.0, 390.0]) {
     testWidgets('pending start can be cancelled before timeout at $width', (
       tester,
@@ -231,7 +324,7 @@ void main() {
 
     expect(find.text('Charging in progress'), findsOneWidget);
     expect(find.text('6.42 kWh'), findsOneWidget);
-    expect(find.text('00:12:34'), findsOneWidget);
+    expect(find.text('SESSION TIME'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Charging timeline & vehicle'),
       200,

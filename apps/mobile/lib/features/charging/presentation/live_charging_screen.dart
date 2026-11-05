@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' show max;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -14,11 +17,13 @@ class LiveChargingScreen extends StatefulWidget {
   const LiveChargingScreen({
     required this.dependencies,
     required this.sessionId,
+    this.now = DateTime.now,
     super.key,
   });
 
   final AppDependencies dependencies;
   final String sessionId;
+  final DateTime Function() now;
 
   @override
   State<LiveChargingScreen> createState() => _LiveChargingScreenState();
@@ -111,7 +116,17 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
             const SizedBox(height: VtsaSpacing.md),
             _Actions(dependencies: widget.dependencies, session: session),
             const SizedBox(height: VtsaSpacing.md),
-            _Metrics(session: session),
+            _Metrics(
+              session: session,
+              now: widget.now,
+              liveTime:
+                  charging.isOnline &&
+                  charging.failure == null &&
+                  !session.chargerDisconnected &&
+                  session.isPhysicalActive &&
+                  session.startedAt != null &&
+                  session.stoppedAt == null,
+            ),
             const SizedBox(height: VtsaSpacing.md),
             if (session.batteryPercentage case final int percentage
                 when percentage >= 0 && percentage <= 100) ...[
@@ -342,8 +357,14 @@ class _PhasePanel extends StatelessWidget {
 }
 
 class _Metrics extends StatelessWidget {
-  const _Metrics({required this.session});
+  const _Metrics({
+    required this.session,
+    required this.now,
+    required this.liveTime,
+  });
   final ChargingSession session;
+  final DateTime Function() now;
+  final bool liveTime;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -383,10 +404,11 @@ class _Metrics extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              _Metric(
+              _SessionTimeMetric(
                 width: width,
-                label: 'SESSION TIME',
-                value: formatDuration(session.durationSeconds),
+                startedAt: liveTime ? session.startedAt : null,
+                confirmedSeconds: session.durationSeconds,
+                now: now,
               ),
               _Metric(
                 width: width,
@@ -413,7 +435,9 @@ class _Metrics extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       Text(
-        'Time and cost use the last server update until the session is finalized.',
+        liveTime
+            ? 'Session time counts from the confirmed start. Energy and cost update with charger readings.'
+            : 'Time, energy and cost reflect the last confirmed server update.',
         style: Theme.of(context).textTheme.bodySmall,
       ),
     ],
@@ -479,6 +503,92 @@ class _Reading extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _SessionTimeMetric extends StatefulWidget {
+  const _SessionTimeMetric({
+    required this.width,
+    required this.startedAt,
+    required this.confirmedSeconds,
+    required this.now,
+  });
+
+  final double width;
+  final DateTime? startedAt;
+  final int confirmedSeconds;
+  final DateTime Function() now;
+
+  @override
+  State<_SessionTimeMetric> createState() => _SessionTimeMetricState();
+}
+
+class _SessionTimeMetricState extends State<_SessionTimeMetric>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(_SessionTimeMetric oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _syncTimer();
+    if (state == AppLifecycleState.resumed) setState(() {});
+  }
+
+  void _syncTimer() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (widget.startedAt == null ||
+        !TickerMode.valuesOf(context).enabled ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      _timer?.cancel();
+      _timer = null;
+      return;
+    }
+    _timer ??= Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() {}),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final start = widget.startedAt;
+    // Use the confirmed start rather than counting timer callbacks, which may
+    // be delayed when Android or the browser backgrounds the app.
+    final seconds = start == null
+        ? widget.confirmedSeconds
+        : max(
+            widget.confirmedSeconds,
+            widget.now().difference(start).inSeconds,
+          );
+    return _Metric(
+      width: widget.width,
+      label: 'SESSION TIME',
+      value: formatDuration(seconds),
+    );
+  }
 }
 
 class _Metric extends StatelessWidget {
