@@ -36,13 +36,15 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final fixture = await buildTestDependencies();
+      addTearDown(fixture.dependencies.dispose);
       await tester.pumpWidget(
         RepaintBoundary(
           key: const ValueKey('driver-preview'),
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: VtsaTheme.light(),
-            home: const WelcomeScreen(),
+            home: WelcomeScreen(dependencies: fixture.dependencies),
           ),
         ),
       );

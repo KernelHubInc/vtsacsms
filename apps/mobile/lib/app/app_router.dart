@@ -80,7 +80,7 @@ GoRouter createAppRouter(AppDependencies dependencies, {Uri? initialUri}) {
     routes: [
       GoRoute(
         path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
+        builder: (context, state) => WelcomeScreen(dependencies: dependencies),
       ),
       GoRoute(
         path: '/charging-accounts',

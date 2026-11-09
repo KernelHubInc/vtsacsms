@@ -33,7 +33,7 @@ Before enabling signup, verify outbound mail, the organization and consumer role
 
 ## Google sign-in for the staging Android app
 
-Google login and signup use the existing Laravel identity and mobile token system. The official Android account chooser is enabled by `GOOGLE_SIGN_IN_ENABLED` plus `GOOGLE_SIGN_IN_SERVER_CLIENT_ID` in the Flutter build. The shared browser build keeps this option hidden until a Google-rendered web button and approved origins are configured.
+Google login and signup use the existing Laravel identity and mobile token system. The official Android account chooser is enabled by `GOOGLE_SIGN_IN_ENABLED` plus `GOOGLE_SIGN_IN_SERVER_CLIENT_ID` in the Flutter build. The opening welcome page offers **Continue with Google** beside Sign in and Create account, so drivers can start directly without opening the password form. Existing password accounts confirm linking inline; new accounts continue to profile and vehicle setup. Cancelling or choosing email sign-in clears pending Google state, and competing navigation is disabled while authentication is running. The shared browser build keeps this option hidden until a Google-rendered web button and approved origins are configured.
 
 Before enabling the backend, apply `2026_11_09_000001_add_google_subject_to_users`. Set the following on the staging API alongside its existing driver-registration configuration, then rebuild the configuration cache and redeploy the affected API containers through the normal release process:
 
