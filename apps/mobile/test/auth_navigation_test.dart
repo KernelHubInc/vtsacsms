@@ -13,11 +13,15 @@ void main() {
     final fixture = await buildTestDependencies(signedIn: true);
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
+    if (find.byTooltip('Show charger list').evaluate().isNotEmpty) {
+      await tester.tap(find.byTooltip('Show charger list'));
+    }
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Harbor Exchange'));
     await tester.pumpAndSettle();
     fixture.dependencies.auth.sessionExpired();
     await tester.pumpAndSettle();
-    expect(find.text('Sign in to your drive.'), findsOneWidget);
+    expect(find.text('Welcome back.'), findsOneWidget);
     expect(
       find.text('Your session has ended. Sign in again to continue.'),
       findsOneWidget,
@@ -26,35 +30,39 @@ void main() {
     expect(fixture.dependencies.auth.user, isNull);
   });
 
-  testWidgets('first sign-in unlocks onboarding before discovery', (
+  testWidgets('first sign-in opens the map and setup stays optional', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
     final fixture = await buildTestDependencies(onboardingComplete: false);
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
+    expect(find.text('Power your next drive.'), findsOneWidget);
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextField, 'Email address (required)'),
+      find.byType(TextFormField).first,
       'ada@example.test',
     );
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Password (required)'),
-      'test-only',
-    );
+    await tester.enterText(find.byType(TextFormField).last, 'test-only');
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('A charger that fits your drive.'), findsOneWidget);
-    expect(fixture.stations.lastBounds, isNull);
-    await tester.tap(find.text('Skip'));
+    final router = GoRouter.of(tester.element(find.byType(Scaffold).first));
+    expect(router.routeInformationProvider.value.uri.path, '/explore');
+    expect(fixture.dependencies.bootstrap.onboardingComplete, isFalse);
+    expect(find.text('A charger that fits your drive.'), findsNothing);
+    router.go('/onboarding');
     await tester.pumpAndSettle();
-    expect(find.text('Where would you like to charge?'), findsOneWidget);
+    expect(find.text('Make EVCS your own.'), findsOneWidget);
+    await tester.ensureVisible(find.text('Explore chargers'));
+    await tester.tap(find.text('Explore chargers'));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/explore');
+    expect(fixture.dependencies.bootstrap.onboardingComplete, isTrue);
   });
 
   for (final onboardingComplete in [false, true]) {
-    testWidgets('guest starts at login; onboarding=$onboardingComplete', (
+    testWidgets('guest starts at welcome; onboarding=$onboardingComplete', (
       tester,
     ) async {
       final fixture = await buildTestDependencies(
@@ -63,7 +71,7 @@ void main() {
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
 
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
+      expect(find.text('Power your next drive.'), findsOneWidget);
       expect(find.text('Continue as guest'), findsNothing);
       expect(find.text('Explore'), findsNothing);
       expect(fixture.stations.lastBounds, isNull);
@@ -102,10 +110,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         router.routeInformationProvider.value.uri.path,
-        '/login',
+        '/welcome',
         reason: path,
       );
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
+      expect(find.text('Power your next drive.'), findsOneWidget);
     }
     expect(fixture.stations.lastBounds, isNull);
 
@@ -128,7 +136,7 @@ void main() {
 
     await fixture.dependencies.auth.logout();
     await tester.pumpAndSettle();
-    expect(find.text('Sign in to your drive.'), findsOneWidget);
+    expect(find.text('Power your next drive.'), findsOneWidget);
     expect(router.canPop(), isFalse);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();

@@ -10,6 +10,7 @@ import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/auth_screens.dart';
 import 'package:vtsa_mobile/features/auth/presentation/quick_unlock_screens.dart';
+import 'package:vtsa_mobile/features/auth/presentation/welcome_screen.dart';
 import 'package:vtsa_mobile/features/charging/presentation/activity_screens.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_start_screen.dart';
 import 'package:vtsa_mobile/features/charging/presentation/live_charging_screen.dart';
@@ -45,6 +46,7 @@ GoRouter createAppRouter(AppDependencies dependencies, {Uri? initialUri}) {
         return location == '/unlock' ? null : '/unlock';
       }
       const authRoutes = {
+        '/welcome',
         '/login',
         '/register',
         '/forgot-password',
@@ -52,13 +54,13 @@ GoRouter createAppRouter(AppDependencies dependencies, {Uri? initialUri}) {
       };
       // New destinations are private unless explicitly part of signing in.
       if (dependencies.auth.status == AuthStatus.guest) {
-        return authRoutes.contains(location) ? null : '/login';
+        if (authRoutes.contains(location)) return null;
+        return location == '/unlock' || dependencies.auth.failure != null
+            ? '/login'
+            : '/welcome';
       }
       if (dependencies.auth.needsEmailVerification) {
         return location == '/verify-email' ? null : '/verify-email';
-      }
-      if (!dependencies.bootstrap.onboardingComplete) {
-        return state.matchedLocation == '/onboarding' ? null : '/onboarding';
       }
       if (pendingWebNotice) {
         pendingWebNotice = false;
@@ -67,16 +69,19 @@ GoRouter createAppRouter(AppDependencies dependencies, {Uri? initialUri}) {
       if (dependencies.notices?.takeOpenRequest() == true) {
         return '/updates';
       }
-      if (state.matchedLocation == '/splash' ||
-          state.matchedLocation == '/onboarding') {
+      if (state.matchedLocation == '/splash') {
         return '/explore';
       }
       if (authRoutes.contains(location) || location == '/unlock') {
-        return '/account';
+        return '/explore';
       }
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/welcome',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
       GoRoute(
         path: '/charging-accounts',
         builder: (context, state) =>

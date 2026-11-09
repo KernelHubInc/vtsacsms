@@ -4,14 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/maps/map_models.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
+import 'package:vtsa_mobile/design_system/components/evcs_access.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_map.dart';
 import 'package:vtsa_mobile/features/discovery/presentation/station_widgets.dart';
+import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
 class _MapButton extends StatelessWidget {
   const _MapButton({
@@ -19,11 +20,13 @@ class _MapButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.loading = false,
+    this.asset,
   });
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
   final bool loading;
+  final String? asset;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -39,7 +42,9 @@ class _MapButton extends StatelessWidget {
               dimension: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Icon(icon),
+          : asset == null
+          ? Icon(icon)
+          : EvcsIcon(asset!, color: Theme.of(context).colorScheme.onSurface),
     ),
   );
 }
@@ -61,9 +66,8 @@ class DiscoveryScreen extends StatefulWidget {
 class _DiscoveryScreenState extends State<DiscoveryScreen> {
   bool _showMap = true;
   bool _locating = false;
-  bool _mapExpanded = false;
+  bool _mapAvailable = true;
   final _mapKey = GlobalKey();
-  String? _vehicleId;
   MapPosition? _userPosition;
 
   @override
@@ -73,8 +77,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     _showMap = maps.provider.name == 'google'
         ? maps.googleReady
         : maps.tileConfigurationValid;
+    _mapAvailable = _showMap;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_locateUser(initial: true));
+      unawaited(_loadDefaultArea());
     });
   }
 
@@ -96,7 +101,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => context.push('/vehicles'),
+          onTap: () {
+            Navigator.pop(context);
+            context.push('/vehicles');
+          },
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Row(
@@ -159,259 +167,307 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       widget.dependencies.favorites,
       widget.dependencies.network,
       widget.dependencies.vehicles,
+      if (widget.dependencies.accounts != null) widget.dependencies.accounts!,
       if (widget.dependencies.notices != null) widget.dependencies.notices!,
     ]),
     builder: (context, _) {
       final discovery = widget.dependencies.discovery;
+      final station = discovery.selectedStationId == null
+          ? null
+          : discovery.byId(discovery.selectedStationId!);
+      final insets = MediaQuery.paddingOf(context);
+      final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+      final textScale = MediaQuery.textScalerOf(context).scale(1);
       return Theme(
-        data: DriverTheme.of(context),
+        data: Theme.of(context).copyWith(
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+        ),
         child: Builder(
           builder: (context) => PopScope(
-            canPop: !_mapExpanded,
+            canPop: _showMap || !_mapAvailable,
             onPopInvokedWithResult: (didPop, _) {
-              if (!didPop && _mapExpanded) setState(() => _mapExpanded = false);
+              if (!didPop && _mapAvailable) setState(() => _showMap = true);
             },
             child: Scaffold(
-              body: SafeArea(
-                bottom: false,
-                child: _mapExpanded
-                    ? _map(context)
-                    : Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 600),
-                          child: RefreshIndicator(
-                            onRefresh: () async {
-                              await discovery.refresh();
-                              await widget.dependencies.notices?.refresh();
-                            },
-                            child: ListView(
-                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              resizeToAvoidBottomInset: false,
+              body: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_mapAvailable) _map(context),
+                  if (!_showMap)
+                    Positioned.fill(
+                      top: insets.top + 196 + (textScale - 1).clamp(0, 1) * 40,
+                      child: Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                        child: ListView(
+                          padding: EdgeInsets.fromLTRB(
+                            20,
+                            20,
+                            20,
+                            keyboard + 24,
+                          ),
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: PowerSolutionsLogo(
-                                          height: 30,
-                                          inverse:
-                                              Theme.of(context).brightness ==
-                                              Brightness.dark,
+                                Expanded(
+                                  child: Text(
+                                    'Chargers in this area',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Nearest first',
+                                  onPressed: _locating
+                                      ? null
+                                      : () => _locateUser(nearest: true),
+                                  icon: const Icon(Icons.near_me_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Favorites',
+                                  onPressed: () => context.push('/favorites'),
+                                  icon: const Icon(Icons.favorite_border),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _StationList(dependencies: widget.dependencies),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: insets.top + 20,
+                    left: 20,
+                    right: 20,
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Material(
+                                    elevation: 8,
+                                    shadowColor: PowerSolutionsColors
+                                        .textPrimary
+                                        .withValues(alpha: .12),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: TextField(
+                                      onChanged: (query) {
+                                        discovery.search(query);
+                                        if (query.trim().isNotEmpty) {
+                                          setState(() => _showMap = false);
+                                        }
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText:
+                                            'Where would you like to charge?',
+                                        hintStyle: const TextStyle(
+                                          fontSize: 14,
                                         ),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Updates',
-                                      onPressed: () => context.push('/updates'),
-                                      icon: const Icon(
-                                        Icons.notifications_outlined,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Scan charger code',
-                                      onPressed: () => context.push('/charge'),
-                                      icon: const Icon(Icons.qr_code_scanner),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Favorites',
-                                      onPressed: () =>
-                                          context.push('/favorites'),
-                                      icon: const Icon(Icons.favorite_border),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Where would you like to charge?',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.headlineSmall,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Let’s find a spot that works for you.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 20),
-                                if (!widget.dependencies.network.isOnline)
-                                  const Padding(
-                                    padding: EdgeInsets.only(bottom: 12),
-                                    child: DriverNotice(
-                                      title: 'You’re offline',
-                                      message:
-                                          'Showing the last loaded stations. Refresh before relying on availability.',
-                                    ),
-                                  ),
-                                TextField(
-                                  onChanged: discovery.search,
-                                  decoration: InputDecoration(
-                                    hintText: 'Address, place or station',
-                                    helperText:
-                                        'Search within the loaded map area',
-                                    prefixIcon: const Icon(Icons.search),
-                                    suffixIcon: IconButton(
-                                      tooltip: 'Filters',
-                                      onPressed: () => _showFilters(context),
-                                      icon: Badge(
-                                        isLabelVisible:
-                                            _filterCount(discovery.filters) > 0,
-                                        label: Text(
-                                          '${_filterCount(discovery.filters)}',
-                                        ),
-                                        child: const Icon(Icons.tune),
-                                      ),
-                                    ),
-                                    filled: true,
-                                    fillColor: context.vtsaColors.surfaceSubtle,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                _currentVehicleCard(context),
-                                const SizedBox(height: 16),
-                                if (_showMap)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: SizedBox(
-                                      height:
-                                          (MediaQuery.sizeOf(context).height *
-                                                  .42)
-                                              .clamp(300.0, 440.0),
-                                      child: _map(context),
-                                    ),
-                                  ),
-                                Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    TextButton.icon(
-                                      onPressed: () =>
-                                          setState(() => _showMap = !_showMap),
-                                      icon: Icon(
-                                        _showMap
-                                            ? Icons.view_list_outlined
-                                            : Icons.map_outlined,
-                                      ),
-                                      label: Text(
-                                        _showMap ? 'Hide map' : 'Show map',
-                                      ),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: _locating
-                                          ? null
-                                          : () => _locateUser(nearest: true),
-                                      icon: const Icon(Icons.near_me_outlined),
-                                      label: const Text('Nearest first'),
-                                    ),
-                                  ],
-                                ),
-                                if (widget
-                                    .dependencies
-                                    .vehicles
-                                    .vehicles
-                                    .isNotEmpty)
-                                  DropdownButton<String>(
-                                    isExpanded: true,
-                                    hint: const Text('All vehicles'),
-                                    value:
-                                        widget.dependencies.vehicles.vehicles
-                                            .any((v) => v.id == _vehicleId)
-                                        ? _vehicleId
-                                        : null,
-                                    items: [
-                                      const DropdownMenuItem(
-                                        value: null,
-                                        child: Text('All connectors'),
-                                      ),
-                                      ...widget.dependencies.vehicles.vehicles.map(
-                                        (v) => DropdownMenuItem(
-                                          value: v.id,
-                                          enabled:
-                                              v.connectorStandards.isNotEmpty,
-                                          child: Text(
-                                            v.connectorStandards.isEmpty
-                                                ? '${v.nickname} · add connectors'
-                                                : v.nickname,
+                                        prefixIcon: const Padding(
+                                          padding: EdgeInsets.all(14),
+                                          child: EvcsIcon(
+                                            'map-icon-search',
+                                            size: 20,
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                    onChanged: (id) {
-                                      setState(() => _vehicleId = id);
-                                      final vehicle = widget
-                                          .dependencies
-                                          .vehicles
-                                          .vehicles
-                                          .where((v) => v.id == id)
-                                          .firstOrNull;
-                                      discovery.updateFilters(
-                                        discovery.filters.copyWith(
-                                          clearConnector: true,
-                                          vehicleConnectors:
-                                              vehicle?.connectorStandards
-                                                  .toList() ??
-                                              [],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                if (discovery.selectedStationId != null)
-                                  Builder(
-                                    builder: (context) {
-                                      final station = discovery.byId(
-                                        discovery.selectedStationId!,
-                                      );
-                                      return station == null
-                                          ? const SizedBox.shrink()
-                                          : Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 16,
-                                              ),
-                                              child: StationCard(
-                                                station: station,
-                                                selected: true,
-                                                favorite: widget
-                                                    .dependencies
-                                                    .favorites
-                                                    .contains(station.id),
-                                                onFavorite: () => widget
-                                                    .dependencies
-                                                    .favorites
-                                                    .toggle(station.id),
-                                                onClose: () =>
-                                                    discovery.select(null),
-                                                onTap: () => context.push(
-                                                  '/stations/${station.id}',
-                                                ),
-                                              ),
-                                            );
-                                    },
-                                  ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'Good options in this area',
-                                        style: Theme.of(
+                                        filled: true,
+                                        fillColor: Theme.of(
                                           context,
-                                        ).textTheme.titleLarge,
+                                        ).colorScheme.surface,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 16,
+                                            ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: () => _showFilters(context),
-                                      child: const Text('Filters'),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                                if (discovery.isLoading)
-                                  const LinearProgressIndicator(),
-                                _StationList(dependencies: widget.dependencies),
+                                const SizedBox(width: 12),
+                                _MapButton(
+                                  tooltip: 'Updates',
+                                  icon: Icons.notifications_outlined,
+                                  asset: 'map-icon-bell',
+                                  onPressed: () => context.push('/updates'),
+                                ),
                               ],
+                            ),
+                            const SizedBox(height: 12),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _quickFilter(
+                                    context,
+                                    'Available',
+                                    discovery.filters.availability ==
+                                        StationAvailability.available,
+                                    () => discovery.updateFilters(
+                                      discovery.filters.copyWith(
+                                        availability:
+                                            StationAvailability.available,
+                                        clearAvailability:
+                                            discovery.filters.availability ==
+                                            StationAvailability.available,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _quickFilter(
+                                    context,
+                                    'Fast',
+                                    (discovery.filters.minimumPowerW ?? 0) >=
+                                        50000,
+                                    () => discovery.updateFilters(
+                                      discovery.filters.copyWith(
+                                        minimumPowerW: 50000,
+                                        clearMinimumPower:
+                                            (discovery.filters.minimumPowerW ??
+                                                0) >=
+                                            50000,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _quickFilter(
+                                    context,
+                                    'Compatible',
+                                    discovery
+                                        .filters
+                                        .vehicleConnectors
+                                        .isNotEmpty,
+                                    _chooseCompatibility,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (widget.dependencies.accounts?.shared !=
+                                        true ||
+                                    widget.dependencies.accounts?.selected?.can(
+                                          'wallet_view',
+                                        ) ==
+                                        true) ...[
+                                  Flexible(
+                                    child: _MapWallet(
+                                      key: ValueKey(
+                                        widget.dependencies.accounts?.accountId,
+                                      ),
+                                      repository:
+                                          widget.dependencies.walletRepository,
+                                      onTap: () => context.go('/wallet'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                _MapButton(
+                                  tooltip: _showMap
+                                      ? 'Show charger list'
+                                      : 'Show map',
+                                  icon: _showMap
+                                      ? Icons.list
+                                      : Icons.map_outlined,
+                                  asset: _showMap
+                                      ? 'map-icon-list'
+                                      : 'map-icon-map',
+                                  onPressed: !_mapAvailable
+                                      ? null
+                                      : () => setState(
+                                          () => _showMap = !_showMap,
+                                        ),
+                                ),
+                                const SizedBox(width: 8),
+                                _MapButton(
+                                  tooltip: 'Filters',
+                                  icon: Icons.tune,
+                                  asset: 'map-icon-filter',
+                                  onPressed: () => _showFilters(context),
+                                ),
+                              ],
+                            ),
+                            if (!widget.dependencies.network.isOnline) ...[
+                              const SizedBox(height: 8),
+                              const DriverNotice(
+                                title: 'You’re offline',
+                                message:
+                                    'Showing the last loaded stations. Reconnect to check availability.',
+                              ),
+                            ],
+                            if (discovery.isLoading) ...[
+                              const SizedBox(height: 8),
+                              const LinearProgressIndicator(),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_showMap) ...[
+                    Positioned(
+                      right: 20,
+                      bottom: station == null ? 20 : 245,
+                      child: _MapButton(
+                        tooltip: 'Show my location',
+                        icon: Icons.my_location,
+                        asset: 'map-icon-target',
+                        loading: _locating,
+                        onPressed: _locating ? null : _locateUser,
+                      ),
+                    ),
+                    if (station != null)
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 20,
+                        child: Align(
+                          alignment: Alignment.bottomLeft,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: 440,
+                              maxHeight: MediaQuery.sizeOf(context).height * .4,
+                            ),
+                            child: SingleChildScrollView(
+                              child: StationCard(
+                                station: station,
+                                selected: true,
+                                favorite: widget.dependencies.favorites
+                                    .contains(station.id),
+                                onFavorite: () => widget.dependencies.favorites
+                                    .toggle(station.id),
+                                onClose: () => discovery.select(null),
+                                onTap: () =>
+                                    context.push('/stations/${station.id}'),
+                              ),
                             ),
                           ),
                         ),
                       ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -420,75 +476,94 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     },
   );
 
-  Widget _map(BuildContext context) {
+  Widget _quickFilter(
+    BuildContext context,
+    String label,
+    bool selected,
+    VoidCallback onTap,
+  ) => FilterChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: (_) => onTap(),
+    selectedColor: PowerSolutionsColors.brandNavy,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    checkmarkColor: Colors.white,
+    labelStyle: TextStyle(
+      color: selected ? Colors.white : Theme.of(context).colorScheme.onSurface,
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+    ),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    side: BorderSide(
+      color: selected
+          ? PowerSolutionsColors.brandNavy
+          : context.vtsaColors.border,
+    ),
+  );
+
+  Future<void> _chooseCompatibility() async {
     final discovery = widget.dependencies.discovery;
-    final station = discovery.selectedStationId == null
-        ? null
-        : discovery.byId(discovery.selectedStationId!);
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        StationMap(
-          key: _mapKey,
-          discovery: discovery,
-          configuration: widget.dependencies.environment.maps,
-          userPosition: _userPosition,
-          openStreetMapBuilder: widget.mapBuilder,
-          googleMapsBuilder: widget.mapBuilder,
-          onProviderFailure: () {
-            if (mounted) {
-              setState(() {
-                _showMap = false;
-                _mapExpanded = false;
-              });
-            }
-          },
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Column(
-            children: [
-              _MapButton(
-                tooltip: _mapExpanded ? 'Close expanded map' : 'Expand map',
-                icon: _mapExpanded ? Icons.close : Icons.fullscreen,
-                onPressed: () => setState(() => _mapExpanded = !_mapExpanded),
-              ),
-              const SizedBox(height: 8),
-              _MapButton(
-                tooltip: 'Show my location',
-                icon: Icons.my_location,
-                loading: _locating,
-                onPressed: _locating ? null : _locateUser,
-              ),
-            ],
+    if (discovery.filters.vehicleConnectors.isNotEmpty) {
+      await discovery.updateFilters(
+        discovery.filters.copyWith(vehicleConnectors: []),
+      );
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        children: [
+          Text(
+            'Choose your vehicle',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-        ),
-        if (_mapExpanded && station != null)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 44,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * .4,
+          const SizedBox(height: 16),
+          _currentVehicleCard(context),
+          for (final vehicle in widget.dependencies.vehicles.vehicles)
+            ListTile(
+              title: Text(vehicle.nickname),
+              subtitle: Text(
+                vehicle.connectorStandards.isEmpty
+                    ? 'Add connector details in your garage'
+                    : vehicle.connectorStandards.join(' · '),
               ),
-              child: SingleChildScrollView(
-                child: StationCard(
-                  station: station,
-                  selected: true,
-                  favorite: widget.dependencies.favorites.contains(station.id),
-                  onFavorite: () =>
-                      widget.dependencies.favorites.toggle(station.id),
-                  onClose: () => discovery.select(null),
-                  onTap: () => context.push('/stations/${station.id}'),
-                ),
-              ),
+              enabled: vehicle.connectorStandards.isNotEmpty,
+              onTap: () {
+                discovery.updateFilters(
+                  discovery.filters.copyWith(
+                    clearConnector: true,
+                    vehicleConnectors: vehicle.connectorStandards.toList(),
+                  ),
+                );
+                Navigator.pop(context);
+              },
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
+
+  Widget _map(BuildContext context) => StationMap(
+    key: _mapKey,
+    discovery: widget.dependencies.discovery,
+    configuration: widget.dependencies.environment.maps,
+    userPosition: _userPosition,
+    openStreetMapBuilder: widget.mapBuilder,
+    googleMapsBuilder: widget.mapBuilder,
+    onProviderFailure: () {
+      if (mounted) {
+        setState(() {
+          _mapAvailable = false;
+          _showMap = false;
+        });
+      }
+    },
+  );
 
   Future<void> _locateUser({bool nearest = false, bool initial = false}) async {
     if (!mounted) return;
@@ -541,8 +616,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   Future<void> _loadDefaultArea() async {
     if (widget.dependencies.discovery.stations.isNotEmpty) return;
+    final maps = widget.dependencies.environment.maps;
     await widget.dependencies.discovery.loadBounds(
-      const GeoBounds(west: 120.85, south: 14.45, east: 121.15, north: 14.78),
+      GeoBounds(
+        west: maps.defaultLongitude - .15,
+        south: maps.defaultLatitude - .15,
+        east: maps.defaultLongitude + .15,
+        north: maps.defaultLatitude + .15,
+      ),
     );
   }
 
@@ -781,21 +862,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       ),
     );
     if (selected != null) {
-      if (selected.vehicleConnectors.isEmpty) setState(() => _vehicleId = null);
       await widget.dependencies.discovery.updateFilters(selected);
     }
   }
-
-  int _filterCount(StationFilters filters) => [
-    filters.connector,
-    filters.amenity,
-    filters.vehicleConnectors.isNotEmpty ? true : null,
-    filters.minimumPowerW,
-    filters.availability,
-    filters.operatorId,
-    filters.siteType,
-    filters.openNow ? true : null,
-  ].where((value) => value != null).length;
 }
 
 class _StationList extends StatelessWidget {
@@ -857,4 +926,59 @@ class _StationList extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MapWallet extends StatefulWidget {
+  const _MapWallet({required this.repository, required this.onTap, super.key});
+  final WalletRepository? repository;
+  final VoidCallback onTap;
+  @override
+  State<_MapWallet> createState() => _MapWalletState();
+}
+
+class _MapWalletState extends State<_MapWallet> {
+  late final Future<Map<String, dynamic>>? _summary = widget.repository
+      ?.summary();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder(
+    future: _summary,
+    builder: (context, snapshot) {
+      final data = snapshot.data;
+      final minor = data?['available_minor'];
+      final label =
+          data?['book'] == 'live' && data?['currency'] == 'PHP' && minor is int
+          ? walletMoney(minor)
+          : 'Wallet';
+      return Material(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: widget.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const EvcsIcon('map-icon-wallet', size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }

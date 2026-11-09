@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
+import 'package:vtsa_mobile/design_system/components/evcs_navigation.dart';
 
 import 'support/fakes.dart';
 
@@ -15,12 +16,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Where would you like to charge?'), findsOneWidget);
-      expect(find.byType(PowerSolutionsLogo), findsOneWidget);
+      expect(find.byType(PowerSolutionsLogo), findsNothing);
       expect(find.text('Harbor Exchange'), findsOneWidget);
       expect(find.text('Status stale'), findsOneWidget);
-      expect(fixture.stations.lastBounds?.west, 120.85);
+      expect(fixture.stations.lastBounds?.west, closeTo(120.8342, .00001));
 
-      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.byType(EvcsNavigationBar), findsOneWidget);
     },
   );
 
@@ -31,18 +32,23 @@ void main() {
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in to your drive.'), findsOneWidget);
+    expect(find.text('Power your next drive.'), findsOneWidget);
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextField, 'Email address (required)'),
+      find.byType(TextFormField).first,
       'ada@example.test',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Password (required)'),
+      find.byType(TextFormField).last,
       'correct horse battery staple',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Where would you like to charge?'), findsOneWidget);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
     expect(find.text('Ada Driver'), findsOneWidget);
     expect(fixture.auth.signedIn, isTrue);
   });
@@ -56,12 +62,16 @@ void main() {
 
       expect(find.text('Where would you like to charge?'), findsOneWidget);
 
-      for (final destination in ['Activity', 'Wallet', 'Account']) {
+      for (final (destination, title) in [
+        ('Sessions', 'Activity'),
+        ('Wallet', 'Wallet'),
+        ('Profile', 'Account'),
+      ]) {
         await tester.tap(find.text(destination));
         await tester.pumpAndSettle();
 
         final header = tester.widget<DriverTabPage>(find.byType(DriverTabPage));
-        expect(header.title, destination);
+        expect(header.title, title);
       }
     },
   );

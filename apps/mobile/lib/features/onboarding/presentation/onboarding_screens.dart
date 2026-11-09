@@ -1,201 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_backdrop.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_logo.dart';
+import 'package:vtsa_mobile/design_system/components/evcs_access.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
-import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: PowerSolutionsBackdrop(
-      child: SafeArea(
-        child: Center(
-          child: Semantics(
-            label: 'Power Solutions is starting',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const PowerSolutionsLogo(height: 78),
-                const SizedBox(height: VtsaSpacing.xl),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(VtsaRadii.pill),
-                  child: const SizedBox(
-                    width: 180,
-                    child: LinearProgressIndicator(minHeight: 6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    body: Center(
+      child: Semantics(
+        label: 'Opening EVCS',
+        child: CircularProgressIndicator(),
       ),
     ),
   );
 }
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({required this.dependencies, super.key});
-
   final AppDependencies dependencies;
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
-}
-
-class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _controller = PageController();
-  int _page = 0;
-
-  static const _pages = [
-    (
-      icon: Icons.electric_car_outlined,
-      eyebrow: 'DISCOVER',
-      title: 'A charger that fits your drive.',
-      body:
-          'Search a live, bounded area. Compare connector standards, power, hours, and availability without downloading the whole network.',
+  Widget build(BuildContext context) => EvcsAuthScaffold(
+    title: 'Make EVCS your own.',
+    subtitle: 'Optional setup. You can do this anytime in Profile.',
+    onBack: () => context.canPop() ? context.pop() : context.go('/explore'),
+    actions: VtsaButton(
+      label: 'Explore chargers',
+      onPressed: () async {
+        await dependencies.bootstrap.finishOnboarding();
+        if (context.mounted) context.go('/explore');
+      },
     ),
-    (
-      icon: Icons.radar_outlined,
-      eyebrow: 'TRUST THE SIGNAL',
-      title: 'Freshness is part of the status.',
-      body:
-          'Power Solutions distinguishes available, busy, offline, and stale data so an old signal is never presented as live availability.',
-    ),
-    (
-      icon: Icons.route_outlined,
-      eyebrow: 'YOUR ROUTE',
-      title: 'Hand off. Keep moving.',
-      body:
-          'Open directions in an installed navigation app, save useful stations, and keep vehicle compatibility close at hand.',
-    ),
-  ];
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: PowerSolutionsBackdrop(
-      intensity: 0.45,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(VtsaSpacing.lg),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  const PowerSolutionsLogo(height: 32),
-                  const Spacer(),
-                  TextButton(onPressed: _finish, child: const Text('Skip')),
-                ],
-              ),
-              Expanded(
-                child: PageView.builder(
-                  controller: _controller,
-                  itemCount: _pages.length,
-                  onPageChanged: (page) => setState(() => _page = page),
-                  itemBuilder: (context, index) {
-                    final item = _pages[index];
-                    return Semantics(
-                      liveRegion: true,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                PowerSolutionsFeatureArt(icon: item.icon),
-                                const SizedBox(height: VtsaSpacing.xl),
-                                Text(
-                                  item.eyebrow,
-                                  style: Theme.of(context).textTheme.labelMedium
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                        letterSpacing: 1.5,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                                const SizedBox(height: VtsaSpacing.sm),
-                                Text(
-                                  item.title,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.displayLarge,
-                                ),
-                                const SizedBox(height: VtsaSpacing.lg),
-                                Text(
-                                  item.body,
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        color: context.vtsaColors.textMuted,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Row(
-                children: [
-                  for (var index = 0; index < _pages.length; index++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: index == _page ? 28 : 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(right: VtsaSpacing.xs),
-                      decoration: BoxDecoration(
-                        color: index == _page
-                            ? Theme.of(context).colorScheme.primary
-                            : context.vtsaColors.borderStrong,
-                        borderRadius: BorderRadius.circular(VtsaRadii.pill),
-                      ),
-                    ),
-                  const Spacer(),
-                  VtsaButton(
-                    label: _page == _pages.length - 1
-                        ? 'Explore chargers'
-                        : 'Next',
-                    icon: Icons.arrow_forward,
-                    onPressed: () {
-                      if (_page == _pages.length - 1) {
-                        _finish();
-                      } else {
-                        _controller.nextPage(
-                          duration: const Duration(milliseconds: 240),
-                          curve: Curves.easeOutCubic,
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.electric_car_outlined),
+          title: const Text('Add your vehicle'),
+          subtitle: const Text('Find connectors that fit your car.'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push('/vehicles'),
         ),
-      ),
+        if (dependencies.auth.quickUnlock?.device.supported == true) ...[
+          const SizedBox(height: 12),
+          ListTile(
+            leading: const Icon(Icons.fingerprint),
+            title: const Text('Set up quick access'),
+            subtitle: const Text('Choose an app PIN and optional biometrics.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/account/security'),
+          ),
+        ],
+        const SizedBox(height: 12),
+        ListTile(
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: const Text('Privacy choices'),
+          subtitle: const Text('Manage your preferences in Profile.'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.go('/account'),
+        ),
+      ],
     ),
   );
-
-  Future<void> _finish() async {
-    await widget.dependencies.bootstrap.finishOnboarding();
-    if (mounted) {
-      context.go('/explore');
-    }
-  }
 }

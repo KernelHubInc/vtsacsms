@@ -38,6 +38,8 @@ final class FakeAuthRepository implements AuthRepository {
   AppFailure? resetFailure;
   Completer<void>? resetCompleter;
   Completer<UserProfile>? currentUserCompleter;
+  Completer<void>? currentUserStarted;
+  int currentUserCalls = 0;
   UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
@@ -47,6 +49,10 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    currentUserCalls++;
+    if (currentUserStarted case final started? when !started.isCompleted) {
+      started.complete();
+    }
     if (currentUserCompleter case final pending?) return pending.future;
     if (currentUserFailure case final failure?) {
       throw failure;

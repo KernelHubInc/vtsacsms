@@ -34,7 +34,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(router.routeInformationProvider.value.uri.path, '/login');
+    expect(router.routeInformationProvider.value.uri.path, '/welcome');
     expect(find.text('Updates are unavailable.'), findsNothing);
 
     await fixture.dependencies.auth.login(

@@ -221,7 +221,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sign in').last);
       await tester.pumpAndSettle();
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
+      expect(find.text('Welcome back.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

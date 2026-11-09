@@ -32,6 +32,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Compatible'));
+      await tester.pumpAndSettle();
       expect(find.text('CURRENT VEHICLE'), findsOneWidget);
       expect(find.text('BYD ATTO 3'), findsOneWidget);
       expect(find.text('Plate pending'), findsOneWidget);

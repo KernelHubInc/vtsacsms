@@ -114,7 +114,7 @@ Target values are deliberately deferred until expected scale, markets, and SLAs 
 - notification delivery rate, support response/resolution time, and customer satisfaction;
 - tenant-isolation incidents, privileged-access reviews, and audit completeness.
 
-MOB-AUTH-002: Android/iOS drivers may opt into a separate six-digit app PIN and optional OS-enrolled biometrics after password sign-in and email verification. Unlock is device-local, locks on restart/background, enforces a persistent five-attempt PIN limit and cannot bypass server session expiry, revocation, tenant scope or verification. Password recovery remains available. See [mobile user flows](../design/mobile-user-flows.md) and [ADR-0020](../architecture/decisions/0020-mobile-pin-and-biometric-unlock.md).
+MOB-AUTH-002: Android/iOS drivers may opt into a separate six-digit app PIN and optional OS-enrolled biometrics after password sign-in and email verification. The secure welcome offers the enabled biometric method and App PIN; PIN entry auto-submits after six digits and native-prompt cancellation leaves PIN/password fallback. Unlock is device-local, locks on restart/background, enforces a persistent five-attempt PIN limit and cannot bypass server session expiry, revocation, tenant scope or verification. Successful verified sign-in/unlock opens the map; app setup remains optional in Profile, with no additional A01–A03 entry sequence. See [mobile user flows](../design/mobile-user-flows.md) and [ADR-0020](../architecture/decisions/0020-mobile-pin-and-biometric-unlock.md).
 
 ## 8. Canonical Data Conventions
 

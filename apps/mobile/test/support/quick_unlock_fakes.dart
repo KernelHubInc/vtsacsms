@@ -29,8 +29,16 @@ final class FakeDeviceAuthenticator implements DeviceAuthenticator {
   bool enrolled = true;
   bool accepted = true;
   Completer<bool>? pending;
+  DeviceBiometricKind kind = DeviceBiometricKind.fingerprint;
+  int authenticationCalls = 0;
   @override
   Future<bool> hasBiometrics() async => enrolled;
   @override
-  Future<bool> authenticate() async => pending?.future ?? accepted;
+  Future<bool> authenticate() async {
+    authenticationCalls++;
+    return pending?.future ?? accepted;
+  }
+
+  @override
+  Future<DeviceBiometricKind> biometricKind() async => kind;
 }

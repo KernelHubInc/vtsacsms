@@ -21,7 +21,7 @@ void main() {
       fixture.auth.registrationCompleter = pending;
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Create an account'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
       await fillRegistrationSecurity(tester);
       await pressRegistrationAction(tester, 'Continue');
@@ -115,7 +115,7 @@ void main() {
     );
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create an account'));
+    await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
     await fillRegistrationSecurity(tester);
     await pressRegistrationAction(tester, 'Continue');

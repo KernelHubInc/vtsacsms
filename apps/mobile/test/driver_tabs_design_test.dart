@@ -60,8 +60,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byType(PowerSolutionsLogo), findsOneWidget);
-        await tester.tap(find.text('Account'));
+        expect(find.byType(PowerSolutionsLogo), findsNothing);
+        await tester.tap(find.text('Profile'));
         await tester.pumpAndSettle();
         expect(find.text('Ada Driver'), findsOneWidget);
         await preview(tester, 'account-${width.toInt()}-$scale');
@@ -71,7 +71,7 @@ void main() {
         expect(find.text('Profile'), findsOneWidget);
         await tester.pageBack();
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Activity').last);
+        await tester.tap(find.text('Sessions').last);
         await tester.pumpAndSettle();
         await preview(tester, 'activity-${width.toInt()}-$scale');
         await tester.tap(find.widgetWithText(ChoiceChip, 'Completed'));
@@ -164,14 +164,18 @@ void main() {
         tester.getSize(find.byType(FlutterMap)).height,
         greaterThanOrEqualTo(300),
       );
+      expect(location.calls, 0);
+      await tester.tap(find.byTooltip('Show my location'));
+      await tester.pumpAndSettle();
       expect(location.calls, 1);
       var map = tester.widget<FlutterMap>(find.byType(FlutterMap));
       expect(map.mapController!.camera.center.latitude, closeTo(14.61, .001));
       expect(map.mapController!.camera.center.longitude, closeTo(121.01, .001));
       await preview(tester, 'explore-map-390');
       final mapState = tester.state(find.byType(OpenStreetMapStationMap));
-      await tester.ensureVisible(find.byTooltip('Expand map'));
-      await tester.tap(find.byTooltip('Expand map'));
+      await tester.tap(find.byTooltip('Show charger list'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show map'));
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byType(FlutterMap)).height, greaterThan(600));
       expect(
@@ -198,18 +202,16 @@ void main() {
         find.text('Location is unavailable or permission was not granted.'),
         findsOneWidget,
       );
-      await tester.tap(find.byTooltip('Close expanded map'));
+      await tester.tap(find.byTooltip('Show charger list'));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Expand map'), findsOneWidget);
+      expect(find.byTooltip('Show map'), findsOneWidget);
       expect(
         tester.state(find.byType(OpenStreetMapStationMap)),
         same(mapState),
       );
-      await tester.tap(find.byTooltip('Expand map'));
-      await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Expand map'), findsOneWidget);
+      expect(find.byTooltip('Show charger list'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

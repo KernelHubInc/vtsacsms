@@ -171,7 +171,7 @@ void main() {
     );
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Activity'));
+    await tester.tap(find.text('Sessions'));
     await tester.pumpAndSettle();
     expect(find.text('History service unavailable.'), findsOneWidget);
     expect(find.text('No sessions in this view'), findsNothing);
@@ -409,7 +409,7 @@ void main() {
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Activity'));
+    await tester.tap(find.text('Sessions'));
     await tester.pumpAndSettle();
     expect(find.textContaining('12.00 kWh'), findsOneWidget);
 
