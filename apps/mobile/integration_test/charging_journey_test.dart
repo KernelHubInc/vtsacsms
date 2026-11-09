@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_page.dart';
 
 import '../test/support/fakes.dart';
 
@@ -88,11 +89,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fixture.dependencies.charging.phase, ChargingFlowPhase.completed);
-    await tester.scrollUntilVisible(find.text('Session complete'), -300);
+    final sessionScroll = find
+        .descendant(
+          of: find.byType(ChargingPage),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('Session complete'),
+      -300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('Session complete'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Open receipt'), 300);
+    await tester.scrollUntilVisible(
+      find.text('Open receipt'),
+      300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('Open receipt'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('6.60 kWh'), 300);
+    await tester.scrollUntilVisible(
+      find.text('6.60 kWh'),
+      300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('6.60 kWh'), findsOneWidget);
   });
 }
