@@ -299,6 +299,7 @@ final class FakeChargingRepository implements ChargingRepository {
   int prepareCalls = 0;
   int? lastPreparedBudget;
   String? lastPreparedCode;
+  String? lastPreparedVehicleId;
   int startCalls = 0;
   int stopCalls = 0;
   int cancelCalls = 0;
@@ -366,6 +367,7 @@ final class FakeChargingRepository implements ChargingRepository {
     prepareCalls++;
     lastPreparedBudget = budgetMinor;
     lastPreparedCode = code.value;
+    lastPreparedVehicleId = vehicleId;
     if (prepareFailure case final failure?) {
       throw failure;
     }

@@ -18,6 +18,8 @@ When enrolled, reopening or returning shows the EVCS secure welcome with a priva
 
 The home map fills the available viewport. Search, Available/Fast/Compatible filters, authorized wallet access, list/map switch, notifications and location sit above it. The bottom bar contains Explore, Sessions, Scan, Wallet and Profile. List mode preserves the map instance and its viewport. Station signals and compatibility remain server-derived; stale, offline and unknown states retain their meaning. The initial view uses the configured map region. Location permission is requested contextually through Show my location or Nearest first.
 
+MOB-DISC-UX-001: Explore keeps the current vehicle visible above the bottom navigation, beside the location control, including while a station preview is open. The card opens the vehicle picker; an empty garage opens vehicle management. Selection starts with the saved default, remains in memory for the current garage across tabs and reloads, and preselects the same vehicle in charging review. Choosing a vehicle does not rewrite the server garage default. An active Compatible filter follows the selected vehicle's recorded connector standards. Account changes and vehicle removal discard invalid selections. No vehicle position or model-specific image is inferred from the selected garage record.
+
 ## Guided identity verification
 
 MOB-KYC-002: Explain the process before collecting evidence. Show five named stages: consent, personal details, document selection, photos/face check, and final review. The capture checklist identifies each required side, uploaded evidence, and the next unfinished capture.

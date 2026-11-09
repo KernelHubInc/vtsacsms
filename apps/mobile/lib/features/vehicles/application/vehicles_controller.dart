@@ -21,16 +21,30 @@ final class VehiclesController extends ChangeNotifier {
   AppFailure? failure;
   int _generation = 0;
   String? _loadedOwner;
+  String? _selectedVehicleId;
 
   List<Vehicle> get vehicles =>
       _loadedOwner == _ownerId() ? _vehicles : const [];
   bool get isLoading => _loading;
   Vehicle? get defaultVehicle =>
       vehicles.where((vehicle) => vehicle.isDefault).firstOrNull;
+  Vehicle? get selectedVehicle =>
+      vehicles
+          .where((vehicle) => vehicle.id == _selectedVehicleId)
+          .firstOrNull ??
+      defaultVehicle;
+
+  bool selectVehicle(String id) {
+    if (!vehicles.any((vehicle) => vehicle.id == id)) return false;
+    _selectedVehicleId = id;
+    notifyListeners();
+    return true;
+  }
 
   Future<void> load() async {
     final generation = ++_generation;
     final owner = _ownerId();
+    if (_loadedOwner != owner) _selectedVehicleId = null;
     _loading = true;
     failure = null;
     notifyListeners();
@@ -41,6 +55,9 @@ final class VehiclesController extends ChangeNotifier {
       if (generation == _generation && owner == _ownerId()) {
         _vehicles = items;
         _loadedOwner = owner;
+        if (!items.any((vehicle) => vehicle.id == _selectedVehicleId)) {
+          _selectedVehicleId = null;
+        }
       }
     } on AppFailure catch (error) {
       if (generation == _generation) {

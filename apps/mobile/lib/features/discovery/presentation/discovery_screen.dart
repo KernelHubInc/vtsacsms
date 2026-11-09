@@ -78,13 +78,38 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         ? maps.googleReady
         : maps.tileConfigurationValid;
     _mapAvailable = _showMap;
+    widget.dependencies.vehicles.addListener(_syncVehicleFilter);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncVehicleFilter();
       unawaited(_loadDefaultArea());
     });
   }
 
+  @override
+  void dispose() {
+    widget.dependencies.vehicles.removeListener(_syncVehicleFilter);
+    super.dispose();
+  }
+
+  void _syncVehicleFilter() {
+    final discovery = widget.dependencies.discovery;
+    final current = discovery.filters.vehicleConnectors.toSet();
+    if (current.isEmpty) return;
+    final selected = widget.dependencies.vehicles.selectedVehicle;
+    final standards = selected?.connectorStandards ?? const <String>{};
+    if (current.length == standards.length && current.containsAll(standards)) {
+      return;
+    }
+    unawaited(
+      discovery.updateFilters(
+        discovery.filters.copyWith(vehicleConnectors: standards.toList()),
+      ),
+    );
+  }
+
   Widget _currentVehicleCard(BuildContext context) {
-    final vehicle = widget.dependencies.vehicles.defaultVehicle;
+    final vehicle = widget.dependencies.vehicles.selectedVehicle;
     final hasVehicles = widget.dependencies.vehicles.vehicles.isNotEmpty;
     final description = vehicle == null
         ? hasVehicles
@@ -154,6 +179,83 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 const Icon(Icons.chevron_right),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mapVehicleCard(BuildContext context) {
+    final vehicles = widget.dependencies.vehicles;
+    final vehicle = vehicles.selectedVehicle;
+    final loading = vehicles.isLoading && vehicle == null;
+    final failed = vehicles.failure != null && vehicle == null;
+    final description = vehicle == null
+        ? loading
+              ? 'Loading vehicle…'
+              : failed
+              ? 'Tap to retry'
+              : 'Choose your vehicle'
+        : [
+            vehicle.manufacturer,
+            vehicle.model,
+            vehicle.variant ?? '',
+          ].where((part) => part.trim().isNotEmpty).join(' ');
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      elevation: 3,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: loading
+            ? null
+            : failed
+            ? vehicles.load
+            : vehicles.vehicles.isEmpty
+            ? () => context.push('/vehicles')
+            : _chooseVehicle,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.electric_car_outlined,
+                color: Theme.of(context).colorScheme.primary,
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      failed ? 'Vehicle unavailable' : 'Current vehicle',
+                      style: const TextStyle(fontSize: 11, height: 1.3),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description.isEmpty ? vehicle!.nickname : description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (loading)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(failed ? Icons.refresh : Icons.expand_more, size: 20),
+            ],
           ),
         ),
       ),
@@ -426,47 +528,77 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       ),
                     ),
                   ),
-                  if (_showMap) ...[
+                  if (_showMap)
                     Positioned(
+                      left: 20,
                       right: 20,
-                      bottom: station == null ? 20 : 245,
-                      child: _MapButton(
-                        tooltip: 'Show my location',
-                        icon: Icons.my_location,
-                        asset: 'map-icon-target',
-                        loading: _locating,
-                        onPressed: _locating ? null : _locateUser,
-                      ),
-                    ),
-                    if (station != null)
-                      Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 20,
-                        child: Align(
-                          alignment: Alignment.bottomLeft,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: 440,
-                              maxHeight: MediaQuery.sizeOf(context).height * .4,
+                      bottom: 20,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * .45,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.bottomLeft,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 440,
+                                      ),
+                                      child: _mapVehicleCard(context),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _MapButton(
+                                  tooltip: 'Show my location',
+                                  icon: Icons.my_location,
+                                  asset: 'map-icon-target',
+                                  loading: _locating,
+                                  onPressed: _locating ? null : _locateUser,
+                                ),
+                              ],
                             ),
-                            child: SingleChildScrollView(
-                              child: StationCard(
-                                station: station,
-                                selected: true,
-                                favorite: widget.dependencies.favorites
-                                    .contains(station.id),
-                                onFavorite: () => widget.dependencies.favorites
-                                    .toggle(station.id),
-                                onClose: () => discovery.select(null),
-                                onTap: () =>
-                                    context.push('/stations/${station.id}'),
+                            if (station != null) ...[
+                              const SizedBox(height: 12),
+                              Flexible(
+                                child: Align(
+                                  alignment: Alignment.bottomLeft,
+                                  heightFactor: 1,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 440,
+                                    ),
+                                    child: SingleChildScrollView(
+                                      child: StationCard(
+                                        station: station,
+                                        selected: true,
+                                        favorite: widget.dependencies.favorites
+                                            .contains(station.id),
+                                        onFavorite: () => widget
+                                            .dependencies
+                                            .favorites
+                                            .toggle(station.id),
+                                        onClose: () => discovery.select(null),
+                                        onTap: () => context.push(
+                                          '/stations/${station.id}',
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            ],
+                          ],
                         ),
                       ),
-                  ],
+                    ),
                 ],
               ),
             ),
@@ -510,40 +642,55 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       );
       return;
     }
+    await _chooseVehicle(requireCompatibility: true);
+  }
+
+  Future<void> _chooseVehicle({bool requireCompatibility = false}) async {
+    final discovery = widget.dependencies.discovery;
+    final vehicles = widget.dependencies.vehicles;
+    final filtering =
+        requireCompatibility || discovery.filters.vehicleConnectors.isNotEmpty;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        children: [
-          Text(
-            'Choose your vehicle',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 16),
-          _currentVehicleCard(context),
-          for (final vehicle in widget.dependencies.vehicles.vehicles)
-            ListTile(
-              title: Text(vehicle.nickname),
-              subtitle: Text(
-                vehicle.connectorStandards.isEmpty
-                    ? 'Add connector details in your garage'
-                    : vehicle.connectorStandards.join(' · '),
-              ),
-              enabled: vehicle.connectorStandards.isNotEmpty,
-              onTap: () {
-                discovery.updateFilters(
-                  discovery.filters.copyWith(
-                    clearConnector: true,
-                    vehicleConnectors: vehicle.connectorStandards.toList(),
-                  ),
-                );
-                Navigator.pop(context);
-              },
+      builder: (context) => AnimatedBuilder(
+        animation: vehicles,
+        builder: (context, _) => ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          children: [
+            Text(
+              'Choose your vehicle',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-        ],
+            const SizedBox(height: 16),
+            _currentVehicleCard(context),
+            for (final vehicle in vehicles.vehicles)
+              ListTile(
+                selected: vehicle.id == vehicles.selectedVehicle?.id,
+                title: Text(vehicle.nickname),
+                subtitle: Text(
+                  vehicle.connectorStandards.isEmpty
+                      ? 'Add connector details in your garage'
+                      : vehicle.connectorStandards.join(' · '),
+                ),
+                enabled: !filtering || vehicle.connectorStandards.isNotEmpty,
+                onTap: () {
+                  if (!vehicles.selectVehicle(vehicle.id)) return;
+                  if (requireCompatibility) {
+                    discovery.updateFilters(
+                      discovery.filters.copyWith(
+                        clearConnector: true,
+                        vehicleConnectors: vehicle.connectorStandards.toList(),
+                      ),
+                    );
+                  }
+                  Navigator.pop(context);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

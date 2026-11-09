@@ -272,6 +272,8 @@ MOB-AUTH-003: The locked native welcome shows the authenticated first-name hint 
 
 MOB-CHG-UX-001: One editable charging authorization screen replaces the explanation/review/second-confirmation sequence. Swipe-to-start and its accessible button alternative share the existing server-authorized, idempotent start operation. The driver sees connector, vehicle, tariff, budget and payer before authorization. See [mobile user flows](../design/mobile-user-flows.md).
 
+MOB-DISC-UX-001: Explore shows the current garage vehicle on the map, including with a station preview open. Vehicle selection survives tab switches for the current garage, keeps an active compatibility filter aligned, and preselects charging review without changing the saved garage default. Account changes cannot reuse another garage's selection. See [mobile user flows](../design/mobile-user-flows.md).
+
 The 2026-10-06 feature review is tracked in [mobile staging acceptance](../runbooks/mobile-feature-review-testing.md). The product owner confirmed minimum signup age 18 and a Plate pending option. Wallet payments, pre-submit OCR autofill and booking/queue workflows are explicitly deferred; no production AUB transaction is part of this release.
 
 ### Prepaid wallet increment (2026-10-08)

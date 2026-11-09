@@ -112,6 +112,9 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             onRefresh: () => _prepare(charging.preparation!.target.connectorId),
             onVehicle: (id) {
               _vehicleId = id;
+              if (id != null) {
+                widget.dependencies.vehicles.selectVehicle(id);
+              }
               _prepare(
                 charging.preparation!.target.connectorId,
                 budgetMinor: charging
@@ -283,7 +286,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
       await widget.dependencies.accounts?.load();
     }
     final vehicleId =
-        _vehicleId ?? widget.dependencies.vehicles.defaultVehicle?.id;
+        _vehicleId ?? widget.dependencies.vehicles.selectedVehicle?.id;
     final prepared = await widget.dependencies.charging.prepare(
       rawCode: code,
       budgetMinor: budgetMinor,
@@ -329,7 +332,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     animation: widget.dependencies.vehicles,
     builder: (context, _) {
       final vehicles = widget.dependencies.vehicles;
-      final selected = _vehicleId ?? vehicles.defaultVehicle?.id ?? '';
+      final selected = _vehicleId ?? vehicles.selectedVehicle?.id ?? '';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -355,7 +358,10 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
                   child: Text(vehicle.nickname),
                 ),
             ],
-            onChanged: (id) => setState(() => _vehicleId = id),
+            onChanged: (id) {
+              if (id != null) vehicles.selectVehicle(id);
+              setState(() => _vehicleId = id);
+            },
           ),
           const SizedBox(height: 16),
         ],
