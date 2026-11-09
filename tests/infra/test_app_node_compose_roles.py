@@ -27,6 +27,42 @@ def services(profiles: str) -> set[str]:
 
 
 class AppNodeComposeRolesTest(unittest.TestCase):
+    def test_google_sign_in_is_disabled_without_deployment_configuration(self):
+        for source in (STAGING_ENV_FILE, ENV_FILE):
+            env = os.environ.copy()
+            for key in ("GOOGLE_SIGN_IN_ENABLED", "GOOGLE_SIGN_IN_TENANT_ID",
+                        "GOOGLE_SIGN_IN_SERVER_CLIENT_ID", "GOOGLE_SIGN_IN_ANDROID_CLIENT_ID"):
+                env.pop(key, None)
+            result = subprocess.run(
+                ["docker", "compose", "--env-file", str(source), "-f", str(COMPOSE),
+                 "config", "--format", "json"],
+                cwd=ROOT, env=env, capture_output=True, text=True, timeout=30, check=True,
+            )
+            configured = json.loads(result.stdout)["services"]["platform"]["environment"]
+            self.assertEqual(configured["GOOGLE_SIGN_IN_ENABLED"], "false")
+            for key in ("GOOGLE_SIGN_IN_TENANT_ID", "GOOGLE_SIGN_IN_SERVER_CLIENT_ID",
+                        "GOOGLE_SIGN_IN_ANDROID_CLIENT_ID"):
+                self.assertEqual(configured[key], "")
+
+    def test_google_settings_reach_each_enabled_laravel_service(self):
+        settings = {
+            "GOOGLE_SIGN_IN_ENABLED": "true",
+            "GOOGLE_SIGN_IN_TENANT_ID": "01J0000000VTSADEMA00000000",
+            "GOOGLE_SIGN_IN_SERVER_CLIENT_ID": "staging-server.apps.googleusercontent.com",
+            "GOOGLE_SIGN_IN_ANDROID_CLIENT_ID": "staging-android.apps.googleusercontent.com",
+        }
+        env = {**os.environ, **settings, "COMPOSE_PROFILES": "worker,scheduler,ocpp"}
+        result = subprocess.run(
+            ["docker", "compose", "--env-file", str(STAGING_ENV_FILE), "-f", str(COMPOSE),
+             "config", "--format", "json"],
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=30, check=True,
+        )
+        configured = json.loads(result.stdout)["services"]
+        for name in ("platform", "worker", "charging-worker", "scheduler",
+                     "ocpp-event-consumer", "ocpp-authorization-consumer"):
+            for key, value in settings.items():
+                self.assertEqual(configured[name]["environment"].get(key), value, name)
+
     def test_staging_on_app02_is_web_only(self):
         env = os.environ.copy()
         env.pop("COMPOSE_PROFILES", None)
