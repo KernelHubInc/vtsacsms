@@ -46,6 +46,10 @@ Map and list selection remain synchronized. Location denial does not block manua
 
 ## Authenticated charging start
 
+MOB-CHG-UX-001: A selected connector is prepared directly; a scan or manually entered code resolves to the same single **Ready to charge** screen. It shows the server's connector, vehicle, tariff/tax/fees, budget and payer together. Vehicle and budget edits refresh the server quote in place. Do not add a second normal start-confirmation dialog. A complete rightward swipe authorizes the displayed reservation and calls the existing idempotent start operation once. A visible button alternative uses the same authorization gate. A compatibility mismatch requires explicit acknowledgement on this screen. Offline, unavailable connectors, failed quote refreshes and expired quotes disable start.
+
+An accepted request opens the existing pending session; only charger transaction evidence marks charging active. The session view distinguishes estimated budget usage, confirmed readings, physical stopping, finalization and payment status. A completion/receipt summary uses actual server totals and supplied document links. Do not add a second payment or invent battery, power, remaining funds or final-cost values.
+
 ```mermaid
 flowchart TD
     Entry["Location or connector context"] --> Identify["Scan approved code or enter identifier"]

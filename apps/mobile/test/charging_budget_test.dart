@@ -49,7 +49,7 @@ void main() {
     expect(find.text('Minimum PHP 100.00'), findsOneWidget);
     await tester.tap(find.text('PHP 200.00'));
     await tester.pump();
-    await tester.tap(find.text('Review budget'));
+    await tester.tap(find.text('Apply budget'));
     await tester.pumpAndSettle();
     expect(result, 20000);
   });
@@ -70,7 +70,7 @@ void main() {
       ('1.001', 'Enter an amount with up to two decimal places.'),
     ]) {
       await tester.enterText(find.byType(TextField), entry.$1);
-      await tester.tap(find.text('Review budget'));
+      await tester.tap(find.text('Apply budget'));
       await tester.pump();
       expect(find.text(entry.$2), findsOneWidget);
     }

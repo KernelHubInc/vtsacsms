@@ -7,9 +7,10 @@ import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charge_review.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charger_scanner_view.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_budget_dialog.dart';
-import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_page.dart';
 
 class ChargingStartScreen extends StatefulWidget {
   const ChargingStartScreen({
@@ -32,6 +33,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
   bool _cameraEnabled = false;
   bool _scanHandled = false;
   bool _preparedHere = false;
+  bool _quoteRefreshFailed = false;
   String? _vehicleId;
   String? _preparedVehicleId;
 
@@ -39,8 +41,14 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
   void initState() {
     super.initState();
     _manualCode.text = widget.initialCode ?? '';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.dependencies.vehicles.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await widget.dependencies.vehicles.load();
+      if (mounted &&
+          widget.initialCode != null &&
+          !widget.dependencies.charging.hasUnfinishedSession) {
+        await _prepare(widget.initialCode!);
+      }
     });
     _scanner = MobileScannerController(
       formats: const [BarcodeFormat.qrCode],
@@ -60,13 +68,13 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     final features = widget.dependencies.featureFlags;
     if (!features.remoteCharging && !features.simulatedCharging) {
       return const VtsaPageShell(
-        eyebrow: 'MILESTONE 2',
-        title: 'Charging controls are intentionally disabled',
+        eyebrow: 'CHARGING',
+        title: 'Charging is currently unavailable',
         body: VtsaEmptyState(
           icon: Icons.electric_bolt_outlined,
           title: 'Charging is not available yet',
           description:
-              'You can explore stations and save compatible vehicles. Starting a charge will become available when charging and payment services are enabled.',
+              'You can explore stations and save compatible vehicles. Check back later or contact your charging operator for help.',
         ),
       );
     }
@@ -97,10 +105,22 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             ),
           );
         }
-        if (_preparedHere &&
-            charging.phase == ChargingFlowPhase.reviewing &&
-            charging.preparation != null) {
-          return _ChargeReview(
+        if (_preparedHere && charging.preparation != null) {
+          return ChargeReview(
+            key: ValueKey(charging.preparation!.quote.id),
+            quoteRefreshFailed: _quoteRefreshFailed,
+            onRefresh: () => _prepare(charging.preparation!.target.connectorId),
+            onVehicle: (id) {
+              _vehicleId = id;
+              _prepare(
+                charging.preparation!.target.connectorId,
+                budgetMinor: charging
+                    .preparation!
+                    .quote
+                    .estimatedPreauthorization
+                    .minorUnits,
+              );
+            },
             dependencies: widget.dependencies,
             fallbackVehicleId: _preparedVehicleId,
             onConfirm: _confirmStart,
@@ -115,85 +135,11 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
             },
           );
         }
-        if (widget.initialCode != null) {
-          return DriverPage(
-            title: 'You’re nearly ready',
-            body: ListView(
-              children: [
-                _contextPicker(),
-                const Text('A quick check, then we’ll take it from here.'),
-                const SizedBox(height: 16),
-                const LinearProgressIndicator(
-                  value: 1 / 3,
-                  semanticsLabel: 'Step 1 of 3: confirm the physical connector',
-                ),
-                const SizedBox(height: 24),
-                const DriverNotice(
-                  title: '1  Plug in your vehicle',
-                  message:
-                      'Connect the cable securely. Follow the instructions on your vehicle and charger.',
-                  positive: true,
-                ),
-                const SizedBox(height: 12),
-                const VtsaCard(
-                  padding: EdgeInsets.all(14),
-                  title: '2  Confirm this charger',
-                  child: Text(
-                    'Make sure the selected plug matches the one connected to your vehicle.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const VtsaCard(
-                  padding: EdgeInsets.all(14),
-                  title: '3  Review before you start',
-                  child: Text(
-                    'Check the live price and wallet reservation. Charging starts only after confirmation from the charger.',
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'How would you like to start?',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                const VtsaCard(
-                  padding: EdgeInsets.all(14),
-                  selected: true,
-                  title: 'Start in the app',
-                  child: Text(
-                    'Authorize with your account and prepaid wallet.',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text('RFID start is not available through this app.'),
-                if (charging.failure != null)
-                  VtsaErrorState(
-                    title: 'Could not validate this plug',
-                    description: charging.failure!.message,
-                    correlationId: charging.failure!.correlationId,
-                  ),
-                if (!charging.isOnline)
-                  const Text('Connect to the internet to review live pricing.'),
-                const SizedBox(height: 16),
-                VtsaButton(
-                  label: 'Review charging estimate',
-                  loading: charging.mutationInFlight,
-                  onPressed: charging.isOnline
-                      ? () => _prepare(widget.initialCode!)
-                      : null,
-                ),
-                TextButton(
-                  onPressed: () => context.push('/charge'),
-                  child: const Text('Scan a different charger'),
-                ),
-              ],
-            ),
-          );
-        }
         if (_cameraEnabled) return _cameraView(context);
-        return VtsaPageShell(
-          eyebrow: 'START CHARGING',
-          title: 'Identify the connector',
+        return ChargingPage(
+          title: 'Scan or enter charger code',
+          subtitle: 'Match the code to the connector you’ll use.',
+          step: 0,
           body: ListView(
             children: [
               _contextPicker(),
@@ -207,7 +153,7 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
               ],
               VtsaCard(
                 eyebrow: 'CAMERA PERMISSION',
-                title: 'Scan only when you choose',
+                title: 'Scan the charger QR code',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -216,9 +162,9 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
                     ),
                     const SizedBox(height: VtsaSpacing.lg),
                     VtsaButton(
-                      label: 'Continue to camera',
+                      label: 'Open camera',
                       icon: Icons.qr_code_scanner,
-                      onPressed: charging.isOnline
+                      onPressed: charging.isOnline && !charging.mutationInFlight
                           ? () => setState(() => _cameraEnabled = true)
                           : null,
                     ),
@@ -343,9 +289,17 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
       budgetMinor: budgetMinor,
       vehicleId: vehicleId == '' ? null : vehicleId,
     );
+    if (prepared &&
+        widget.dependencies.charging.selectedPaymentMethod == null) {
+      final methods = widget.dependencies.charging.preparation!.paymentMethods;
+      if (methods.length == 1) {
+        widget.dependencies.charging.selectPaymentMethod(methods.single);
+      }
+    }
     if (mounted) {
       setState(() {
-        _preparedHere = prepared;
+        _quoteRefreshFailed = !prepared;
+        _preparedHere = prepared || _preparedHere;
         _preparedVehicleId = vehicleId;
       });
     }
@@ -364,31 +318,6 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
 
   Future<void> _confirmStart() async {
     final charging = widget.dependencies.charging;
-    final preparation = charging.preparation!;
-    final vehicle = widget.dependencies.vehicles.vehicles
-        .where(
-          (v) =>
-              v.id ==
-              (preparation.attribution.isEmpty
-                  ? _preparedVehicleId
-                  : (preparation.attribution['vehicle'] as Map?)?['id']),
-        )
-        .firstOrNull;
-    final incompatible =
-        vehicle != null &&
-        !vehicle.supports(preparation.target.connectorStandard);
-    final confirmed = await showVtsaConfirmationDialog(
-      context: context,
-      title: incompatible
-          ? 'Start despite compatibility warning?'
-          : 'Start charging?',
-      description:
-          '${preparation.target.stationName}, ${preparation.target.connectorName}. Reserve ${formatMoney(preparation.quote.estimatedPreauthorization)} from ${preparation.attribution['payer'] ?? 'your prepaid wallet'}. We request a stop before this limit; the charger must confirm it. Final cost uses charger readings and unused funds return to the same wallet.',
-      confirmLabel: 'Request start',
-    );
-    if (!confirmed) {
-      return;
-    }
     final started = await charging.start();
     final session = charging.session;
     if (mounted && started && session != null) {
@@ -433,228 +362,4 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
       );
     },
   );
-}
-
-class _ChargeReview extends StatelessWidget {
-  const _ChargeReview({
-    required this.dependencies,
-    required this.onConfirm,
-    required this.onBudget,
-    required this.onBack,
-    this.fallbackVehicleId,
-  });
-
-  final AppDependencies dependencies;
-  final VoidCallback onConfirm;
-  final VoidCallback onBudget;
-  final VoidCallback onBack;
-  final String? fallbackVehicleId;
-
-  @override
-  Widget build(BuildContext context) {
-    final charging = dependencies.charging;
-    final preparation = charging.preparation!;
-    final target = preparation.target;
-    final quote = preparation.quote;
-    final vehicle = dependencies.vehicles.vehicles
-        .where(
-          (v) =>
-              v.id ==
-              (preparation.attribution.isEmpty
-                  ? fallbackVehicleId
-                  : (preparation.attribution['vehicle'] as Map?)?['id']),
-        )
-        .firstOrNull;
-    final compatible = vehicle?.supports(target.connectorStandard);
-    return DriverPage(
-      title: 'Review your charge',
-      actions: [
-        IconButton(
-          tooltip: 'Use another charger code',
-          onPressed: onBack,
-          icon: const Icon(Icons.close),
-        ),
-      ],
-      body: ListView(
-        children: [
-          if (preparation.attribution.isNotEmpty) ...[
-            VtsaCard(
-              eyebrow: 'DRIVER · VEHICLE · PAYER',
-              title:
-                  preparation.attribution['account_name'] as String? ??
-                  'Personal',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Driver: ${preparation.attribution['driver_name'] ?? ''}',
-                  ),
-                  Text(
-                    'Vehicle: ${(preparation.attribution['vehicle'] as Map?)?['nickname'] ?? 'Not selected'}',
-                  ),
-                  Text('Paid by: ${preparation.attribution['payer']}'),
-                  const Text('This session uses only the selected wallet.'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          Text(
-            'REVIEW BEFORE START',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            target.stationName,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          VtsaCard(
-            eyebrow: 'CONNECTOR',
-            title: target.connectorName,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${target.connectorStandard} · ${(target.maximumPowerW / 1000).toStringAsFixed(0)} kW maximum',
-                ),
-                if (target.stationAddress != null) Text(target.stationAddress!),
-                const SizedBox(height: VtsaSpacing.sm),
-                VtsaStatusChip(
-                  label: target.canStart ? 'Available' : target.readiness.name,
-                  state: target.canStart
-                      ? VtsaOperationalState.available
-                      : VtsaOperationalState.unavailable,
-                ),
-              ],
-            ),
-          ),
-          if (compatible == false) ...[
-            const SizedBox(height: VtsaSpacing.md),
-            VtsaCard(
-              eyebrow: 'COMPATIBILITY WARNING',
-              title:
-                  '${vehicle!.nickname} does not list ${target.connectorStandard}',
-              child: const Text(
-                'Check the vehicle inlet and manufacturer guidance before continuing. Power Solutions compatibility data is advisory.',
-              ),
-            ),
-          ],
-          const SizedBox(height: VtsaSpacing.md),
-          VtsaCard(
-            eyebrow: quote.taxInclusive
-                ? 'TAX INCLUDED'
-                : 'PLUS ${(quote.taxRateBasisPoints / 100).toStringAsFixed(2)}% TAX',
-            title: quote.name,
-            child: Column(
-              children: [
-                for (final line in quote.lines)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(line.description),
-                    trailing: Text(
-                      formatMoney(
-                        Money(
-                          minorUnits: line.priceMinor,
-                          currency: quote.currency,
-                        ),
-                      ),
-                    ),
-                  ),
-                if (quote.platformFee['enabled'] == true)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Platform fee · tax included'),
-                    subtitle: Text(
-                      'Once per completed session with charging usage. Waived when charging costs less than ${formatMoney(Money(minorUnits: quote.platformFee['waiver_threshold_minor'] as int, currency: quote.currency))}. Included within your budget.',
-                    ),
-                    trailing: Text(
-                      formatMoney(
-                        Money(
-                          minorUnits: quote.platformFee['amount_minor'] as int,
-                          currency: quote.currency,
-                        ),
-                      ),
-                    ),
-                  ),
-                Divider(color: context.vtsaColors.border),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Charging budget'),
-                  subtitle: const Text(
-                    'Held in your wallet until final readings are checked. Unused funds are released. A network interruption can delay the charger stopping; unresolved charges require review.',
-                  ),
-                  trailing: Text(
-                    formatMoney(quote.estimatedPreauthorization),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                if (quote.budgetPolicy.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: onBudget,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Change budget'),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: VtsaSpacing.md),
-          VtsaCard(
-            eyebrow: 'PREPAID WALLET',
-            title: 'How you will pay',
-            child: preparation.paymentMethods.isEmpty
-                ? const VtsaEmptyState(
-                    title: 'No payment method available',
-                    description:
-                        'Add money to your wallet using QR Ph before starting.',
-                  )
-                : RadioGroup<String>(
-                    groupValue: charging.selectedPaymentMethod?.id,
-                    onChanged: (id) {
-                      final method = preparation.paymentMethods
-                          .where((item) => item.id == id)
-                          .firstOrNull;
-                      if (method != null) {
-                        charging.selectPaymentMethod(method);
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        for (final method in preparation.paymentMethods)
-                          RadioListTile<String>(
-                            value: method.id,
-                            title: Text(method.label),
-                            subtitle: method.lastFour == null
-                                ? null
-                                : Text(
-                                    '${method.brand ?? 'Card'} •••• ${method.lastFour}',
-                                  ),
-                          ),
-                      ],
-                    ),
-                  ),
-          ),
-          if (charging.failure != null) ...[
-            const SizedBox(height: VtsaSpacing.md),
-            VtsaErrorState(
-              title: 'Start request could not continue',
-              description: charging.failure!.message,
-              correlationId: charging.failure!.correlationId,
-            ),
-          ],
-          const SizedBox(height: VtsaSpacing.lg),
-          VtsaButton(
-            label: 'Review and request start',
-            loading: charging.mutationInFlight,
-            onPressed:
-                target.canStart &&
-                    charging.selectedPaymentMethod != null &&
-                    charging.isOnline
-                ? onConfirm
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
 }

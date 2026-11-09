@@ -23,12 +23,22 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Validate connector')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Review and request start'), 300);
-    await tester.tap(find.text('Review and request start'));
+    await tester.tap(find.text('Can’t swipe? Start with a button'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Request start'));
+    await tester.tap(find.text('Start charging'));
     await tester.pumpAndSettle();
     expect(find.text('Waiting for physical start'), findsOneWidget);
 

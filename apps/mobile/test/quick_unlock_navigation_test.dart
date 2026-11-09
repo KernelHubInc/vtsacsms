@@ -5,6 +5,7 @@ import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
+import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'support/fakes.dart';
 import 'support/quick_unlock_fakes.dart';
 
@@ -21,6 +22,13 @@ void main() {
       );
       await store.initialize();
       final fixture = await buildTestDependencies(tokenStore: store);
+      fixture.auth.user = UserProfile(
+        id: fixture.auth.user.id,
+        name: 'Ada Driver',
+        email: 'ada@example.test',
+        emailVerified: true,
+        firstName: 'Ada',
+      );
       final auth = fixture.dependencies.auth;
       await auth.login(email: 'ada@example.test', password: 'test-password');
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
@@ -44,7 +52,9 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
-      expect(find.text('Your saved account'), findsOneWidget);
+      expect(find.text('Ada'), findsOneWidget);
+      expect(auth.user, isNull);
+      expect(find.text('ada@example.test'), findsNothing);
       expect(find.text('Explore'), findsNothing);
       for (final route in [
         '/account',

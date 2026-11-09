@@ -268,6 +268,10 @@ The layout is a proposal, not an instruction to scaffold applications during Pha
 
 ## Mobile feature review acceptance (FR-01–FR-11)
 
+MOB-AUTH-003: The locked native welcome shows the authenticated first-name hint when retained in platform-secure quick-unlock settings, with a generic fallback. It clears with saved credentials and never grants access. See [ADR-0031](../architecture/decisions/0031-device-local-welcome-name-hint.md).
+
+MOB-CHG-UX-001: One editable charging authorization screen replaces the explanation/review/second-confirmation sequence. Swipe-to-start and its accessible button alternative share the existing server-authorized, idempotent start operation. The driver sees connector, vehicle, tariff, budget and payer before authorization. See [mobile user flows](../design/mobile-user-flows.md).
+
 The 2026-10-06 feature review is tracked in [mobile staging acceptance](../runbooks/mobile-feature-review-testing.md). The product owner confirmed minimum signup age 18 and a Plate pending option. Wallet payments, pre-submit OCR autofill and booking/queue workflows are explicitly deferred; no production AUB transaction is part of this release.
 
 ### Prepaid wallet increment (2026-10-08)

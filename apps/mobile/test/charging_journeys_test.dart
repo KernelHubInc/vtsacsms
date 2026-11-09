@@ -235,19 +235,23 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Scan only when you choose'), findsOneWidget);
+    expect(find.text('Scan the charger QR code'), findsOneWidget);
     expect(find.textContaining('Camera video is not stored'), findsOneWidget);
     expect(find.text('Charger code (required)'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
-    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
-    expect(find.text('REVIEW BEFORE START'), findsOneWidget);
+    expect(find.text('Ready to charge'), findsOneWidget);
     expect(find.text('Standard charging'), findsOneWidget);
-    expect(find.text('Charging budget'), findsOneWidget);
+    expect(find.text('Budget limit'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Visa ending 4242'), 240);
     expect(find.text('Visa ending 4242'), findsOneWidget);
   });
@@ -269,23 +273,27 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
-    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
-    expect(find.text('COMPATIBILITY WARNING'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byType(CheckboxListTile), 240);
+    expect(find.byType(CheckboxListTile), findsOneWidget);
     expect(find.textContaining('does not list CCS2'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Review and request start'), 300);
-    await tester.ensureVisible(find.text('Review and request start'));
+    expect(fixture.charging.startCalls, 0);
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Review and request start'));
+    await tester.tap(find.text('Can’t swipe? Start with a button'));
     await tester.pumpAndSettle();
-    expect(find.text('Start despite compatibility warning?'), findsOneWidget);
-    await tester.tap(find.text('Request start'));
+    await tester.tap(find.text('Start charging'));
     await tester.pumpAndSettle();
-
     expect(find.text('Waiting for physical start'), findsOneWidget);
     expect(find.textContaining('charging is not active until'), findsOneWidget);
     await tester.scrollUntilVisible(

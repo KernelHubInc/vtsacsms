@@ -343,7 +343,11 @@ final class AuthController extends ChangeNotifier {
     if (_busy || !canConfigureQuickUnlock || quickUnlock == null) return false;
     _setBusy(true);
     try {
-      await quickUnlock!.configure(pin, biometrics: biometrics);
+      await quickUnlock!.configure(
+        pin,
+        biometrics: biometrics,
+        firstName: _user?.firstName,
+      );
       if (quickUnlock!.locked) lock();
       return quickUnlock!.enabled;
     } on AppFailure catch (failure) {
@@ -376,6 +380,8 @@ final class AuthController extends ChangeNotifier {
       }
       // Local proof never overrides expiry, revocation, membership or verification.
       final user = await _repository.currentUser();
+      if (generation != unlock.generation) return false;
+      await unlock.rememberFirstName(user.firstName);
       if (generation != unlock.generation) return false;
       _user = user;
       _verificationRequired = !user.emailVerified;

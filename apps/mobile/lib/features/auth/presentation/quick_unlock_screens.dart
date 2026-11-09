@@ -161,20 +161,23 @@ class _UnlockScreenState extends State<UnlockScreen> {
                     children: [
                       const EvcsIcon('access-icon-user', size: 22),
                       const SizedBox(width: 14),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Your saved account',
-                              style: TextStyle(
+                              auth.quickUnlock?.savedFirstName ??
+                                  'Your saved account',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 height: 18 / 13,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            Text(
+                            const Text(
                               'Switch account',
                               style: TextStyle(
                                 color: Colors.white,
@@ -390,7 +393,7 @@ class _QuickUnlockSettingsScreenState extends State<QuickUnlockSettingsScreen> {
                       Text(
                         enabled
                             ? 'Your app PIN is enabled${auth.quickUnlock!.biometricsEnabled ? ' with fingerprint / Face ID' : ''}. The app locks when you leave it.'
-                            : 'Create a six-digit app PIN. You can also use a fingerprint or Face ID already enrolled on your phone.',
+                            : 'Create a six-digit app PIN. Your first name will appear on this phone’s locked welcome screen. You can also use a fingerprint or Face ID already enrolled on your phone.',
                       ),
                       const SizedBox(height: 12),
                       const Text(

@@ -51,7 +51,27 @@ final class QuickUnlockStore implements LockableTokenStore {
   @override
   bool get locked => _locked;
   bool get biometricsEnabled => _config?['biometrics'] == true;
+  String? get savedFirstName => _firstName(_config?['first_name']);
   int get generation => _generation;
+
+  static String? _firstName(Object? value) {
+    if (value is! String) return null;
+    final name = value
+        .replaceAll(RegExp(r'[\x00-\x1F\x7F\u202A-\u202E\u2066-\u2069]'), '')
+        .trim();
+    return name.isEmpty ? null : String.fromCharCodes(name.runes.take(80));
+  }
+
+  Future<void> rememberFirstName(String? value) async {
+    final config = _config;
+    if (config == null || _locked) return;
+    final name = _firstName(value);
+    if (name == savedFirstName) return;
+    final updated = Map<String, dynamic>.from(config)..remove('first_name');
+    if (name != null) updated['first_name'] = name;
+    await _settings.write(jsonEncode(updated));
+    if (identical(_config, config)) _config = updated;
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -83,7 +103,11 @@ final class QuickUnlockStore implements LockableTokenStore {
   Future<List<int>> _derive(String pin, List<int> salt) =>
       compute(_derivePin, (pin, salt));
 
-  Future<void> configure(String pin, {required bool biometrics}) async {
+  Future<void> configure(
+    String pin, {
+    required bool biometrics,
+    String? firstName,
+  }) async {
     if (!device.supported ||
         _locked ||
         enabled ||
@@ -121,6 +145,7 @@ final class QuickUnlockStore implements LockableTokenStore {
       'device': tokens.deviceId,
       'biometrics': biometrics,
       'attempts': 0,
+      if (_firstName(firstName) case final String name) 'first_name': name,
     };
     await _settings.write(jsonEncode(config));
     _config = config;

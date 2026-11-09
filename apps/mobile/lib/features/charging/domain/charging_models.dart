@@ -314,6 +314,7 @@ final class ChargingSession {
     this.batteryReportedAt,
     this.estimatedCost,
     this.finalCost,
+    this.reservedBudget,
     this.platformFee,
     this.chargingTotal,
     this.startDeadlineAt,
@@ -352,6 +353,7 @@ final class ChargingSession {
           : DateTime.parse(json['battery_reported_at']! as String).toUtc(),
       estimatedCost: money('estimated_cost_minor'),
       finalCost: money('final_cost_minor'),
+      reservedBudget: money('reserved_budget_minor'),
       platformFee: money('platform_fee_minor'),
       chargingTotal: money('charging_total_minor'),
       requestedAt: DateTime.parse(json['requested_at']! as String).toUtc(),
@@ -402,6 +404,7 @@ final class ChargingSession {
   final DateTime? batteryReportedAt;
   final Money? estimatedCost;
   final Money? finalCost;
+  final Money? reservedBudget;
   final Money? platformFee;
   final Money? chargingTotal;
   final DateTime requestedAt;

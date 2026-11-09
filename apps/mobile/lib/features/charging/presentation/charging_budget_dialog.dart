@@ -137,7 +137,7 @@ class _ChargingBudgetDialogState extends State<ChargingBudgetDialog> {
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(onPressed: _submit, child: const Text('Review budget')),
+      FilledButton(onPressed: _submit, child: const Text('Apply budget')),
     ],
   );
 }
