@@ -19,8 +19,10 @@ import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/data/api_auth_repository.dart';
 import 'package:vtsa_mobile/features/auth/data/device_authenticator.dart';
+import 'package:vtsa_mobile/features/auth/data/native_google_identity.dart';
 import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/charging/application/charging_controller.dart';
 import 'package:vtsa_mobile/features/charging/data/active_session_store.dart';
 import 'package:vtsa_mobile/features/charging/data/api_charging_repository.dart';
@@ -72,6 +74,7 @@ final class AppDependencies {
     required TokenStore tokenStore,
     required ConnectivityService connectivity,
     required AuthRepository authRepository,
+    GoogleIdentityProvider? googleIdentityProvider,
     required StationRepository stationRepository,
     required VehicleRepository vehicleRepository,
     required FavoritesRepository favoritesRepository,
@@ -89,7 +92,11 @@ final class AppDependencies {
     late final AuthController auth;
     String ownerId() =>
         auth.user?.id.isNotEmpty == true ? auth.user!.id : 'guest';
-    auth = AuthController(repository: authRepository, tokens: tokenStore);
+    auth = AuthController(
+      repository: authRepository,
+      tokens: tokenStore,
+      googleIdentityProvider: googleIdentityProvider,
+    );
     final network = NetworkState(connectivity);
     final notices = noticeRepository == null
         ? null
@@ -267,6 +274,13 @@ final class AppDependencies {
         tokens: tokens,
         environment: environment,
       ),
+      googleIdentityProvider:
+          !kIsWeb &&
+              defaultTargetPlatform == TargetPlatform.android &&
+              environment.googleSignInEnabled &&
+              environment.googleServerClientId.isNotEmpty
+          ? NativeGoogleIdentity(environment.googleServerClientId)
+          : null,
       stationRepository: ApiStationRepository(client),
       vehicleRepository: ApiVehicleRepository(
         client,
@@ -314,6 +328,20 @@ final class AppDependencies {
   final ChargingAccountsController? accounts;
   final DriverNoticesController? notices;
   final NoticePushRegistration noticePush;
+
+  Future<void> loadSignedInData() async {
+    if (auth.status != AuthStatus.authenticated ||
+        auth.needsEmailVerification) {
+      return;
+    }
+    await Future.wait([
+      favorites.load(),
+      vehicles.load(),
+      pushRegistration.register(),
+      if (featureFlags.remoteCharging || featureFlags.simulatedCharging)
+        charging.restoreAuthoritativeSession(),
+    ]);
+  }
 
   Future<void> initialize() async {
     await Future.wait([

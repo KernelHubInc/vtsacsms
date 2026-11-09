@@ -3,9 +3,10 @@ import 'package:vtsa_mobile/core/config/app_environment.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 
-final class ApiAuthRepository implements AuthRepository {
+final class ApiAuthRepository implements AuthRepository, GoogleAuthRepository {
   factory ApiAuthRepository({
     required ApiClient client,
     required TokenStore tokens,
@@ -17,6 +18,70 @@ final class ApiAuthRepository implements AuthRepository {
   final ApiClient _client;
   final TokenStore _tokens;
   final AppEnvironment _environment;
+
+  MobileAuthSession _session(Map<String, dynamic> data) => (
+    tokens: TokenBundle(
+      accessToken: data['token']! as String,
+      expiresAt: DateTime.parse(data['expires_at']! as String).toUtc(),
+      tenantId: data['tenant_id']! as String,
+      deviceId: data['device_id']! as String,
+    ),
+    user: UserProfile.fromJson(data['user']! as Map<String, dynamic>),
+  );
+
+  @override
+  Future<GoogleLoginResult> signInWithGoogle(
+    String idToken, {
+    String? password,
+  }) async {
+    try {
+      final response = await _client.dio.post<Map<String, dynamic>>(
+        '/api/v1/auth/google',
+        data: {
+          'id_token': idToken,
+          'tenant_id': _environment.defaultTenantId,
+          'device_name': 'Power Solutions Android app',
+          'password': ?password,
+        },
+        options: Options(extra: {'anonymous': true}),
+      );
+      final data = response.data!['data']! as Map<String, dynamic>;
+      if (data['status'] == 'registration_required') {
+        return GoogleLoginResult.registration(
+          GoogleProfile(
+            email: data['email']! as String,
+            firstName: data['first_name']! as String,
+            lastName: data['last_name']! as String,
+          ),
+        );
+      }
+      return GoogleLoginResult.signedIn(_session(data));
+    } on Object catch (error) {
+      ApiClient.throwFailure(error);
+    }
+  }
+
+  @override
+  Future<MobileAuthSession> registerWithGoogle(
+    String idToken,
+    Map<String, Object?> profile,
+  ) async {
+    try {
+      final response = await _client.dio.post<Map<String, dynamic>>(
+        '/api/v2/auth/google/register',
+        data: {
+          ...profile,
+          'id_token': idToken,
+          'tenant_id': _environment.defaultTenantId,
+          'device_name': 'Power Solutions Android app',
+        },
+        options: Options(extra: {'anonymous': true}),
+      );
+      return _session(response.data!['data']! as Map<String, dynamic>);
+    } on Object catch (error) {
+      ApiClient.throwFailure(error);
+    }
+  }
 
   @override
   Future<({TokenBundle tokens, UserProfile user})> login({

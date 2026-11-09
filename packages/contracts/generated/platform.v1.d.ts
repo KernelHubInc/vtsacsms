@@ -497,6 +497,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Google identity and sign in or request remaining driver registration
+         * @description Environment and tenant gated. Existing unlinked email accounts require their current password before linking. Provider claims never grant roles or bypass MFA, membership or email-verification gates. Google tokens must never be logged.
+         */
+        post: operations["loginGoogleDriver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/auth/google/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a new Google driver's profile and consumer enrollment
+         * @description Verifies the Google token again before atomic account, provider-link, consumer membership, vehicle and mobile session creation. The token determines email. Third-party Google-account email addresses still require local verification.
+         */
+        post: operations["registerGoogleDriver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -1993,6 +2033,41 @@ export interface components {
             password: string;
             tenant_id: components["schemas"]["Ulid"];
             device_name: string;
+        };
+        GoogleLoginRequest: {
+            id_token: string;
+            tenant_id: components["schemas"]["Ulid"];
+            device_name: string;
+            /** @description Current password only for explicitly confirming an existing account link. */
+            password?: string | null;
+        };
+        GoogleRegistrationRequest: {
+            id_token: string;
+            tenant_id: components["schemas"]["Ulid"];
+            device_name: string;
+            first_name: string;
+            middle_name?: string | null;
+            last_name: string;
+            /**
+             * Format: date
+             * @description Must be a valid date from 1900 with age at least 18.
+             */
+            birth_date: string;
+            plate_pending: boolean;
+            /** @description Required when plate_pending is false and prohibited when true. */
+            plate_number?: string | null;
+            /** @constant */
+            terms_accepted: true;
+        };
+        GoogleRegistrationRequired: {
+            data: {
+                /** @constant */
+                status: "registration_required";
+                /** Format: email */
+                email: string;
+                first_name: string;
+                last_name: string;
+            };
         };
         LoginResponse: {
             data: {
@@ -4191,6 +4266,102 @@ export interface operations {
             };
             422: components["responses"]["ValidationError"];
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    loginGoogleDriver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description A tenant-bound mobile session or a registration-required profile. Responses must not be cached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"] | components["schemas"]["GoogleRegistrationRequired"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Google authentication or registration scope is disabled for this tenant. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing password confirmation, MFA or account-conflict recovery is required. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+            /** @description Google public keys cannot currently be obtained. Authentication fails closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    registerGoogleDriver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleRegistrationRequest"];
+            };
+        };
+        responses: {
+            /** @description Driver created with a tenant-bound session. Check the user's email verification status before protected operations. Response must not be cached. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Google authentication or consumer registration is disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The account changed concurrently. Return to Google sign-in. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+            /** @description Google authentication is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     requestPasswordReset: {

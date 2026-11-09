@@ -31,21 +31,37 @@ There is no database migration for this change. Organizations owns membership an
 
 Before enabling signup, verify outbound mail, the organization and consumer role. Test a new email, email verification, sign-in, default vehicle creation, invalid fields, a duplicate email, a different tenant and disabled registration. A refused signup returns `registration_unavailable` with no field errors. Do not enable `FEATURE_DEMO_MODE` on production to work around registration.
 
-## Google sign-in: deferred configuration
+## Google sign-in for the staging Android app
 
-Google sign-in is not enabled or advertised in this release. OAuth client IDs are not configured, and the user requested it last. No dummy sign-in button or credential is included.
+Google login and signup use the existing Laravel identity and mobile token system. The official Android account chooser is enabled by `GOOGLE_SIGN_IN_ENABLED` plus `GOOGLE_SIGN_IN_SERVER_CLIENT_ID` in the Flutter build. The shared browser build keeps this option hidden until a Google-rendered web button and approved origins are configured.
 
-For the next stage:
+Before enabling the backend, apply `2026_11_09_000001_add_google_subject_to_users`. Set the following on the staging API alongside its existing driver-registration configuration, then rebuild the configuration cache and redeploy the affected API containers through the normal release process:
 
-1. In the chosen Google Cloud project, configure Google Auth Platform branding, audience and the app's support/privacy details. Add test users while the app is in testing.
-2. Create a Web application OAuth client. Register the actual browser origins separately for staging and production. A browser origin has no `/mobile/` path. Keep local development origins separate.
-3. Create an Android OAuth client for the package ID from the build and the SHA-1 of the certificate that signs the APK. Test-signed APK and future Play App Signing certificates may require different Android clients.
-4. Supply the public Web and Android client IDs for implementation. Do not put a client secret or service-account private key in Flutter, Git or chat. The Firebase service-account key restriction encountered earlier is separate from creating OAuth clients.
-5. Integrate the official Flutter Google sign-in plugin, including its Google-rendered web button. The backend must verify signature, issuer, audience, expiry and verified-email claims; use Google's stable subject identifier for account links. Existing password accounts need an authenticated linking flow, not automatic takeover by a matching email.
-6. New Google users must still complete required driver details, date-of-birth and vehicle/plate onboarding. Tenant restrictions, suspended accounts, driver permissions and KYC rules must remain enforced.
-7. Test Android and web cancellation, denied consent, wrong audience, expired tokens, account linking, new-account onboarding and tenant isolation before enabling the button.
+```dotenv
+GOOGLE_SIGN_IN_ENABLED=true
+GOOGLE_SIGN_IN_TENANT_ID=01J0000000VTSADEMA00000000
+GOOGLE_SIGN_IN_SERVER_CLIENT_ID=516894406407-cqnbbigrkrq95fq0e0b6ttevub18gn10.apps.googleusercontent.com
+GOOGLE_SIGN_IN_ANDROID_CLIENT_ID=516894406407-lu0cf4am14ubdiv1q8mk8mgu45vl43c3.apps.googleusercontent.com
+```
 
-Official integration references: [Flutter Google sign-in](https://pub.dev/packages/google_sign_in), [Android configuration](https://pub.dev/packages/google_sign_in_android), and [Google backend token verification](https://developers.google.com/identity/sign-in/android/backend-auth).
+These are public staging client identifiers supplied by the operator. Do not use them for production. Both clients must belong to the selected staging Google Cloud project. The Android client must register package `com.vtsa.vtsa_mobile` and the SHA-1 of the certificate signing the installed APK. The existing test-signed APK certificate has SHA-1 `CD:5D:D5:A3:E4:BC:C7:5D:E5:89:BD:E5:98:B3:5A:9E:BF:EA:13:65`. A future Play App Signing certificate needs its own registration. The Web client acts as the Android token's server audience and does not require an origin or redirect URI for this native flow. No client secret or service-account JSON is needed. Outbound HTTPS to Google's fixed JWKS endpoint must work.
+
+In Google Auth Platform, complete branding, external audience, support/privacy details and basic `openid`, `email`, `profile` scopes. Add test users while testing as required by the console. App name/logo display may require Google brand verification. Google Cloud configuration cannot be confirmed by local automated fixtures.
+
+Driver instructions:
+
+1. Tap **Continue with Google** on Sign in or Create account and select a Google account. Dismissing the chooser leaves the account signed out.
+2. A linked account signs in through the normal tenant-scoped mobile session.
+3. A matching existing password account asks for the current Power Solutions password once, then links the verified Google identity. Use Forgot your password if necessary. Linking never moves vehicles, wallet funds or memberships into a new account.
+4. A new account opens Personal information with Google names prefilled for correction, then Vehicle details. Complete date of birth and plate/plate-pending, explicitly accept the linked terms/privacy policy, and tap Create account. A separate password is optional through later password recovery.
+5. Gmail and authoritative Workspace identities can complete email verification through Google. Google accounts using a third-party email address must still follow the local email-verification screen. Existing linked accounts retain their existing verification status. KYC remains a separate requirement for protected operations.
+6. If the Google proof expires while completing the form, choose **Choose another Google account** to authenticate again. Leaving registration clears the in-memory Google proof.
+
+Google is an additional sign-in method. Existing email/password and recovery keep their normal contracts. New provider links and sign-ins appear in the existing audit log. `POST /api/v1/auth/google` verifies the token before returning a session or a registration-required response; `POST /api/v2/auth/google/register` validates the remaining profile and creates the account atomically. Tokens, client secrets and provider subjects must never be added to support screenshots or logs. See [ADR 0030](../architecture/decisions/0030-google-driver-sign-in.md).
+
+Deployment acceptance requires an actual signed Android APK with the correct Google Cloud fingerprint. Verify cancellation, new-user onboarding, password-confirmed linking, repeated login/logout, disabled accounts and failed/expired Google proof. Roll back activation with `GOOGLE_SIGN_IN_ENABLED=false` and retain provider-link data. Production activation and `/mobile/` browser integration are subsequent rollouts.
+
+Official references: [Flutter Google sign-in](https://pub.dev/packages/google_sign_in), [Android configuration](https://pub.dev/packages/google_sign_in_android), [Google backend token verification](https://developers.google.com/identity/sign-in/android/backend-auth), and [button artwork](https://developers.google.com/identity/branding-guidelines). The Google G image in `apps/mobile/assets/interface/google-g.png` is the official asset downloaded from Google's branding guide.
 
 ## Verification boundaries
 

@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
+import 'package:vtsa_mobile/features/auth/presentation/google_access_button.dart';
 import 'package:vtsa_mobile/features/auth/presentation/registration_layout.dart';
 import 'package:vtsa_mobile/features/auth/presentation/registration_validation.dart';
 
@@ -42,7 +43,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return EvcsAuthScaffold(
         title: 'Welcome back.',
         subtitle: 'Sign in to your Power Solutions account',
-        onBack: () => context.canPop() ? context.pop() : context.go('/welcome'),
+        onBack: () {
+          if (auth.isBusy) return;
+          auth.cancelGoogle();
+          context.canPop() ? context.pop() : context.go('/welcome');
+        },
         actions: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -57,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
               variant: VtsaButtonVariant.secondary,
               onPressed: auth.isBusy ? null : () => context.push('/register'),
             ),
+            GoogleAccessButton(dependencies: widget.dependencies),
           ],
         ),
         child: Form(
@@ -179,14 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!signedIn || dependencies.auth.needsEmailVerification) {
       return;
     }
-    await Future.wait([
-      dependencies.favorites.load(),
-      dependencies.vehicles.load(),
-      dependencies.pushRegistration.register(),
-      if (dependencies.featureFlags.remoteCharging ||
-          dependencies.featureFlags.simulatedCharging)
-        dependencies.charging.restoreAuthoritativeSession(),
-    ]);
+    await dependencies.loadSignedInData();
   }
 }
 
@@ -206,6 +205,32 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _plate = TextEditingController();
   DateTime? _birthDate;
   bool _platePending = false;
+  bool _termsAccepted = false;
+  bool get _usingGoogle => widget.dependencies.auth.googleRegistration != null;
+
+  void _applyGoogleProfile() {
+    final profile = widget.dependencies.auth.googleRegistration;
+    if (profile == null) return;
+    setState(() {
+      if (_email.text != profile.email) {
+        _birthDate = null;
+        _plate.clear();
+        _platePending = false;
+      }
+      _termsAccepted = false;
+      _email.text = profile.email;
+      _first.text = profile.firstName;
+      _last.text = profile.lastName;
+      _password.clear();
+      _passwordConfirmation.clear();
+      _invalid = {};
+      _serverErrors.clear();
+      _validated.clear();
+      _requestFailure = null;
+      _step = 1;
+    });
+  }
+
   bool _passwordVisible = false;
   int _step = 0;
   final _scroll = ScrollController();
@@ -262,6 +287,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
+    final google = widget.dependencies.auth.googleRegistration;
+    if (google != null) {
+      _email.text = google.email;
+      _first.text = google.firstName;
+      _last.text = google.lastName;
+      _step = 1;
+    }
     _focusNodes = {
       for (final field in _fieldKeys.keys.where((name) => name != 'birth_date'))
         field: FocusNode(),
@@ -310,6 +342,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
+    widget.dependencies.auth.cancelGoogle(notify: false);
     for (final node in _focusNodes.values) {
       node.dispose();
     }
@@ -335,15 +368,71 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         final busy = widget.dependencies.auth.isBusy;
         final muted = Theme.of(context).textTheme.bodySmall;
         return PopScope(
-          canPop: _step == 0 && !busy,
+          canPop: (_step == 0 || (_usingGoogle && _step == 1)) && !busy,
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop && !busy && _step > 0) _setStep(_step - 1);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!_usingGoogle)
+                GoogleAccessButton(
+                  dependencies: widget.dependencies,
+                  onRegistration: _applyGoogleProfile,
+                ),
+              if (_usingGoogle) ...[
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Continue with Google',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(widget.dependencies.auth.googleRegistration!.email),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () async {
+                                await widget.dependencies.auth
+                                    .signInWithGoogle();
+                                if (!mounted) return;
+                                if (widget
+                                        .dependencies
+                                        .auth
+                                        .googleRegistration !=
+                                    null) {
+                                  _applyGoogleProfile();
+                                } else {
+                                  setState(() {
+                                    _step = 0;
+                                    _requestFailure =
+                                        widget.dependencies.auth.failure;
+                                  });
+                                }
+                              },
+                        child: const Text('Choose another Google account'),
+                      ),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () {
+                                widget.dependencies.auth.cancelGoogle();
+                                setState(() {
+                                  _step = 0;
+                                  _email.clear();
+                                });
+                              },
+                        child: const Text('Use email and password instead'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               Offstage(
-                offstage: _step != 0,
+                offstage: _step != 0 || _usingGoogle,
                 child: ExcludeFocus(
                   excluding: _step != 0,
                   child: RegistrationSection(
@@ -579,6 +668,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (_step == 2) ...[
+                      if (_usingGoogle)
+                        Material(
+                          child: CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _termsAccepted,
+                            onChanged: busy
+                                ? null
+                                : (value) => setState(
+                                    () => _termsAccepted = value ?? false,
+                                  ),
+                            title: const Text(
+                              'I agree to the Terms of service and Privacy policy.',
+                            ),
+                          ),
+                        ),
                       Text(
                         'By creating an account, you agree to our',
                         style: muted,
@@ -625,7 +730,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ],
                     Row(
                       children: [
-                        if (_step > 0) ...[
+                        if (_step > (_usingGoogle ? 1 : 0)) ...[
                           TextButton(
                             onPressed: busy ? null : () => _setStep(_step - 1),
                             child: const Text('Back'),
@@ -636,7 +741,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           child: VtsaButton(
                             label: _step == 2 ? 'Create account' : 'Continue',
                             loading: busy,
-                            onPressed: _step == 2 ? _submit : _continue,
+                            onPressed:
+                                _step == 2 && _usingGoogle && !_termsAccepted
+                                ? null
+                                : (_step == 2 ? _submit : _continue),
                           ),
                         ),
                       ],
@@ -730,7 +838,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (widget.dependencies.auth.isBusy) return;
     FocusScope.of(context).unfocus();
     setState(() {
-      _step = step;
+      _step = _usingGoogle && step == 0 ? 1 : step;
       _passwordVisible = false;
       _requestFailure = null;
     });
@@ -755,18 +863,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _setStep(_step + 1);
   }
 
-  Set<String> _invalidFields() => registrationInvalidFields(
-    firstName: _first.text,
-    middleName: _middle.text,
-    lastName: _last.text,
-    birthDate: _birthDate,
-    today: DateTime.now().toUtc(),
-    plate: _plate.text,
-    platePending: _platePending,
-    email: _email.text,
-    password: _password.text,
-    passwordConfirmation: _passwordConfirmation.text,
-  );
+  Set<String> _invalidFields() {
+    final invalid = registrationInvalidFields(
+      firstName: _first.text,
+      middleName: _middle.text,
+      lastName: _last.text,
+      birthDate: _birthDate,
+      today: DateTime.now().toUtc(),
+      plate: _plate.text,
+      platePending: _platePending,
+      email: _email.text,
+      password: _password.text,
+      passwordConfirmation: _passwordConfirmation.text,
+    );
+    if (_usingGoogle) {
+      invalid.removeAll({'email', 'password', 'password_confirmation'});
+    }
+    return invalid;
+  }
 
   Future<void> _submit() async {
     if (_step != 2 || widget.dependencies.auth.isBusy) return;
@@ -781,7 +895,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _showFirstInvalid();
       return;
     }
-    final created = await widget.dependencies.auth.register(
+    final dependencies = widget.dependencies;
+    final created = await dependencies.auth.register(
       name: [
         _first.text.trim(),
         _middle.text.trim(),
@@ -796,8 +911,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       email: _email.text,
       password: _password.text,
       passwordConfirmation: _passwordConfirmation.text,
+      termsAccepted: _termsAccepted,
     );
+    if (created) await dependencies.loadSignedInData();
     if (!mounted) return;
+    if (created &&
+        widget.dependencies.auth.status == AuthStatus.authenticated) {
+      return;
+    }
     if (!created) {
       final failure = widget.dependencies.auth.failure;
       setState(() {

@@ -3,6 +3,7 @@ import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 
 enum AuthStatus { checking, guest, locked, authenticated }
@@ -11,12 +12,78 @@ final class AuthController extends ChangeNotifier {
   factory AuthController({
     required AuthRepository repository,
     required TokenStore tokens,
-  }) => AuthController._(repository, tokens);
+    GoogleIdentityProvider? googleIdentityProvider,
+  }) => AuthController._(repository, tokens, googleIdentityProvider);
 
-  AuthController._(this._repository, this._tokens);
+  AuthController._(this._repository, this._tokens, this._googleProvider);
 
   final AuthRepository _repository;
   final TokenStore _tokens;
+  final GoogleIdentityProvider? _googleProvider;
+  String? _googleToken;
+  GoogleProfile? _googleProfile;
+  bool _googleLinkRequired = false;
+  bool get googleAvailable =>
+      _googleProvider != null && _repository is GoogleAuthRepository;
+  GoogleProfile? get googleRegistration => _googleProfile;
+  bool get googleLinkRequired => _googleLinkRequired;
+
+  Future<void> signInWithGoogle({String? password}) async {
+    if (_busy || !googleAvailable) return;
+    _setBusy(true);
+    try {
+      if (password == null) {
+        _clearGoogle();
+        _googleToken = await _googleProvider!.authenticate();
+      }
+      final token = _googleToken;
+      if (token == null) return;
+      final result = await (_repository as GoogleAuthRepository)
+          .signInWithGoogle(token, password: password);
+      if (result.session != null) {
+        await _acceptGoogleSession(result.session!);
+      } else {
+        _googleProfile = result.profile;
+      }
+    } on AppFailure catch (failure) {
+      _failure = failure;
+      _googleLinkRequired =
+          failure.code == 'google_link_required' ||
+          (password != null && failure.code == 'invalid_credentials');
+      if (!_googleLinkRequired) _clearGoogle();
+    } on Object {
+      _clearGoogle();
+      _failure = const AppFailure(
+        kind: FailureKind.unknown,
+        message: 'Google sign-in could not finish. Please try again.',
+      );
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  void cancelGoogle({bool notify = true}) {
+    if (_busy) return;
+    _clearGoogle();
+    _failure = null;
+    if (notify) notifyListeners();
+  }
+
+  void _clearGoogle() {
+    _googleToken = null;
+    _googleProfile = null;
+    _googleLinkRequired = false;
+  }
+
+  Future<void> _acceptGoogleSession(MobileAuthSession session) async {
+    await _tokens.write(session.tokens);
+    _user = session.user;
+    _verificationRequired = !session.user.emailVerified;
+    _status = AuthStatus.authenticated;
+    _passwordSignIn = false;
+    _clearGoogle();
+  }
+
   AuthStatus _status = AuthStatus.checking;
   UserProfile? _user;
   AppFailure? _failure;
@@ -89,6 +156,7 @@ final class AuthController extends ChangeNotifier {
   Future<bool> login({required String email, required String password}) async {
     if (_busy) return false;
     _setBusy(true);
+    _clearGoogle();
     try {
       final result = await _repository.login(email: email, password: password);
       await _tokens.write(result.tokens);
@@ -119,11 +187,29 @@ final class AuthController extends ChangeNotifier {
     String? birthDate,
     String? plateNumber,
     bool platePending = false,
+    bool termsAccepted = false,
   }) async {
     if (_busy) return false;
     _setBusy(true);
     _registration = null;
     try {
+      if (_googleProfile != null &&
+          _googleToken != null &&
+          _repository is GoogleAuthRepository) {
+        final session = await (_repository as GoogleAuthRepository)
+            .registerWithGoogle(_googleToken!, {
+              'first_name': firstName?.trim(),
+              'middle_name': middleName?.trim(),
+              'last_name': lastName?.trim(),
+              'birth_date': birthDate,
+              'plate_pending': platePending,
+              if (!platePending)
+                'plate_number': plateNumber?.trim().toUpperCase(),
+              'terms_accepted': termsAccepted,
+            });
+        await _acceptGoogleSession(session);
+        return true;
+      }
       _registration = await _repository.register(
         name: name,
         email: email,
@@ -186,6 +272,7 @@ final class AuthController extends ChangeNotifier {
       await _tokens.clear();
       _user = null;
       _passwordSignIn = false;
+      _clearGoogle();
       _verificationRequired = false;
       _status = AuthStatus.guest;
       _setBusy(false);

@@ -58,6 +58,8 @@ Controls are repeated at boundaries. Network placement alone never grants busine
 - Workforce SSO may be added through OIDC/SAML after provider/realm decisions. External group claims map only to reviewed application role assignments.
 - Driver and workforce identity realm separation/account linking remains open.
 
+Driver Google sign-in uses verified provider subjects, password-confirmed linking for existing accounts and the existing tenant membership/MFA gates. Google-only signup still requires the driver profile, vehicle and terms flow. See [ADR 0030](decisions/0030-google-driver-sign-in.md) for token verification, provider-link retention and rollout controls.
+
 ### Machine identities
 
 - API clients, services, jobs, gateway nodes, and chargers use distinct non-human identities with owner, environment, scopes, expiry/rotation, and revocation.

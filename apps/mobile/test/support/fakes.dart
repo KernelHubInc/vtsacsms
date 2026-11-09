@@ -11,6 +11,7 @@ import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
@@ -22,7 +23,7 @@ import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
-final class FakeAuthRepository implements AuthRepository {
+class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.signedIn = false});
 
   bool signedIn;
@@ -440,6 +441,8 @@ Future<
 buildTestDependencies({
   bool onboardingComplete = true,
   bool signedIn = false,
+  FakeAuthRepository? authRepository,
+  GoogleIdentityProvider? googleIdentityProvider,
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
   KycRepository? kycRepository,
@@ -465,7 +468,7 @@ buildTestDependencies({
       ),
     );
   }
-  final auth = FakeAuthRepository(signedIn: signedIn);
+  final auth = authRepository ?? FakeAuthRepository(signedIn: signedIn);
   final stationRepository = FakeStationRepository(stations: stations);
   final charging = chargingRepository ?? FakeChargingRepository();
   final dependencies = AppDependencies.fromParts(
@@ -497,6 +500,7 @@ buildTestDependencies({
     tokenStore: tokens,
     connectivity: const AlwaysOnlineConnectivity(),
     authRepository: auth,
+    googleIdentityProvider: googleIdentityProvider,
     stationRepository: stationRepository,
     vehicleRepository: LocalVehicleRepository(preferences),
     favoritesRepository: LocalFavoritesRepository(preferences),
