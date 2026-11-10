@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property string $tenant_id
  * @property string $subject_id
+ * @property string $email_hash
  * @property string $plan_hash
  * @property string|null $token_hash
  * @property CarbonImmutable $expires_at
@@ -24,7 +25,7 @@ final class WorkforceEnrollment extends Model
 
     protected $table = 'identity_workforce_enrollments';
 
-    protected $fillable = ['tenant_id', 'subject_id', 'plan_hash', 'token_hash', 'expires_at', 'completed_at', 'email_sent_at'];
+    protected $fillable = ['tenant_id', 'subject_id', 'email_hash', 'plan_hash', 'token_hash', 'expires_at', 'completed_at', 'email_sent_at'];
 
     protected $hidden = ['token_hash'];
 

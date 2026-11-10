@@ -306,6 +306,20 @@ final class AdministratorEnrollmentTest extends TenantSecurityTestCase
         $this->postJson('/workforce/setup', $data)->assertStatus(429);
     }
 
+    public function test_email_changes_cannot_redirect_approved_enrollment(): void
+    {
+        $this->bootstrap();
+        $data = $this->setupData('admin@example.test');
+        $user = User::query()->where('email', 'admin@example.test')->sole();
+        $user->forceFill(['email' => 'unapproved@example.test'])->save();
+        $this->postJson('/workforce/setup', $data)->assertStatus(422);
+        $this->assertNull($user->fresh()->activated_at);
+        Notification::fake();
+        $this->bootstrap(resend: true);
+        Notification::assertSentOnDemandTimes(WorkforceEnrollmentNotification::class, 1);
+        Notification::assertSentOnDemand(WorkforceEnrollmentNotification::class, fn ($notification, $channels, $notifiable): bool => $notifiable->routes['mail'] === 'super.admin@example.test');
+    }
+
     public function test_command_requires_explicit_confirmation_and_emits_no_credentials(): void
     {
         $options = ['--tenant' => $this->tenant->getKey(), '--super-admin' => 'super.admin@example.test', '--admin' => 'admin@example.test', '--organization' => 'Power Solutions Platform', '--approval-reference' => 'owner-approved-test'];

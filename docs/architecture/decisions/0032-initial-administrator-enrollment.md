@@ -1,8 +1,10 @@
 # ADR-0032: Initial administrator enrollment
 
-**Status:** Accepted by explicit tenant-owner approval  
-**Date:** 2026-11-11  
-**Owners:** Identity and Organizations  
+**Status:** Accepted by explicit tenant-owner approval
+
+**Date:** 2026-11-11
+
+**Owners:** Identity and Organizations
 **Requirements:** FR-IDN-001, FR-IDN-003, FR-IDN-005, FR-IDN-006, FR-ORG-002–004
 
 ## Context
@@ -15,7 +17,7 @@ Provide a trusted Platform CLI operation for one owner-approved administrator pa
 
 Organizations owns the atomic bootstrap reservation, platform organization, memberships, roles, permission grants and assignments. The tenant-unique reservation serializes retries; a digest binds the original identities, organization and permission lists. A different plan fails. Existing platform-panel assignments prevent a fresh bootstrap. Repeating the same completed plan returns the original public IDs without creating or restoring grants. Every new privileged assignment and completed bootstrap enters the tamper-evident audit ledger with the approval reference and a Platform actor; no human grantor is fabricated.
 
-Identity's `WorkforceEnrollmentService::prepare` owns new identities and credentials. Its credential-free projection returns a subject ULID and the existing internal user key required by the legacy membership foreign key. Organizations never imports or writes the User model. This narrow compatibility reference does not expose a password/hash or establish a second identity owner. Enrollment records use public subject ULIDs without a cross-context foreign key. Identity completion consults Tenancy's active-status query and Organizations' current authorization query.
+Identity's `WorkforceEnrollmentService::prepare` owns new identities and credentials. Its credential-free projection returns a subject ULID and the existing internal user key required by the legacy membership foreign key. Organizations never imports or writes the User model. This narrow compatibility reference does not expose a password/hash or establish a second identity owner. Enrollment records use public subject ULIDs without a cross-context foreign key. A stored hash binds the approved email address; changing the identity email blocks completion and resend rather than redirecting the approved access. Identity completion consults Tenancy's active-status query and Organizations' current authorization query.
 
 New identities have no activation or email verification and an inaccessible random password. They cannot sign in. Only the recipient of a private email may set the usable password and activate the account. The 256-bit setup token is stored as a SHA-256 verifier, expires after 24 hours and is consumed under row locks. The emailed URL carries the credential in its fragment, keeping it out of HTTP access URLs. The isolated page removes the fragment from visible history and posts the token with CSRF protection. Responses use no-store and no-referrer; the page's CSP permits only local assets and connections. Passwords require at least 12 characters and the shared complexity policy; bcrypt inputs over 72 bytes are rejected. Passwords and setup tokens are never flashed, audited, printed or included in application telemetry.
 

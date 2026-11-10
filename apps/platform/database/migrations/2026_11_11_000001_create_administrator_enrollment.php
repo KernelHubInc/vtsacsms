@@ -14,6 +14,7 @@ return new class extends Migration
             $table->ulid('id')->primary();
             $table->ulid('tenant_id');
             $table->ulid('subject_id');
+            $table->string('email_hash', 64);
             $table->string('plan_hash', 64);
             $table->string('token_hash', 64)->nullable()->unique();
             $table->timestampTz('expires_at');

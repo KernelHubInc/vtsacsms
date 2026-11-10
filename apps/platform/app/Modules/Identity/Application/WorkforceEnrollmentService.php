@@ -37,6 +37,7 @@ final readonly class WorkforceEnrollmentService
         $user = User::query()->create(['name' => $email, 'email' => $email, 'password' => Str::random(64), 'activated_at' => null]);
         $enrollment = WorkforceEnrollment::query()->create([
             'subject_id' => $user->public_id,
+            'email_hash' => hash('sha256', $email),
             'plan_hash' => $planHash,
             'token_hash' => null,
             'expires_at' => now('UTC'),
@@ -53,7 +54,8 @@ final readonly class WorkforceEnrollmentService
         foreach ($subjects as $subjectId) {
             $enrollment = WorkforceEnrollment::query()->where('subject_id', $subjectId)->where('plan_hash', $planHash)->lockForUpdate()->firstOrFail();
             $user = User::query()->where('public_id', $subjectId)->lockForUpdate()->firstOrFail();
-            if ($enrollment->completed_at === null && $user->activated_at === null && $user->disabled_at === null) {
+            if ($enrollment->completed_at === null && $user->activated_at === null && $user->disabled_at === null
+                && hash_equals($enrollment->email_hash, hash('sha256', Str::lower(trim($user->email))))) {
                 $this->issue($enrollment, $user);
             }
         }
@@ -73,7 +75,8 @@ final readonly class WorkforceEnrollmentService
                 $user = User::query()->where('public_id', $enrollment->subject_id)->lockForUpdate()->firstOrFail();
                 if (! is_string($enrollment->token_hash) || ! hash_equals($enrollment->token_hash, hash('sha256', $token))
                     || $enrollment->completed_at !== null || ! $enrollment->expires_at->isFuture()
-                    || $user->activated_at !== null || $user->disabled_at !== null) {
+                    || $user->activated_at !== null || $user->disabled_at !== null
+                    || ! hash_equals($enrollment->email_hash, hash('sha256', Str::lower(trim($user->email))))) {
                     $this->invalid();
                 }
                 $user->forceFill(['name' => $name, 'password' => $password, 'email_verified_at' => now('UTC'), 'activated_at' => now('UTC')])->save();
