@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
+import 'package:vtsa_mobile/design_system/components/evcs_navigation.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
@@ -32,7 +33,11 @@ class ConsumerShell extends StatelessWidget {
       NavigationDestination(
         icon: const Icon(Icons.receipt_long_outlined),
         selectedIcon: const Icon(Icons.receipt_long),
-        label: strings.activity,
+        label: 'Sessions',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.qr_code_scanner),
+        label: 'Scan',
       ),
       NavigationDestination(
         icon: const Icon(Icons.account_balance_wallet_outlined),
@@ -42,13 +47,13 @@ class ConsumerShell extends StatelessWidget {
       NavigationDestination(
         icon: const Icon(Icons.person_outline),
         selectedIcon: const Icon(Icons.person),
-        label: strings.account,
+        label: 'Profile',
       ),
     ];
     final index = switch (location) {
       final String value when value.startsWith('/activity') => 1,
-      final String value when value.startsWith('/wallet') => 2,
-      final String value when value.startsWith('/account') => 3,
+      final String value when value.startsWith('/wallet') => 3,
+      final String value when value.startsWith('/account') => 4,
       _ => 0,
     };
     return AnimatedBuilder(
@@ -69,8 +74,10 @@ class ConsumerShell extends StatelessWidget {
           child: VtsaBottomNavigationShell(
             destinations: destinations,
             selectedIndex: index,
-            onDestinationSelected: (selected) => context.go(
-              const ['/explore', '/activity', '/wallet', '/account'][selected],
+            onDestinationSelected: (selected) => _navigate(context, selected),
+            navigationBar: EvcsNavigationBar(
+              selectedIndex: index,
+              onSelected: (selected) => _navigate(context, selected),
             ),
             activeSession: showActive
                 ? _ActiveSessionBanner(dependencies: dependencies)
@@ -96,6 +103,22 @@ class ConsumerShell extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _navigate(BuildContext context, int selected) {
+    if (selected == 2) {
+      context.push('/charge');
+    } else {
+      context.go(
+        const [
+          '/explore',
+          '/activity',
+          '/charge',
+          '/wallet',
+          '/account',
+        ][selected],
+      );
+    }
   }
 }
 

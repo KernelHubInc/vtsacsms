@@ -11,6 +11,7 @@ import 'package:vtsa_mobile/core/network/connectivity_service.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/domain/auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
@@ -22,7 +23,7 @@ import 'package:vtsa_mobile/features/notices/notice_push_registration.dart';
 import 'package:vtsa_mobile/features/vehicles/data/local_vehicle_repository.dart';
 import 'package:vtsa_mobile/features/wallet/wallet_repository.dart';
 
-final class FakeAuthRepository implements AuthRepository {
+class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.signedIn = false});
 
   bool signedIn;
@@ -38,6 +39,8 @@ final class FakeAuthRepository implements AuthRepository {
   AppFailure? resetFailure;
   Completer<void>? resetCompleter;
   Completer<UserProfile>? currentUserCompleter;
+  Completer<void>? currentUserStarted;
+  int currentUserCalls = 0;
   UserProfile user = const UserProfile(
     id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
     name: 'Ada Driver',
@@ -47,6 +50,10 @@ final class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<UserProfile> currentUser() async {
+    currentUserCalls++;
+    if (currentUserStarted case final started? when !started.isCompleted) {
+      started.complete();
+    }
     if (currentUserCompleter case final pending?) return pending.future;
     if (currentUserFailure case final failure?) {
       throw failure;
@@ -231,6 +238,7 @@ ChargingSession sampleChargingSession({
   int aggregateVersion = 1,
   DateTime? startDeadlineAt,
   Money? finalCost,
+  Money? reservedBudget,
   List<String> anomalyFlags = const [],
   ChargingDocument? receipt,
   ChargingDocument? invoice,
@@ -250,6 +258,7 @@ ChargingSession sampleChargingSession({
   batteryReportedAt: batteryReportedAt,
   estimatedCost: const Money(minorUnits: 2500, currency: 'PHP'),
   finalCost: finalCost,
+  reservedBudget: reservedBudget,
   requestedAt: DateTime.utc(2026, 7, 26, 3),
   startedAt: state == ChargingSessionState.starting
       ? null
@@ -290,6 +299,7 @@ final class FakeChargingRepository implements ChargingRepository {
   int prepareCalls = 0;
   int? lastPreparedBudget;
   String? lastPreparedCode;
+  String? lastPreparedVehicleId;
   int startCalls = 0;
   int stopCalls = 0;
   int cancelCalls = 0;
@@ -357,6 +367,7 @@ final class FakeChargingRepository implements ChargingRepository {
     prepareCalls++;
     lastPreparedBudget = budgetMinor;
     lastPreparedCode = code.value;
+    lastPreparedVehicleId = vehicleId;
     if (prepareFailure case final failure?) {
       throw failure;
     }
@@ -434,6 +445,8 @@ Future<
 buildTestDependencies({
   bool onboardingComplete = true,
   bool signedIn = false,
+  FakeAuthRepository? authRepository,
+  GoogleIdentityProvider? googleIdentityProvider,
   List<Station>? stations,
   FakeChargingRepository? chargingRepository,
   KycRepository? kycRepository,
@@ -459,7 +472,7 @@ buildTestDependencies({
       ),
     );
   }
-  final auth = FakeAuthRepository(signedIn: signedIn);
+  final auth = authRepository ?? FakeAuthRepository(signedIn: signedIn);
   final stationRepository = FakeStationRepository(stations: stations);
   final charging = chargingRepository ?? FakeChargingRepository();
   final dependencies = AppDependencies.fromParts(
@@ -491,6 +504,7 @@ buildTestDependencies({
     tokenStore: tokens,
     connectivity: const AlwaysOnlineConnectivity(),
     authRepository: auth,
+    googleIdentityProvider: googleIdentityProvider,
     stationRepository: stationRepository,
     vehicleRepository: LocalVehicleRepository(preferences),
     favoritesRepository: LocalFavoritesRepository(preferences),

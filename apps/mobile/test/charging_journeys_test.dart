@@ -13,6 +13,99 @@ import 'support/test_fonts.dart';
 
 void main() {
   setUpAll(loadTestFonts);
+
+  testWidgets(
+    'session clock ticks independently and uses confirmed final time',
+    (tester) async {
+      final session = sampleChargingSession(
+        state: ChargingSessionState.charging,
+        durationSeconds: 30,
+      );
+      final repository = FakeChargingRepository()
+        ..sessions[session.id] = session;
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      final charging = fixture.dependencies.charging;
+      await charging.recoverSession(session.id);
+      final initialTime = session.startedAt!.add(const Duration(seconds: 30));
+      var now = initialTime;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: LiveChargingScreen(
+            dependencies: fixture.dependencies,
+            sessionId: session.id,
+            now: () => now,
+          ),
+        ),
+      );
+      try {
+        await tester.pump();
+        expect(find.text('00:00:30'), findsOneWidget);
+        final cost = find.text('₱25.00');
+        expect(cost, findsOneWidget);
+
+        now = initialTime.add(const Duration(seconds: 1));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:31'), findsOneWidget);
+        expect(cost, findsOneWidget);
+        expect(charging.session!.durationSeconds, 30);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 30,
+          aggregateVersion: 2,
+        );
+        await charging.refresh();
+        now = initialTime.add(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:32'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 31,
+          aggregateVersion: 3,
+          anomalyFlags: const ['charger_disconnected'],
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:31'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 4));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('00:00:31'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.stopping,
+          durationSeconds: 31,
+          aggregateVersion: 4,
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:34'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 5));
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('00:00:35'), findsOneWidget);
+
+        repository.sessions[session.id] = sampleChargingSession(
+          state: ChargingSessionState.completed,
+          durationSeconds: 33,
+          aggregateVersion: 5,
+          paymentState: PaymentState.captured,
+        );
+        await charging.refresh();
+        await tester.pump();
+        expect(find.text('00:00:33'), findsOneWidget);
+        now = initialTime.add(const Duration(seconds: 7));
+        await tester.pump(const Duration(seconds: 3));
+        expect(find.text('00:00:33'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        fixture.dependencies.dispose();
+      }
+    },
+  );
   for (final width in [320.0, 390.0]) {
     testWidgets('pending start can be cancelled before timeout at $width', (
       tester,
@@ -78,7 +171,7 @@ void main() {
     );
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Activity'));
+    await tester.tap(find.text('Sessions'));
     await tester.pumpAndSettle();
     expect(find.text('History service unavailable.'), findsOneWidget);
     expect(find.text('No sessions in this view'), findsNothing);
@@ -142,19 +235,23 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Scan only when you choose'), findsOneWidget);
+    expect(find.text('Scan the charger QR code'), findsOneWidget);
     expect(find.textContaining('Camera video is not stored'), findsOneWidget);
     expect(find.text('Charger code (required)'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
-    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
-    expect(find.text('REVIEW BEFORE START'), findsOneWidget);
+    expect(find.text('Ready to charge'), findsOneWidget);
     expect(find.text('Standard charging'), findsOneWidget);
-    expect(find.text('Charging budget'), findsOneWidget);
+    expect(find.text('Budget limit'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Visa ending 4242'), 240);
     expect(find.text('Visa ending 4242'), findsOneWidget);
   });
@@ -176,23 +273,27 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
-    await tester.ensureVisible(find.text('Validate connector'));
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
 
-    expect(find.text('COMPATIBILITY WARNING'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byType(CheckboxListTile), 240);
+    expect(find.byType(CheckboxListTile), findsOneWidget);
     expect(find.textContaining('does not list CCS2'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Review and request start'), 300);
-    await tester.ensureVisible(find.text('Review and request start'));
+    expect(fixture.charging.startCalls, 0);
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Review and request start'));
+    await tester.tap(find.text('Can’t swipe? Start with a button'));
     await tester.pumpAndSettle();
-    expect(find.text('Start despite compatibility warning?'), findsOneWidget);
-    await tester.tap(find.text('Request start'));
+    await tester.tap(find.text('Start charging'));
     await tester.pumpAndSettle();
-
     expect(find.text('Waiting for physical start'), findsOneWidget);
     expect(find.textContaining('charging is not active until'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -231,7 +332,7 @@ void main() {
 
     expect(find.text('Charging in progress'), findsOneWidget);
     expect(find.text('6.42 kWh'), findsOneWidget);
-    expect(find.text('00:12:34'), findsOneWidget);
+    expect(find.text('SESSION TIME'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Charging timeline & vehicle'),
       200,
@@ -316,7 +417,7 @@ void main() {
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Activity'));
+    await tester.tap(find.text('Sessions'));
     await tester.pumpAndSettle();
     expect(find.textContaining('12.00 kWh'), findsOneWidget);
 

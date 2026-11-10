@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\DriverNoticeController;
 use App\Http\Controllers\Api\V1\DriverVehicleController;
 use App\Http\Controllers\Api\V1\EmailVerificationController;
 use App\Http\Controllers\Api\V1\GoodsReceiptController;
+use App\Http\Controllers\Api\V1\GoogleAuthController;
 use App\Http\Controllers\Api\V1\IdentityContextController;
 use App\Http\Controllers\Api\V1\InventoryAdjustmentController;
 use App\Http\Controllers\Api\V1\InventoryCatalogController;
@@ -98,6 +99,10 @@ Route::post('/v1/webhooks/payments/{tenant}/{configuration}', PaymentWebhookCont
 
 Route::post('/v2/auth/register', RegistrationController::class)
     ->middleware('throttle:auth.login')->name('api.v2.auth.register');
+Route::post('/v2/auth/google/register', [GoogleAuthController::class, 'register'])
+    ->middleware('throttle:auth.login')->name('api.v2.auth.google.register');
+Route::post('/v1/auth/google', [GoogleAuthController::class, 'login'])
+    ->middleware('throttle:auth.login')->name('api.v1.auth.google.login');
 
 Route::prefix('v1/auth')->group(function (): void {
     Route::post('/register', [RegistrationController::class, 'legacy'])

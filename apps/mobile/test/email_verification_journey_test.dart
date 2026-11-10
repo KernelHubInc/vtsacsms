@@ -115,13 +115,15 @@ void main() {
     fixture.auth.user = unverifiedUser;
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
-    expect(find.text('Sign in to your drive.'), findsOneWidget);
+    expect(find.text('Power your next drive.'), findsOneWidget);
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextField, 'Email address (required)'),
+      find.byType(TextFormField).first,
       'ada@example.test',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Password (required)'),
+      find.byType(TextFormField).last,
       'test-only-password',
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
@@ -137,7 +139,7 @@ void main() {
     fixture.auth.user = verifiedUser;
     await tester.tap(find.text("I've verified my email"));
     await tester.pumpAndSettle();
-    expect(find.text('Ada Driver'), findsOneWidget);
+    expect(find.text('Where would you like to charge?'), findsOneWidget);
     expect(fixture.dependencies.auth.user?.emailVerified, isTrue);
   });
 
@@ -149,8 +151,8 @@ void main() {
       fixture.auth.verificationEmailSent = delivered;
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
-      await tester.tap(find.text('Create an account'));
+      expect(find.text('Power your next drive.'), findsOneWidget);
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
       await fillRegistrationSecurity(tester);
       await pressRegistrationAction(tester, 'Continue');
@@ -176,7 +178,7 @@ void main() {
       expect(find.text('Sign in to continue'), findsOneWidget);
       await tester.tap(find.text('Sign in to continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
+      expect(find.text('Welcome back.'), findsOneWidget);
     });
   }
 }

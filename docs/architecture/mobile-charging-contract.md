@@ -38,6 +38,8 @@ The proposed QR-to-payment orchestration, simulator interaction, recovery behavi
 
 Session responses need canonical state, aggregate version, UTC timestamps, station and connector presentation facts, energy Wh, duration seconds, current power W when trustworthy, estimated/final minor-unit money with ISO currency, start deadline when applicable, safe anomaly codes, payment state, and authorized document links. A state update with a lower aggregate version cannot replace a newer projection.
 
+The live Flutter screen displays elapsed session time once per second from the confirmed start while the transaction remains physically active, including suspension and a pending stop. Before start, after end, or while connectivity/updates are interrupted, it uses the last server duration. The display clock does not poll the API or calculate billable energy-flow time, estimated cost or final totals; those remain part of the server projection.
+
 Preparation responses need an expiring quote ID and tariff-version ID. A start request references those IDs; the app never sends a client-calculated amount. Payment methods contain provider-independent token references and safe labels only. PAN, CVV, provider secrets, raw authorization data, and internal tenant-wide identifiers are forbidden.
 
 ## Idempotency and recovery

@@ -3,12 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
-import 'package:vtsa_mobile/design_system/branding/power_solutions_app_bar.dart';
+import 'package:vtsa_mobile/design_system/components/evcs_access.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
-import 'package:vtsa_mobile/features/auth/presentation/auth_entry_scaffold.dart';
 import 'package:vtsa_mobile/features/auth/presentation/driver_date_field.dart';
+import 'package:vtsa_mobile/features/auth/presentation/google_access_button.dart';
 import 'package:vtsa_mobile/features/auth/presentation/registration_layout.dart';
 import 'package:vtsa_mobile/features/auth/presentation/registration_validation.dart';
 
@@ -32,78 +32,149 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  final _form = GlobalKey<FormState>();
+  bool _passwordVisible = false;
+
   @override
-  Widget build(BuildContext context) => AuthEntryScaffold(
-    title: 'Sign in to your drive.',
-    subtitle: 'Welcome back to Power Solutions.',
-    child: AnimatedBuilder(
-      animation: widget.dependencies.auth,
-      builder: (context, _) {
-        final auth = widget.dependencies.auth;
-        return Column(
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.dependencies.auth,
+    builder: (context, _) {
+      final auth = widget.dependencies.auth;
+      return EvcsAuthScaffold(
+        title: 'Welcome back.',
+        subtitle: 'Sign in to your Power Solutions account',
+        onBack: () {
+          if (auth.isBusy) return;
+          auth.cancelGoogle();
+          context.canPop() ? context.pop() : context.go('/welcome');
+        },
+        actions: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AutofillGroup(
-              child: Column(
-                children: [
-                  VtsaTextField(
-                    label: 'Email address',
-                    controller: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    autofillHints: const [AutofillHints.email],
-                    required: true,
-                  ),
-                  const SizedBox(height: VtsaSpacing.md),
-                  VtsaTextField(
-                    label: 'Password',
-                    controller: _password,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [AutofillHints.password],
-                    onSubmitted: (_) => _submit(),
-                    required: true,
-                  ),
-                ],
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => context.push('/forgot-password'),
-                child: const Text('Forgot password?'),
-              ),
-            ),
-            if (auth.failure != null) ...[
-              VtsaErrorState(
-                title: 'Could not sign in',
-                description: auth.failure!.message,
-                correlationId: auth.failure!.correlationId,
-              ),
-              const SizedBox(height: VtsaSpacing.md),
-            ],
             VtsaButton(
               label: 'Sign in',
               loading: auth.isBusy,
               onPressed: _submit,
             ),
-            const SizedBox(height: VtsaSpacing.md),
-            const Center(child: Text('New to Power Solutions?')),
             const SizedBox(height: 8),
             VtsaButton(
-              label: 'Create an account',
+              label: 'Create account',
               variant: VtsaButtonVariant.secondary,
-              onPressed: () => context.push('/register'),
+              onPressed: auth.isBusy ? null : () => context.push('/register'),
             ),
+            GoogleAccessButton(dependencies: widget.dependencies),
           ],
-        );
-      },
-    ),
+        ),
+        child: Form(
+          key: _form,
+          child: AutofillGroup(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Email address',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: 'Email address',
+                  child: TextFormField(
+                    key: const ValueKey('login-email'),
+                    controller: _email,
+                    enabled: !auth.isBusy,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.email],
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    decoration: const InputDecoration(
+                      hintText: 'you@example.com',
+                      semanticCounterText: 'Email address',
+                    ),
+                    validator: (value) {
+                      final email = value?.trim() ?? '';
+                      return email.isEmpty || !email.contains('@')
+                          ? 'Enter your email address.'
+                          : null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Password',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: 'Password',
+                  child: TextFormField(
+                    key: const ValueKey('login-password'),
+                    controller: _password,
+                    enabled: !auth.isBusy,
+                    obscureText: !_passwordVisible,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    decoration: InputDecoration(
+                      hintText: 'Enter your password',
+                      suffixIcon: IconButton(
+                        tooltip: _passwordVisible
+                            ? 'Hide password'
+                            : 'Show password',
+                        onPressed: () => setState(
+                          () => _passwordVisible = !_passwordVisible,
+                        ),
+                        icon: Icon(
+                          _passwordVisible
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                      ),
+                    ),
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Enter your password.'
+                        : null,
+                    onFieldSubmitted: (_) => _submit(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  margin: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(color: context.vtsaColors.border),
+                  ),
+                  child: ListTile(
+                    leading: EvcsIcon(
+                      'auth-icon-shield',
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    title: const Text('Forgot password?'),
+                    subtitle: const Text('Recover access securely.'),
+                    onTap: auth.isBusy
+                        ? null
+                        : () => context.push('/forgot-password'),
+                  ),
+                ),
+                if (auth.failure != null) ...[
+                  const SizedBox(height: 16),
+                  Semantics(
+                    liveRegion: true,
+                    child: VtsaErrorState(
+                      title: 'Could not sign in',
+                      description: auth.failure!.message,
+                      correlationId: auth.failure!.correlationId,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    },
   );
 
   Future<void> _submit() async {
-    if (_email.text.trim().isEmpty || _password.text.isEmpty) {
-      showVtsaToast(context, message: 'Enter your email and password.');
+    if (widget.dependencies.auth.isBusy || !_form.currentState!.validate()) {
       return;
     }
     final dependencies = widget.dependencies;
@@ -114,14 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!signedIn || dependencies.auth.needsEmailVerification) {
       return;
     }
-    await Future.wait([
-      dependencies.favorites.load(),
-      dependencies.vehicles.load(),
-      dependencies.pushRegistration.register(),
-      if (dependencies.featureFlags.remoteCharging ||
-          dependencies.featureFlags.simulatedCharging)
-        dependencies.charging.restoreAuthoritativeSession(),
-    ]);
+    await dependencies.loadSignedInData();
   }
 }
 
@@ -141,6 +205,32 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _plate = TextEditingController();
   DateTime? _birthDate;
   bool _platePending = false;
+  bool _termsAccepted = false;
+  bool get _usingGoogle => widget.dependencies.auth.googleRegistration != null;
+
+  void _applyGoogleProfile() {
+    final profile = widget.dependencies.auth.googleRegistration;
+    if (profile == null) return;
+    setState(() {
+      if (_email.text != profile.email) {
+        _birthDate = null;
+        _plate.clear();
+        _platePending = false;
+      }
+      _termsAccepted = false;
+      _email.text = profile.email;
+      _first.text = profile.firstName;
+      _last.text = profile.lastName;
+      _password.clear();
+      _passwordConfirmation.clear();
+      _invalid = {};
+      _serverErrors.clear();
+      _validated.clear();
+      _requestFailure = null;
+      _step = 1;
+    });
+  }
+
   bool _passwordVisible = false;
   int _step = 0;
   final _scroll = ScrollController();
@@ -197,6 +287,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   @override
   void initState() {
     super.initState();
+    final google = widget.dependencies.auth.googleRegistration;
+    if (google != null) {
+      _email.text = google.email;
+      _first.text = google.firstName;
+      _last.text = google.lastName;
+      _step = 1;
+    }
     _focusNodes = {
       for (final field in _fieldKeys.keys.where((name) => name != 'birth_date'))
         field: FocusNode(),
@@ -245,6 +342,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   @override
   void dispose() {
+    widget.dependencies.auth.cancelGoogle(notify: false);
     for (final node in _focusNodes.values) {
       node.dispose();
     }
@@ -270,15 +368,71 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         final busy = widget.dependencies.auth.isBusy;
         final muted = Theme.of(context).textTheme.bodySmall;
         return PopScope(
-          canPop: _step == 0 && !busy,
+          canPop: (_step == 0 || (_usingGoogle && _step == 1)) && !busy,
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop && !busy && _step > 0) _setStep(_step - 1);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (!_usingGoogle)
+                GoogleAccessButton(
+                  dependencies: widget.dependencies,
+                  onRegistration: _applyGoogleProfile,
+                ),
+              if (_usingGoogle) ...[
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Continue with Google',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(widget.dependencies.auth.googleRegistration!.email),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () async {
+                                await widget.dependencies.auth
+                                    .signInWithGoogle();
+                                if (!mounted) return;
+                                if (widget
+                                        .dependencies
+                                        .auth
+                                        .googleRegistration !=
+                                    null) {
+                                  _applyGoogleProfile();
+                                } else {
+                                  setState(() {
+                                    _step = 0;
+                                    _requestFailure =
+                                        widget.dependencies.auth.failure;
+                                  });
+                                }
+                              },
+                        child: const Text('Choose another Google account'),
+                      ),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () {
+                                widget.dependencies.auth.cancelGoogle();
+                                setState(() {
+                                  _step = 0;
+                                  _email.clear();
+                                });
+                              },
+                        child: const Text('Use email and password instead'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               Offstage(
-                offstage: _step != 0,
+                offstage: _step != 0 || _usingGoogle,
                 child: ExcludeFocus(
                   excluding: _step != 0,
                   child: RegistrationSection(
@@ -514,6 +668,22 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (_step == 2) ...[
+                      if (_usingGoogle)
+                        Material(
+                          child: CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _termsAccepted,
+                            onChanged: busy
+                                ? null
+                                : (value) => setState(
+                                    () => _termsAccepted = value ?? false,
+                                  ),
+                            title: const Text(
+                              'I agree to the Terms of service and Privacy policy.',
+                            ),
+                          ),
+                        ),
                       Text(
                         'By creating an account, you agree to our',
                         style: muted,
@@ -560,7 +730,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     ],
                     Row(
                       children: [
-                        if (_step > 0) ...[
+                        if (_step > (_usingGoogle ? 1 : 0)) ...[
                           TextButton(
                             onPressed: busy ? null : () => _setStep(_step - 1),
                             child: const Text('Back'),
@@ -571,7 +741,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           child: VtsaButton(
                             label: _step == 2 ? 'Create account' : 'Continue',
                             loading: busy,
-                            onPressed: _step == 2 ? _submit : _continue,
+                            onPressed:
+                                _step == 2 && _usingGoogle && !_termsAccepted
+                                ? null
+                                : (_step == 2 ? _submit : _continue),
                           ),
                         ),
                       ],
@@ -665,7 +838,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (widget.dependencies.auth.isBusy) return;
     FocusScope.of(context).unfocus();
     setState(() {
-      _step = step;
+      _step = _usingGoogle && step == 0 ? 1 : step;
       _passwordVisible = false;
       _requestFailure = null;
     });
@@ -690,18 +863,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _setStep(_step + 1);
   }
 
-  Set<String> _invalidFields() => registrationInvalidFields(
-    firstName: _first.text,
-    middleName: _middle.text,
-    lastName: _last.text,
-    birthDate: _birthDate,
-    today: DateTime.now().toUtc(),
-    plate: _plate.text,
-    platePending: _platePending,
-    email: _email.text,
-    password: _password.text,
-    passwordConfirmation: _passwordConfirmation.text,
-  );
+  Set<String> _invalidFields() {
+    final invalid = registrationInvalidFields(
+      firstName: _first.text,
+      middleName: _middle.text,
+      lastName: _last.text,
+      birthDate: _birthDate,
+      today: DateTime.now().toUtc(),
+      plate: _plate.text,
+      platePending: _platePending,
+      email: _email.text,
+      password: _password.text,
+      passwordConfirmation: _passwordConfirmation.text,
+    );
+    if (_usingGoogle) {
+      invalid.removeAll({'email', 'password', 'password_confirmation'});
+    }
+    return invalid;
+  }
 
   Future<void> _submit() async {
     if (_step != 2 || widget.dependencies.auth.isBusy) return;
@@ -716,7 +895,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _showFirstInvalid();
       return;
     }
-    final created = await widget.dependencies.auth.register(
+    final dependencies = widget.dependencies;
+    final created = await dependencies.auth.register(
       name: [
         _first.text.trim(),
         _middle.text.trim(),
@@ -731,8 +911,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       email: _email.text,
       password: _password.text,
       passwordConfirmation: _passwordConfirmation.text,
+      termsAccepted: _termsAccepted,
     );
+    if (created) await dependencies.loadSignedInData();
     if (!mounted) return;
+    if (created &&
+        widget.dependencies.auth.status == AuthStatus.authenticated) {
+      return;
+    }
     if (!created) {
       final failure = widget.dependencies.auth.failure;
       setState(() {
@@ -803,11 +989,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.dependencies.auth,
-    builder: (context, _) => AuthEntryScaffold(
+    builder: (context, _) => EvcsAuthScaffold(
       title: _sent ? 'Check your inbox.' : 'Reset your password.',
       subtitle: _sent
           ? 'If an account matches that address, reset instructions are on their way.'
           : 'We will send a time-limited reset link without revealing whether an account exists.',
+      onBack: () => context.canPop() ? context.pop() : context.go('/login'),
       child: _sent
           ? VtsaButton(
               label: 'Back to sign in',
@@ -955,32 +1142,10 @@ class _AuthShell extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: PowerSolutionsAppBar(title: title, eyebrow: eyebrow),
-    body: SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(VtsaSpacing.lg),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: VtsaSpacing.md),
-                Text(
-                  intro,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: context.vtsaColors.textMuted,
-                  ),
-                ),
-                const SizedBox(height: VtsaSpacing.xxl),
-                child,
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
+  Widget build(BuildContext context) => EvcsAuthScaffold(
+    title: title,
+    subtitle: intro,
+    onBack: () => context.canPop() ? context.pop() : context.go('/login'),
+    child: child,
   );
 }

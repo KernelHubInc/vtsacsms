@@ -6,6 +6,7 @@ namespace Tests\Feature\Security;
 
 use App\Http\Middleware\EstablishPanelTenantContext;
 use App\Http\Middleware\TrackPanelSession;
+use App\Modules\Identity\Application\PanelAccessService;
 use App\Modules\Organizations\Domain\Models\Organization;
 use App\Modules\Organizations\Domain\OrganizationType;
 use App\Modules\Organizations\Domain\PermissionKey;
@@ -20,6 +21,42 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class PanelTenantContextTest extends TenantSecurityTestCase
 {
+    public function test_panels_deny_mfa_required_users_without_a_verified_challenge(): void
+    {
+        $user = $this->createUser();
+        $tenant = $this->createTenant('panel-mfa');
+
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            foreach ([OrganizationType::Platform, OrganizationType::ChargePointOperator] as $type) {
+                Organization::query()->create([
+                    'tenant_id' => $tenant->getKey(),
+                    'name' => $type->value,
+                    'code' => $type->value,
+                    'type' => $type,
+                    'is_active' => true,
+                ]);
+            }
+            $membership = $this->createMembership($tenant, $user);
+            $role = $this->createRole($tenant, 'panel-access', [
+                PermissionKey::PlatformPanelAccess,
+                PermissionKey::OperatorPanelAccess,
+            ]);
+            $this->assignDirectly($tenant, $membership, $role);
+        });
+
+        $access = app(PanelAccessService::class);
+        foreach (['admin', 'operator'] as $panel) {
+            $this->assertTrue($access->canAccess($user, $panel));
+        }
+
+        $user->forceFill(['mfa_required' => true, 'mfa_enrolled_at' => now('UTC')])->save();
+
+        foreach (['admin', 'operator'] as $panel) {
+            $this->assertFalse($access->canAccess($user->fresh(), $panel));
+            $this->actingAs($user)->get('/'.$panel)->assertForbidden();
+        }
+    }
+
     public function test_panel_authentication_and_tenant_context_are_persistent_livewire_middleware(): void
     {
         $middleware = Livewire::getPersistentMiddleware();

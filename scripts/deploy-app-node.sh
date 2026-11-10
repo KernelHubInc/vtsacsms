@@ -143,7 +143,7 @@ services=()
 if [[ "$environment" == "production" ]]; then
     services=(platform web)
     if grep -Fqx 'APP_NODE_ROLE=primary' "$env_file"; then
-        services+=(worker scheduler)
+        services+=(worker charging-worker scheduler)
     fi
 fi
 

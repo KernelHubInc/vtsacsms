@@ -79,7 +79,7 @@ void main() {
       final fixture = await buildTestDependencies();
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Create an account'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
       await fillRegistrationSecurity(tester, confirmation: 'Different!2026');
       await pressRegistrationAction(tester, 'Continue');
@@ -113,7 +113,7 @@ void main() {
       final fixture = await buildTestDependencies();
       await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Create an account'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
       String? error(String label) =>
           tester.widget<TextField>(textInput(label)).decoration!.errorText;
@@ -165,7 +165,7 @@ void main() {
         }
         await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Create an account'));
+        await tester.tap(find.text('Create account'));
         await tester.pumpAndSettle();
         await fillRegistrationSecurity(
           tester,

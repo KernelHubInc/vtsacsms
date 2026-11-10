@@ -66,6 +66,7 @@ jobs:
       - run: composer audit
       - run: composer lint
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run build
       - run: composer test
       - name: Verify PostgreSQL migrations
@@ -160,6 +161,7 @@ jobs:
           cache: npm
           cache-dependency-path: packages/contracts/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run generate
       - name: Verify generated artifacts are current

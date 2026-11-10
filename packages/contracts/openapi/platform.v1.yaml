@@ -334,6 +334,59 @@ paths:
           description: MFA is required before a token can be issued.
         '422': {$ref: '#/components/responses/ValidationError'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/google:
+    post:
+      operationId: loginGoogleDriver
+      summary: Verify Google identity and sign in or request remaining driver registration
+      tags: [Identity]
+      security: []
+      description: Environment and tenant gated. Existing unlinked email accounts require their current password before linking. Provider claims never grant roles or bypass MFA, membership or email-verification gates. Google tokens must never be logged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+      responses:
+        '200':
+          description: A tenant-bound mobile session or a registration-required profile. Responses must not be cached.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LoginResponse'
+                  - $ref: '#/components/schemas/GoogleRegistrationRequired'
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '404': {description: Google authentication or registration scope is disabled for this tenant.}
+        '409': {description: 'Existing password confirmation, MFA or account-conflict recovery is required.'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {description: Google public keys cannot currently be obtained. Authentication fails closed.}
+  /api/v2/auth/google/register:
+    post:
+      operationId: registerGoogleDriver
+      summary: Complete a new Google driver's profile and consumer enrollment
+      tags: [Identity]
+      security: []
+      description: Verifies the Google token again before atomic account, provider-link, consumer membership, vehicle and mobile session creation. The token determines email. Third-party Google-account email addresses still require local verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleRegistrationRequest'
+      responses:
+        '201':
+          description: Driver created with a tenant-bound session. Check the user's email verification status before protected operations. Response must not be cached.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LoginResponse'}
+        '401': {$ref: '#/components/responses/Unauthenticated'}
+        '404': {description: Google authentication or consumer registration is disabled.}
+        '409': {description: The account changed concurrently. Return to Google sign-in.}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {description: Google authentication is temporarily unavailable.}
   /api/v1/auth/forgot-password:
     post:
       operationId: requestPasswordReset
@@ -1912,6 +1965,40 @@ components:
         password: {type: string, format: password}
         tenant_id: {$ref: '#/components/schemas/Ulid'}
         device_name: {type: string, maxLength: 120}
+    GoogleLoginRequest:
+      type: object
+      required: [id_token, tenant_id, device_name]
+      properties:
+        id_token: {type: string, maxLength: 8192, writeOnly: true}
+        tenant_id: {$ref: '#/components/schemas/Ulid'}
+        device_name: {type: string, maxLength: 120}
+        password: {type: [string, 'null'], maxLength: 1024, writeOnly: true, description: Current password only for explicitly confirming an existing account link.}
+    GoogleRegistrationRequest:
+      type: object
+      required: [id_token, tenant_id, device_name, first_name, last_name, birth_date, plate_pending, terms_accepted]
+      properties:
+        id_token: {type: string, maxLength: 8192, writeOnly: true}
+        tenant_id: {$ref: '#/components/schemas/Ulid'}
+        device_name: {type: string, maxLength: 120}
+        first_name: {type: string, maxLength: 80}
+        middle_name: {type: [string, 'null'], maxLength: 80}
+        last_name: {type: string, maxLength: 80}
+        birth_date: {type: string, format: date, description: Must be a valid date from 1900 with age at least 18.}
+        plate_pending: {type: boolean}
+        plate_number: {type: [string, 'null'], maxLength: 20, description: Required when plate_pending is false and prohibited when true.}
+        terms_accepted: {type: boolean, const: true}
+    GoogleRegistrationRequired:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [status, email, first_name, last_name]
+          properties:
+            status: {type: string, const: registration_required}
+            email: {type: string, format: email}
+            first_name: {type: string}
+            last_name: {type: string}
     LoginResponse:
       type: object
       required: [data]

@@ -99,6 +99,10 @@ x-platform-environment: &platform-environment
   DRIVER_REGISTRATION_ENABLED: ${DRIVER_REGISTRATION_ENABLED:-false}
   DRIVER_REGISTRATION_TENANT_ID: ${DRIVER_REGISTRATION_TENANT_ID:-}
   DRIVER_REGISTRATION_ORGANIZATION_ID: ${DRIVER_REGISTRATION_ORGANIZATION_ID:-}
+  GOOGLE_SIGN_IN_ENABLED: ${GOOGLE_SIGN_IN_ENABLED:-false}
+  GOOGLE_SIGN_IN_TENANT_ID: ${GOOGLE_SIGN_IN_TENANT_ID:-}
+  GOOGLE_SIGN_IN_SERVER_CLIENT_ID: ${GOOGLE_SIGN_IN_SERVER_CLIENT_ID:-}
+  GOOGLE_SIGN_IN_ANDROID_CLIENT_ID: ${GOOGLE_SIGN_IN_ANDROID_CLIENT_ID:-}
   FEATURE_DEMO_MODE: "false"
   FEATURE_SIMULATED_CHARGING: "false"
   FEATURE_SIMULATED_PAYMENTS: "false"
@@ -136,7 +140,17 @@ services:
     profiles: [worker]
     healthcheck:
       disable: true
-    command: ["php", "artisan", "queue:work", "--queue=charging,default,reports,invitations", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    command: ["php", "artisan", "queue:work", "--queue=default,reports,invitations", "--sleep=1", "--tries=3", "--timeout=120", "--max-time=3600"]
+    depends_on:
+      platform:
+        condition: service_healthy
+
+  charging-worker:
+    <<: *platform-service
+    profiles: [worker]
+    healthcheck:
+      disable: true
+    command: ["php", "artisan", "queue:work", "--queue=charging", "--sleep=1", "--tries=1", "--timeout=60", "--max-time=3600"]
     depends_on:
       platform:
         condition: service_healthy

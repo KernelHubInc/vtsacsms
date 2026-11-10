@@ -54,9 +54,12 @@ Controls are repeated at boundaries. Network placement alone never grants busine
 - Identity owns a stable ULID subject independent of email/phone/provider identifiers.
 - Passwords, if supported, use Laravel's current strong password hashing configuration and rate-limited sign-in/recovery.
 - Privileged tenant/platform roles require MFA capability and recent/step-up authentication for defined high-risk actions.
+- Admin and operator eligibility fails closed for MFA-required accounts until a verified browser challenge flow is implemented; enrollment metadata cannot satisfy the challenge.
 - Recovery must not be weaker than sign-in; recovery/change events revoke or review existing sessions according to policy.
 - Workforce SSO may be added through OIDC/SAML after provider/realm decisions. External group claims map only to reviewed application role assignments.
 - Driver and workforce identity realm separation/account linking remains open.
+
+Driver Google sign-in uses verified provider subjects, password-confirmed linking for existing accounts and the existing tenant membership/MFA gates. Google-only signup still requires the driver profile, vehicle and terms flow. See [ADR 0030](decisions/0030-google-driver-sign-in.md) for token verification, provider-link retention and rollout controls.
 
 ### Machine identities
 

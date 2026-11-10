@@ -10,6 +10,10 @@ The public discovery repository sends bounded server queries to `/api/v1/public/
 
 ## PIN and fingerprint unlock
 
+The EVCS welcome is the signed-out entry on web and native builds. Sign in opens the password form; verified sign-in and quick unlock open the full-screen Explore map. There is no additional A01–A03 intro sequence. Optional preferences remain in **Profile > App setup**, and location is requested when the driver chooses the location action. The native OS launch screen remains.
+
+Saved native sessions open the secure welcome with App PIN and the enabled biometric method. PIN entry submits once after six masked digits. Native-prompt cancellation keeps PIN/password fallback available. The original realistic EV artwork and local Inter font follow [the Figma review](https://www.figma.com/design/wmrJ4VV3zw6uZC4tHdD9Qv/EVCS?node-id=57-1621).
+
 After password sign-in and email verification, open **Account > PIN & fingerprint** to create a separate six-digit app PIN and optionally confirm fingerprint/Face ID. The native app locks on restart/background. Five incorrect PINs, sign-out or password fallback remove setup. Expired/revoked sessions require password sign-in; offline quick unlock stays locked until the server can validate the session. Browser/desktop builds do not offer setup. No API or database migration is required.
 
 PIN verifiers and attempt limits use secure storage; biometric data remains with the OS. See [ADR-0020](../../docs/architecture/decisions/0020-mobile-pin-and-biometric-unlock.md) for security boundaries and required physical Android/iOS verification. Changing the PIN requires signing out and signing in with the password again.

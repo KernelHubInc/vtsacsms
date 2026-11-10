@@ -32,12 +32,22 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Compatible'));
+      await tester.pumpAndSettle();
+      final vehicleCard = find.ancestor(
+        of: find.text('CURRENT VEHICLE'),
+        matching: find.byType(Card),
+      );
+      final vehicleName = find.descendant(
+        of: vehicleCard,
+        matching: find.text('BYD ATTO 3'),
+      );
       expect(find.text('CURRENT VEHICLE'), findsOneWidget);
-      expect(find.text('BYD ATTO 3'), findsOneWidget);
+      expect(vehicleName, findsOneWidget);
       expect(find.text('Plate pending'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await preview(tester, 'current-vehicle-390');
-      await tester.tap(find.text('BYD ATTO 3'));
+      await tester.tap(vehicleName);
       await tester.pumpAndSettle();
       expect(find.byType(VehicleListScreen), findsOneWidget);
     },

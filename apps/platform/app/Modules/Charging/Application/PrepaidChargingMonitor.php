@@ -51,9 +51,10 @@ final readonly class PrepaidChargingMonitor
             if ($session->failure_reason === 'prepaid_start_unconfirmed' || $session->state->value === 'review_required') {
                 $owner->forceFill(['payment_state' => 'requires_action'])->save();
             }
-            if ($session->state->value === 'stopping' && ChargerCommand::query()->where('session_id', $sessionId)
-                ->where('type', 'remote_stop')->where('created_at', '<=', now('UTC')->subSeconds(120))->exists()) {
-                $owner->forceFill(['payment_state' => 'requires_action'])->save();
+            if ($session->state->value === 'stopping') {
+                app(AutomaticStopRecovery::class)->recover($session);
+
+                return;
             }
             if ($session->state->value === 'completed') {
                 $cdr = ChargeDetailRecord::query()->where('session_id', $sessionId)->where('state', 'finalized')->latest('version')->first();
@@ -100,31 +101,51 @@ final readonly class PrepaidChargingMonitor
                 ->where('unit', 'Wh')->whereNull('phase')->max('sampled_at');
             $lastAt = $latest === null ? $session->started_at : CarbonImmutable::parse($latest);
             $stale = $lastAt->addSeconds((int) config('mobile_charging.meter_timeout_seconds'))->isPast();
-            $bufferSeconds = (int) config('mobile_charging.stop_buffer_seconds');
-            $futureEnergy = (int) $session->energy_wh + intdiv($session->connector_maximum_power_w * $bufferSeconds + 3599, 3600);
-            $future = app(TariffEngine::class)->rate($session->tariff_snapshot, new RatingInput(
-                $futureEnergy, (int) $session->duration_seconds + $bufferSeconds, (int) $session->parking_seconds,
-                (int) $session->idle_seconds, $session->started_at, (int) $session->energy_flow_seconds + $bufferSeconds,
-            ));
             $components = $session->tariff_snapshot['components'] ?? [];
             if (is_array($components) && in_array('time', array_column($components, 'dimension'), true)) {
                 $lastPower = MeterReading::query()->where('session_id', $sessionId)->where('measurand', 'Power.Active.Import')
                     ->where('unit', 'W')->whereNull('phase')->max('sampled_at');
                 $powerAt = $lastPower === null ? $session->started_at : CarbonImmutable::parse($lastPower);
                 $stale = $stale || $powerAt->addSeconds((int) config('mobile_charging.meter_timeout_seconds'))->isPast();
+                $lastAt = $lastAt->min($powerAt);
             }
+            $readingAge = max(0, (int) $lastAt->diffInSeconds(now('UTC')));
+            $queueSeconds = 0;
+            foreach (ChargerCommand::query()->where('charging_station_id', $session->charging_station_id)->whereNotNull('dispatched_at')
+                ->latest('id')->limit(5)->get(['created_at', 'dispatched_at']) as $recent) {
+                $queueSeconds = max($queueSeconds, min(300, (int) $recent->created_at->diffInSeconds($recent->dispatched_at)));
+            }
+            $bufferSeconds = max((int) config('mobile_charging.stop_buffer_seconds'),
+                (int) config('services.ocpp_gateway.timeout_seconds', 20) + 10) + $readingAge + $queueSeconds;
+            $futureEnergy = (int) $session->energy_wh + intdiv($session->connector_maximum_power_w * $bufferSeconds + 3599, 3600);
+            $future = app(TariffEngine::class)->rate($session->tariff_snapshot, new RatingInput(
+                $futureEnergy, (int) $session->duration_seconds + $bufferSeconds, (int) $session->parking_seconds,
+                (int) $session->idle_seconds, $session->started_at, (int) $session->energy_flow_seconds + $bufferSeconds,
+            ));
             $usagePriced = is_array($components) && array_intersect(['energy', 'time'], array_column($components, 'dimension')) !== [];
             if (! $stale && $session->failure_reason !== 'prepaid_start_unconfirmed' && (! $usagePriced || $future->totalMinor < $owner->budget_minor)) {
                 return;
             }
             $attempts = ChargerCommand::query()->where('session_id', $sessionId)->where('idempotency_key', 'like', 'budget-stop-%')->count();
-            if ($attempts >= 3 || $session->protocol_transaction_id === null) {
+            if ($attempts >= max(1, (int) config('mobile_charging.stop_maximum_attempts', 3))) {
+                app(AutomaticStopRecovery::class)->recover($session);
+
+                return;
+            }
+            if ($session->protocol_transaction_id === null) {
                 $owner->forceFill(['payment_state' => 'requires_action'])->save();
 
                 return;
             }
+            if ($attempts > 0 && ! app(AutomaticStopRecovery::class)->retryable($session)) {
+                return;
+            }
             // This service identity acts under the driver's recorded spending-limit consent.
-            app(RemoteStopService::class)->request($session, 'budget-stop-'.$sessionId.'-'.$attempts, true);
+            $result = app(RemoteStopService::class)->request($session, 'budget-stop-'.$sessionId.'-'.$attempts, true);
+            app(StateTransitionRecorder::class)->record('command', (string) $result->command->getKey(), 'requested', 'requested',
+                'prepaid_stop_forecast', ['budget_minor' => $owner->budget_minor, 'projected_cost_minor' => $future->totalMinor,
+                    'lookahead_seconds' => $bufferSeconds, 'reading_age_seconds' => $readingAge, 'queue_delay_seconds' => $queueSeconds,
+                    'stale_meter' => $stale]);
         });
     }
 

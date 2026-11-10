@@ -666,6 +666,7 @@ class VtsaBottomNavigationShell extends StatelessWidget {
     required this.onDestinationSelected,
     required this.child,
     this.activeSession,
+    this.navigationBar,
     super.key,
   });
 
@@ -674,6 +675,7 @@ class VtsaBottomNavigationShell extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
   final Widget child;
   final Widget? activeSession;
+  final Widget? navigationBar;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -696,11 +698,12 @@ class VtsaBottomNavigationShell extends StatelessWidget {
               ),
             ),
           ),
-        NavigationBar(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: onDestinationSelected,
-          destinations: destinations,
-        ),
+        navigationBar ??
+            NavigationBar(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: onDestinationSelected,
+              destinations: destinations,
+            ),
       ],
     ),
   );

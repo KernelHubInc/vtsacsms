@@ -104,7 +104,7 @@ remote "$app2" "/usr/local/sbin/vtsa-deploy-app production '$release_tag'"
 ready_node "$app2" || fail 'App02 is not ready; inspect its deployment rollback.'
 ready_public "$production_url" || fail 'Public production failed after App02 deployment.'
 
-if remote "$app2" 'docker ps --format "{{.Names}}"' | grep -Eq '^vtsa-csms-production-(worker|scheduler)-'; then
+if remote "$app2" 'docker ps --format "{{.Names}}"' | grep -Eq '^vtsa-csms-production-(worker|charging-worker|scheduler)-'; then
     fail 'App02 unexpectedly runs a production worker or scheduler.'
 fi
 printf 'Production is ready on App01 and App02 at %s.\n' "$release_tag"

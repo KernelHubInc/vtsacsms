@@ -40,7 +40,9 @@ final readonly class CommandOutcomeService
             return;
         }
 
-        if ($command->state === ChargerCommandState::Rejected && $session->state === ChargingSessionState::Stopping) {
+        if ($command->state === ChargerCommandState::Rejected && $session->state === ChargingSessionState::Stopping
+            && ! ChargerCommand::query()->where('session_id', $session->getKey())->where('type', 'remote_stop')
+                ->where('id', '>', $command->getKey())->exists()) {
             $previous = $command->expected_state['session_state'] ?? null;
             $resume = is_string($previous) ? ChargingSessionState::tryFrom($previous) : null;
             if ($resume !== null && $session->state->canTransitionTo($resume)) {

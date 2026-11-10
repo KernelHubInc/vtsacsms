@@ -56,6 +56,11 @@ final class ExpireChargingOperations extends Command
 
                 foreach ($commandIds as $commandId) {
                     DB::transaction(function () use ($commandId, $commandStates, $outcomes, &$count): void {
+                        $sessionId = ChargerCommand::query()->whereKey($commandId)->value('session_id');
+                        if ($sessionId === null) {
+                            return;
+                        }
+                        ChargingSession::query()->whereKey($sessionId)->lockForUpdate()->firstOrFail();
                         $command = ChargerCommand::query()->whereKey($commandId)->lockForUpdate()->first();
                         if ($command === null || $command->state->isTerminal() || $command->expires_at->isFuture()) {
                             return;

@@ -8,6 +8,7 @@ use App\Modules\Tenancy\Infrastructure\Eloquent\BelongsToTenant;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 
+/** @property array<string, mixed> $evidence */
 final class ChargingStateTransition extends Model
 {
     use BelongsToTenant, HasUlids;

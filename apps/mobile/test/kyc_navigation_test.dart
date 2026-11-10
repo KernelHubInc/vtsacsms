@@ -18,7 +18,7 @@ void main() {
     );
     await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Account'));
+    await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Identity verification'));
     await tester.pumpAndSettle();
@@ -34,6 +34,6 @@ void main() {
     await fixture.dependencies.auth.logout();
     await tester.pumpAndSettle();
     expect(find.byType(KycScreen), findsNothing);
-    expect(find.text('Sign in to your drive.'), findsOneWidget);
+    expect(find.text('Power your next drive.'), findsOneWidget);
   });
 }

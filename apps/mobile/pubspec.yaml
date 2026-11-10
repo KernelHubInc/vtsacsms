@@ -33,6 +33,8 @@ dependencies:
   gal: 2.3.3
   firebase_core: ^5.0.0
   firebase_messaging: ^17.0.0
+  flutter_svg: 2.3.2
+  google_sign_in: 7.2.0
 
 dev_dependencies:
   camera_platform_interface: 2.14.0
@@ -48,3 +50,9 @@ flutter:
     - assets/branding/
     - assets/interface/
     - assets/registration/
+    - assets/evcs/
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf

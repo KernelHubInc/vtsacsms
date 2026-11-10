@@ -15,6 +15,8 @@ use App\Modules\Assets\Domain\Models\OcppVersion;
 use App\Modules\Billing\Application\PrepaidWallet;
 use App\Modules\Charging\Application\CommandOutcomeService;
 use App\Modules\Charging\Application\CustomerCharging;
+use App\Modules\Charging\Application\Gateway\GatewayCommandClient;
+use App\Modules\Charging\Application\Gateway\GatewayCommandResult;
 use App\Modules\Charging\Application\MeterValueService;
 use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\PrepaidChargingMonitor;
@@ -27,6 +29,7 @@ use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Domain\Models\InboundOcppEvent;
 use App\Modules\Charging\Domain\Models\StationConnection;
+use App\Modules\Charging\Jobs\DispatchChargerCommand;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Notifications\Application\ChargingReceiptPdf;
 use App\Modules\Notifications\Application\ChargingSummaryDelivery;
@@ -808,6 +811,90 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
             self::assertSame(0, ChargerCommand::query()->count());
         });
+    }
+
+    public function test_automatic_budget_stop_dispatches_through_worker_middleware_and_settles_after_physical_stop(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('automatic-budget-worker');
+        [$session, $connector] = $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): array {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->id);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->id, 'automatic-budget-start');
+            $this->event((string) $tenant->id, $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 92, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $session->refresh()->forceFill(['energy_wh' => 900, 'estimated_cost_minor' => 90])->save();
+
+            return [$session, $connector];
+        });
+        Artisan::call('charging:monitor-prepaid');
+        $command = $this->withinTenant($tenant, $actor, fn () => ChargerCommand::query()->where('session_id', $session->id)->where('type', 'remote_stop')->firstOrFail());
+        $gateway = $this->createMock(GatewayCommandClient::class);
+        $gateway->expects(self::once())->method('dispatch')
+            ->with(self::callback(fn (ChargerCommand $sent): bool => $sent->id === $command->id && $sent->payload === ['transaction_id' => 92]))
+            ->willReturn(new GatewayCommandResult('completed', ['status' => 'Accepted'], null));
+        $this->app->instance(GatewayCommandClient::class, $gateway);
+        $this->runStopJob((string) $command->id);
+        self::assertFalse(app(CurrentTenant::class)->has());
+        $this->withinTenant($tenant, $actor, function () use ($command, $session, $connector, $tenant, $actor): void {
+            self::assertSame('acknowledged', $command->refresh()->state->value);
+            self::assertSame('stopping', $session->refresh()->state->value);
+            self::assertNull(CustomerChargingSession::query()->where('session_id', $session->id)->firstOrFail()->settled_at);
+            $this->event((string) $tenant->id, $connector, 'stop_transaction', ['protocol_transaction_id' => 92, 'meter_stop_wh' => 1950, 'reason' => 'Remote', 'samples' => []]);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            self::assertSame('completed', $session->refresh()->state->value);
+            self::assertSame('captured', CustomerChargingSession::query()->where('session_id', $session->id)->firstOrFail()->payment_state);
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(5, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
+            self::assertSame(1, ChargingEmailDelivery::query()->where('session_id', $session->id)->count());
+        });
+    }
+
+    public function test_expired_automatic_stop_recovers_without_driver_action_and_stops_at_attempt_limit(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('automatic-stop-expiry');
+        $session = $this->withinTenant($tenant, $actor, function () use ($actor, $tenant) {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->id);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->id, 'expiry-budget-start');
+            $this->event((string) $tenant->id, $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 93, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $session->refresh()->forceFill(['energy_wh' => 900])->save();
+
+            return $session;
+        });
+        Artisan::call('charging:monitor-prepaid');
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $this->withinTenant($tenant, $actor, fn () => self::assertSame($attempt, ChargerCommand::query()->where('session_id', $session->id)->where('type', 'remote_stop')->count()));
+            $this->travel(40)->seconds();
+            Artisan::call('charging:expire-operations');
+            Artisan::call('charging:monitor-prepaid');
+            Artisan::call('charging:monitor-prepaid');
+        }
+        $this->withinTenant($tenant, $actor, function () use ($session): void {
+            self::assertSame(3, ChargerCommand::query()->where('session_id', $session->id)->where('type', 'remote_stop')->count());
+            self::assertSame('stopping', $session->refresh()->state->value);
+            self::assertSame('authorized', CustomerChargingSession::query()->where('session_id', $session->id)->firstOrFail()->payment_state);
+            self::assertContains('remote_stop_unconfirmed', $session->anomaly_flags);
+        });
+    }
+
+    private function runStopJob(string $commandId): void
+    {
+        $job = null;
+        Queue::assertPushed(DispatchChargerCommand::class,
+            function (DispatchChargerCommand $candidate) use ($commandId, &$job): bool {
+                if ($candidate->commandId !== $commandId) {
+                    return false;
+                }
+                $job = $candidate;
+
+                return true;
+            });
+        self::assertInstanceOf(DispatchChargerCommand::class, $job);
+        $job->middleware()[0]->handle($job, fn (DispatchChargerCommand $job) => app()->call([$job, 'handle']));
     }
 
     private function fixture(User $actor): Connector

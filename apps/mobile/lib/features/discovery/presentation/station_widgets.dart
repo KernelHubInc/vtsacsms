@@ -386,7 +386,9 @@ class _FactChip extends StatelessWidget {
       children: [
         Icon(icon, size: 14),
         const SizedBox(width: VtsaSpacing.xxs),
-        Text(label, style: Theme.of(context).textTheme.labelSmall),
+        Flexible(
+          child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ),
       ],
     ),
   );

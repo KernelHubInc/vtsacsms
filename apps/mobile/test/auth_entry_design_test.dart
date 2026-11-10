@@ -38,9 +38,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('A better way to charge.'), findsOneWidget);
+      expect(find.text('Power your next drive.'), findsOneWidget);
+      await preview(tester, 'welcome-$width-$scale');
+      await tester.ensureVisible(find.text('Sign in'));
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+      expect(find.text('Welcome back.'), findsOneWidget);
       await preview(tester, 'login-$width-$scale');
-      await tester.ensureVisible(find.text('Create an account'));
+      await tester.ensureVisible(find.text('Create account'));
       expect(tester.takeException(), isNull);
       await fixture.dependencies.auth.login(
         email: 'ada@example.test',
@@ -54,14 +59,18 @@ void main() {
       );
       fixture.dependencies.auth.lock();
       await tester.pumpAndSettle();
+      expect(find.text('Your saved account'), findsOneWidget);
+      await tester.ensureVisible(find.text('App PIN'));
+      await tester.tap(find.text('App PIN'));
+      await tester.pumpAndSettle();
       expect(find.text('Unlock your drive.'), findsOneWidget);
       await preview(tester, 'pin-$width-$scale');
-      await tester.ensureVisible(
-        find.text('Forgot PIN? Sign in with password'),
-      );
-      await tester.tap(find.text('Forgot PIN? Sign in with password'));
+      await tester.ensureVisible(find.text('Forgot PIN? Use your password'));
+      await tester.tap(find.text('Forgot PIN? Use your password'));
       await tester.pumpAndSettle();
-      expect(find.text('Sign in to your drive.'), findsOneWidget);
+      await tester.tap(find.text('Continue with password'));
+      await tester.pumpAndSettle();
+      expect(find.text('Welcome back.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }

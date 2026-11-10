@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' show max;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,33 +10,70 @@ import 'package:vtsa_mobile/design_system/components/driver_components.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_budget_progress.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_page.dart';
 import 'package:vtsa_mobile/features/charging/presentation/vehicle_battery_progress.dart';
 
 class LiveChargingScreen extends StatefulWidget {
   const LiveChargingScreen({
     required this.dependencies,
     required this.sessionId,
+    this.now = DateTime.now,
     super.key,
   });
 
   final AppDependencies dependencies;
   final String sessionId;
+  final DateTime Function() now;
 
   @override
   State<LiveChargingScreen> createState() => _LiveChargingScreenState();
 }
 
 class _LiveChargingScreenState extends State<LiveChargingScreen> {
+  final _scroll = ScrollController();
+  Object? _lastStatus;
+
+  void _statusChanged() {
+    final charging = widget.dependencies.charging;
+    final status = (
+      charging.phase,
+      charging.session?.state,
+      charging.session?.cancellationRequested,
+    );
+    if (_lastStatus == status) return;
+    _lastStatus = status;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) {
+        _scroll.jumpTo(0);
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.dependencies.charging.addListener(_statusChanged);
+    final charging = widget.dependencies.charging;
+    _lastStatus = (
+      charging.phase,
+      charging.session?.state,
+      charging.session?.cancellationRequested,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
           widget.dependencies.charging.session?.id != widget.sessionId) {
         widget.dependencies.charging.recoverSession(widget.sessionId);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    widget.dependencies.charging.removeListener(_statusChanged);
+    _scroll.dispose();
+    super.dispose();
   }
 
   @override
@@ -62,13 +102,16 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
         );
       }
 
-      return DriverPage(
-        selectedIndex: 1,
-        title:
-            charging.phase == ChargingFlowPhase.live &&
-                session.state == ChargingSessionState.charging &&
-                !session.chargerDisconnected &&
-                charging.isOnline
+      return ChargingPage(
+        bottomActions: session.canRequestRemoteStop
+            ? _StopAction(dependencies: widget.dependencies, session: session)
+            : null,
+        title: charging.phase == ChargingFlowPhase.completed
+            ? 'Charging receipt'
+            : charging.phase == ChargingFlowPhase.live &&
+                  session.state == ChargingSessionState.charging &&
+                  !session.chargerDisconnected &&
+                  charging.isOnline
             ? 'You’re charging'
             : 'Your charging session',
         actions: [
@@ -84,6 +127,7 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
           ),
         ],
         body: ListView(
+          controller: _scroll,
           children: [
             if (!charging.isOnline)
               const _Notice(
@@ -109,9 +153,25 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               ),
             _PhasePanel(dependencies: widget.dependencies, session: session),
             const SizedBox(height: VtsaSpacing.md),
-            _Actions(dependencies: widget.dependencies, session: session),
+            if (charging.phase != ChargingFlowPhase.live &&
+                charging.phase != ChargingFlowPhase.completed)
+              _Actions(dependencies: widget.dependencies, session: session),
+            if (charging.phase == ChargingFlowPhase.completed)
+              ChargingReceiptSummary(session: session)
+            else if (session.reservedBudget != null)
+              ChargingBudgetProgress(session: session),
             const SizedBox(height: VtsaSpacing.md),
-            _Metrics(session: session),
+            _Metrics(
+              session: session,
+              now: widget.now,
+              liveTime:
+                  charging.isOnline &&
+                  charging.failure == null &&
+                  !session.chargerDisconnected &&
+                  session.isPhysicalActive &&
+                  session.startedAt != null &&
+                  session.stoppedAt == null,
+            ),
             const SizedBox(height: VtsaSpacing.md),
             if (session.batteryPercentage case final int percentage
                 when percentage >= 0 && percentage <= 100) ...[
@@ -123,6 +183,10 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               ),
               const SizedBox(height: VtsaSpacing.md),
             ],
+            if (charging.phase == ChargingFlowPhase.live ||
+                charging.phase == ChargingFlowPhase.completed)
+              _Actions(dependencies: widget.dependencies, session: session),
+            const SizedBox(height: 16),
             _ChargerReadings(session: session),
             const SizedBox(height: VtsaSpacing.md),
             if (charging.phase == ChargingFlowPhase.live &&
@@ -342,37 +406,41 @@ class _PhasePanel extends StatelessWidget {
 }
 
 class _Metrics extends StatelessWidget {
-  const _Metrics({required this.session});
+  const _Metrics({
+    required this.session,
+    required this.now,
+    required this.liveTime,
+  });
   final ChargingSession session;
+  final DateTime Function() now;
+  final bool liveTime;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const SizedBox(height: 8),
-      Text('ENERGY DELIVERED', style: Theme.of(context).textTheme.labelSmall),
-      const SizedBox(height: 8),
-      Text(
-        formatEnergy(session.energyWh),
-        style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-          fontSize: 34,
-          fontWeight: FontWeight.w600,
-        ),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _Metric(
+              width: double.infinity,
+              label: 'ENERGY DELIVERED',
+              value: formatEnergy(session.energyWh),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _Metric(
+              width: double.infinity,
+              label: 'POWER',
+              value: formatPower(session.currentPowerW),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 12),
-      Container(
-        height: 5,
-        decoration: BoxDecoration(
-          color: context.vtsaColors.border,
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        'Energy so far · last reported value',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      const SizedBox(height: 24),
       LayoutBuilder(
         builder: (context, constraints) {
           final wideText = MediaQuery.textScalerOf(context).scale(14) > 20;
@@ -383,18 +451,22 @@ class _Metrics extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              _Metric(
+              _SessionTimeMetric(
                 width: width,
-                label: 'SESSION TIME',
-                value: formatDuration(session.durationSeconds),
+                startedAt: liveTime ? session.startedAt : null,
+                confirmedSeconds: session.durationSeconds,
+                now: now,
               ),
-              _Metric(
-                width: width,
-                label: session.finalCost == null
-                    ? 'ESTIMATED COST'
-                    : 'FINAL COST',
-                value: formatMoney(session.finalCost ?? session.estimatedCost),
-              ),
+              if (session.reservedBudget == null && session.finalCost == null)
+                _Metric(
+                  width: width,
+                  label: session.finalCost == null
+                      ? 'ESTIMATED COST'
+                      : 'FINAL COST',
+                  value: formatMoney(
+                    session.finalCost ?? session.estimatedCost,
+                  ),
+                ),
               if (session.platformFee != null)
                 _Metric(
                   width: width,
@@ -413,7 +485,9 @@ class _Metrics extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       Text(
-        'Time and cost use the last server update until the session is finalized.',
+        liveTime
+            ? 'Session time counts from the confirmed start. Energy and cost update with charger readings.'
+            : 'Time, energy and cost reflect the last confirmed server update.',
         style: Theme.of(context).textTheme.bodySmall,
       ),
     ],
@@ -481,6 +555,92 @@ class _Reading extends StatelessWidget {
   );
 }
 
+class _SessionTimeMetric extends StatefulWidget {
+  const _SessionTimeMetric({
+    required this.width,
+    required this.startedAt,
+    required this.confirmedSeconds,
+    required this.now,
+  });
+
+  final double width;
+  final DateTime? startedAt;
+  final int confirmedSeconds;
+  final DateTime Function() now;
+
+  @override
+  State<_SessionTimeMetric> createState() => _SessionTimeMetricState();
+}
+
+class _SessionTimeMetricState extends State<_SessionTimeMetric>
+    with WidgetsBindingObserver {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(_SessionTimeMetric oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _syncTimer();
+    if (state == AppLifecycleState.resumed) setState(() {});
+  }
+
+  void _syncTimer() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (widget.startedAt == null ||
+        !TickerMode.valuesOf(context).enabled ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      _timer?.cancel();
+      _timer = null;
+      return;
+    }
+    _timer ??= Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() {}),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final start = widget.startedAt;
+    // Use the confirmed start rather than counting timer callbacks, which may
+    // be delayed when Android or the browser backgrounds the app.
+    final seconds = start == null
+        ? widget.confirmedSeconds
+        : max(
+            widget.confirmedSeconds,
+            widget.now().difference(start).inSeconds,
+          );
+    return _Metric(
+      width: widget.width,
+      label: 'SESSION TIME',
+      value: formatDuration(seconds),
+    );
+  }
+}
+
 class _Metric extends StatelessWidget {
   const _Metric({
     required this.width,
@@ -526,30 +686,6 @@ class _Actions extends StatelessWidget {
   Widget build(BuildContext context) {
     final charging = dependencies.charging;
     final actions = <Widget>[];
-    if (session.canRequestRemoteStop) {
-      actions.add(
-        VtsaButton(
-          label: 'End charging',
-          variant: VtsaButtonVariant.secondary,
-          loading: charging.mutationInFlight,
-          onPressed: charging.isOnline
-              ? () async {
-                  final confirmed = await showVtsaConfirmationDialog(
-                    context: context,
-                    title: 'Stop charging?',
-                    description:
-                        'Power Solutions will request a stop for ${session.connectorName}. Keep the vehicle connected until the charger confirms the transaction ended.',
-                    confirmLabel: 'Request stop',
-                    dangerous: true,
-                  );
-                  if (confirmed) {
-                    await charging.stop();
-                  }
-                }
-              : null,
-        ),
-      );
-    }
     if (session.canCancelStart) {
       actions.addAll([
         VtsaButton(
@@ -631,6 +767,49 @@ class _Actions extends StatelessWidget {
             const SizedBox(height: VtsaSpacing.sm),
         ],
       ],
+    );
+  }
+}
+
+class _StopAction extends StatelessWidget {
+  const _StopAction({required this.dependencies, required this.session});
+  final AppDependencies dependencies;
+  final ChargingSession session;
+  @override
+  Widget build(BuildContext context) {
+    final charging = dependencies.charging;
+    return OutlinedButtonTheme(
+      data: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          backgroundColor: context.vtsaColors.dangerSurface,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          side: BorderSide.none,
+          minimumSize: const Size(48, 52),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      child: VtsaButton(
+        label: 'End charging',
+        variant: VtsaButtonVariant.secondary,
+        loading: charging.mutationInFlight,
+        onPressed: charging.isOnline
+            ? () async {
+                final confirmed = await showVtsaConfirmationDialog(
+                  context: context,
+                  title: 'Stop charging?',
+                  description:
+                      'Power Solutions will request a stop for ${session.connectorName}. Keep the vehicle connected until the charger confirms the transaction ended.',
+                  confirmLabel: 'Request stop',
+                  dangerous: true,
+                );
+                if (confirmed) {
+                  await charging.stop();
+                }
+              }
+            : null,
+      ),
     );
   }
 }

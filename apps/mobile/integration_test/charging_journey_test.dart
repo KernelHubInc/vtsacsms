@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/presentation/charging_page.dart';
 
 import '../test/support/fakes.dart';
 
@@ -23,12 +24,22 @@ void main() {
     await tester.tap(find.byTooltip('Scan charger code'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'VSTA-ABC_123');
+    await tester.scrollUntilVisible(
+      find.text('Validate connector'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.text('Validate connector')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Validate connector'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Review and request start'), 300);
-    await tester.tap(find.text('Review and request start'));
+    await tester.tap(find.text('Can’t swipe? Start with a button'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Request start'));
+    await tester.tap(find.text('Start charging'));
     await tester.pumpAndSettle();
     expect(find.text('Waiting for physical start'), findsOneWidget);
 
@@ -78,11 +89,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fixture.dependencies.charging.phase, ChargingFlowPhase.completed);
-    await tester.scrollUntilVisible(find.text('Session complete'), -300);
+    final sessionScroll = find
+        .descendant(
+          of: find.byType(ChargingPage),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('Session complete'),
+      -300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('Session complete'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Open receipt'), 300);
+    await tester.scrollUntilVisible(
+      find.text('Open receipt'),
+      300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('Open receipt'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('6.60 kWh'), 300);
+    await tester.scrollUntilVisible(
+      find.text('6.60 kWh'),
+      300,
+      scrollable: sessionScroll,
+    );
     expect(find.text('6.60 kWh'), findsOneWidget);
   });
 }

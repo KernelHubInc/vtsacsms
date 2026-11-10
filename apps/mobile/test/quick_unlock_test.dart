@@ -49,6 +49,34 @@ void main() {
   });
 
   test(
+    'first-name hint survives locking and restart, but not credential clearing',
+    () async {
+      expect(store.savedFirstName, isNull);
+      expect(await store.unlock(), isTrue);
+      await store.rememberFirstName('  Ada\n\u202E  ');
+      store.lock();
+      expect(await store.read(), isNull);
+      final restored = makeStore();
+      await restored.initialize();
+      expect(restored.savedFirstName, 'Ada');
+      expect(await restored.read(), isNull);
+      expect(jsonDecode(settings.value!) as Map, isNot(contains('email')));
+      await restored.clear();
+      expect(restored.savedFirstName, isNull);
+      expect(settings.value, isNull);
+    },
+  );
+
+  test('a missing or blank first name keeps the generic fallback', () async {
+    expect(await store.unlock(), isTrue);
+    await store.rememberFirstName('Ada');
+    await store.rememberFirstName(' \n ');
+    store.lock();
+    expect(store.savedFirstName, isNull);
+    expect(jsonDecode(settings.value!) as Map, isNot(contains('first_name')));
+  });
+
+  test(
     'cold start gates API tokens; correct PIN restores the tenant-bound token',
     () async {
       expect(await store.read(), isNull);

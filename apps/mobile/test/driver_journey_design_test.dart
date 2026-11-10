@@ -134,19 +134,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Continue with Type 2'));
         await tester.pumpAndSettle();
-        expect(find.text('You’re nearly ready'), findsOneWidget);
-        expect(fixture.charging.prepareCalls, 0);
-        expect(fixture.charging.startCalls, 0);
+        expect(find.text('Ready to charge'), findsOneWidget);
         await preview(tester, 'ready-${width.toInt()}-$scale');
-        await tester.scrollUntilVisible(
-          find.text('Review charging estimate'),
-          200,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.ensureVisible(find.text('Review charging estimate'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Review charging estimate'));
-        await tester.pumpAndSettle();
         expect(fixture.charging.prepareCalls, 1);
         expect(
           fixture.charging.lastPreparedCode,
@@ -158,17 +147,21 @@ void main() {
           'Standard charging',
         );
         await tester.scrollUntilVisible(
-          find.text('Review and request start'),
+          find.text('Can’t swipe? Start with a button'),
           200,
           scrollable: find.byType(Scrollable).first,
         );
-        await tester.ensureVisible(find.text('Review and request start'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.text('Can’t swipe? Start with a button'),
+        );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Review and request start'));
+        await tester.tap(find.text('Can’t swipe? Start with a button'));
         await tester.pumpAndSettle();
-        expect(find.text('Request start'), findsOneWidget);
-        await tester.tap(find.text('Request start'));
+        expect(find.byType(AlertDialog), findsNothing);
+        await tester.ensureVisible(find.text('Start charging'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Start charging'));
         await tester.pumpAndSettle();
         expect(fixture.charging.startCalls, 1);
         expect(find.text('Waiting for physical start'), findsOneWidget);

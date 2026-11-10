@@ -3,6 +3,10 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 Future<void> loadTestFonts() async {
+  final inter = await File('assets/fonts/Inter.ttf').readAsBytes();
+  await (FontLoader(
+    'Inter',
+  )..addFont(Future.value(ByteData.sublistView(inter)))).load();
   for (final (family, filename) in [
     ('Roboto', 'roboto-regular.ttf'),
     ('MaterialIcons', 'materialicons-regular.otf'),

@@ -117,6 +117,12 @@ class AccountScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: VtsaSpacing.md),
+              _AccountTile(
+                icon: Icons.tune,
+                title: 'App setup',
+                subtitle: 'Optional preferences for your next charge',
+                onTap: () => context.push('/onboarding'),
+              ),
               if (dependencies.auth.quickUnlock?.device.supported == true)
                 _AccountTile(
                   icon: Icons.fingerprint,
@@ -173,7 +179,7 @@ class AccountScreen extends StatelessWidget {
                     dependencies.vehicles.load(),
                   ]);
                   if (context.mounted) {
-                    context.go('/login');
+                    context.go('/welcome');
                   }
                 },
               ),
