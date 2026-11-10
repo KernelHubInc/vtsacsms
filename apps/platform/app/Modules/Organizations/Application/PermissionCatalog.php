@@ -6,9 +6,59 @@ namespace App\Modules\Organizations\Application;
 
 use App\Modules\Organizations\Domain\Models\Permission;
 use App\Modules\Organizations\Domain\PermissionKey;
+use Illuminate\Support\Str;
 
 final class PermissionCatalog
 {
+    /** @return array<string, array{label: string, permissions: array<string, string>}> */
+    public function modules(): array
+    {
+        $labels = [
+            'panels' => 'Portal access',
+            'identity' => 'People and access',
+            'kyc' => 'Identity verification (KYC)',
+            'audit' => 'Audit trail',
+            'tenancy' => 'Tenant settings',
+            'organizations' => 'Organizations',
+            'charging_accounts' => 'Charging accounts',
+            'locations' => 'Locations',
+            'assets' => 'Charging equipment',
+            'charging' => 'Charging operations',
+            'tariffs' => 'Tariffs',
+            'payments' => 'Payments',
+            'billing' => 'Billing',
+            'settlements' => 'Settlements',
+            'procurement' => 'Procurement',
+            'inventory' => 'Inventory',
+            'maintenance' => 'Maintenance',
+            'support' => 'Support',
+            'reporting' => 'Reports and exports',
+            'cms' => 'Content studio',
+            'integrations' => 'Integrations',
+        ];
+        $modules = [];
+        foreach ($labels as $key => $label) {
+            $modules[$key] = ['label' => $label, 'permissions' => []];
+        }
+
+        foreach (PermissionKey::cases() as $permission) {
+            $parts = explode('.', $permission->value);
+            $module = array_shift($parts);
+            if ($module === 'identity' && in_array($parts[0], ['panels', 'kyc'], true)) {
+                $module = array_shift($parts);
+            } elseif ($module === 'organizations' && $parts[0] === 'charging_accounts') {
+                $module = array_shift($parts);
+            }
+
+            if (! isset($modules[$module])) {
+                throw new \LogicException('Every permission must belong to a named module.');
+            }
+            $modules[$module]['permissions'][$permission->value] = implode(' · ', array_map(Str::headline(...), $parts));
+        }
+
+        return $modules;
+    }
+
     /**
      * @return list<array{key: string, context: string, description: string, created_at: mixed, updated_at: mixed}>
      */
