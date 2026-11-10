@@ -81,6 +81,8 @@ The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composit
 
 ### Identity, Organizations, and Tenancy
 
+- Initial administrator provisioning uses Organizations' `AdministratorBootstrap` and Identity's `WorkforceEnrollmentService`. Organizations owns the one-per-tenant reservation and grants; Identity owns pending users, token verifiers and password activation. Its credential-free projection exposes the existing membership user key and public subject ULID only. Completion queries current tenant status and permissions without writing organization records. See [ADR 0032](decisions/0032-initial-administrator-enrollment.md).
+
 - Identity owns `identity_charger_credentials`; Assets owns station identity/version/lifecycle. `GatewayStationQuery`, `GatewayTenantQuery` and `ChargerCredentials` compose the versioned OCPP authentication query without cross-context writes (ADR 0023). Admin provisioning is an explicit transaction; secrets are excluded from events and asset audit snapshots.
 
 - Identity proves who/what authenticated.

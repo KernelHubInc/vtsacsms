@@ -56,6 +56,8 @@ Exact production limits remain subject to load testing and abuse telemetry.
 
 ## Operational Commands
 
+For a tenant with no platform administrator, use the explicitly owner-approved CLI bootstrap and private 24-hour single-use email enrollment described in the [initial administrator runbook](../runbooks/initial-administrator-enrollment.md) and [ADR-0032](../architecture/decisions/0032-initial-administrator-enrollment.md). New recipients choose their own passwords of at least 12 characters. No password or token is printed. Normal invitations and grantor-subset enforcement remain unchanged; bootstrap cannot replace existing identities or initialize the same tenant with a different plan.
+
 After migrations, synchronize the immutable permission vocabulary:
 
 ```powershell

@@ -40,6 +40,8 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 
 | [0031](0031-device-local-welcome-name-hint.md) | Device-local first-name hint on secure welcome | Accepted by explicit product-owner request |
 
+| [0032](0032-initial-administrator-enrollment.md) | Audited initial administrator bootstrap and private enrollment | Accepted by explicit tenant-owner approval |
+
 ## ADR Template
 
 New records should include status, date, owners, context, decision, decision details, consequences, alternatives, risks/controls, and follow-up decisions. Use the next zero-padded number and a stable descriptive filename.

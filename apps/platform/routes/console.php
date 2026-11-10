@@ -17,3 +17,4 @@ Schedule::command('notifications:send-driver-notices')->everyMinute()->withoutOv
 Schedule::command('integrations:publish-outbox --limit=250')->everySecond()->withoutOverlapping();
 Schedule::command('maintenance:run-automation')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('kyc:reconcile')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('security:expire-workforce-enrollments')->daily()->withoutOverlapping();
