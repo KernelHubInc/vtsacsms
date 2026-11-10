@@ -13,10 +13,14 @@ use App\Http\Controllers\PublicStationController;
 use App\Http\Controllers\RobotsController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StagingKycPolicyController;
+use App\Http\Controllers\WorkforceEnrollmentController;
 use App\Http\Middleware\RequireEnabledFeature;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', PublicPageController::class)->defaults('slug', 'home')->name('home');
+
+Route::get('/workforce/setup', [WorkforceEnrollmentController::class, 'show'])->name('workforce-enrollment.show');
+Route::post('/workforce/setup', [WorkforceEnrollmentController::class, 'complete'])->middleware('throttle:auth.recovery')->name('workforce-enrollment.complete');
 
 Route::get('/accept-invitation', [AcceptOperatorInvitationController::class, 'show'])->name('operator-invitation.show');
 Route::post('/accept-invitation', [AcceptOperatorInvitationController::class, 'accept'])->middleware('throttle:auth.recovery')->name('operator-invitation.accept');

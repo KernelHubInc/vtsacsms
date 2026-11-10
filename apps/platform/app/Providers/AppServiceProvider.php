@@ -20,6 +20,7 @@ use App\Modules\Charging\Infrastructure\EloquentFinalizedChargeDetailRecordQuery
 use App\Modules\Charging\Infrastructure\HttpGatewayCommandClient;
 use App\Modules\Identity\Application\Contracts\MfaChallengeProvider;
 use App\Modules\Identity\Application\Contracts\MobileVerificationSender;
+use App\Modules\Identity\Application\RecordWorkforceEnrollmentDelivery;
 use App\Modules\Identity\Domain\Models\MobileAccessToken;
 use App\Modules\Identity\Infrastructure\FakeLocalMobileVerificationSender;
 use App\Modules\Identity\Infrastructure\UnavailableMfaChallengeProvider;
@@ -66,6 +67,8 @@ use App\Policies\WarehousePolicy;
 use App\Policies\WorkOrderPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -101,6 +104,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Event::listen(
+            NotificationSent::class,
+            RecordWorkforceEnrollmentDelivery::class,
+        );
         // Laravel's symbols check also accepts spaces; require actual punctuation or a symbol.
         Password::defaults(static fn (): Password => Password::min(8)->mixedCase()->numbers()->symbols()
             ->rules(['regex:/[\p{S}\p{P}]/u']));
