@@ -19,6 +19,8 @@ UI visibility, navigation groups, table filters, and map filters are convenience
 
 Operator-user administration calls the audited Identity and Organizations application services. Invitations carry an explicit tenant or site scope, role assignment applies the non-escalation rule (a grantor cannot delegate authority they do not hold), and membership suspension revokes mobile tokens. Custom role composition applies the same non-escalation rule and keeps system roles immutable. Permission definitions remain code-governed through `PermissionCatalog`. Remote-stop actions likewise call the Charging application workflow and require `charging.remote_commands.execute` for the session's exact site.
 
+Custom roles use module sections with individually selected functions and a **Remove module** action. `RoleManager` owns atomic permission replacement and before/after audit evidence. The editor shows the assigned membership/assignment counts before saving. Removing grants updates navigation and server authorization in both panels on subsequent requests; another role can still supply the same permission. The [role administration guide](../runbooks/module-role-administration.md) describes operation and recovery. No schema or existing grant migration is required.
+
 ## Dashboard projection
 
 `PortalDashboardQuery` owns the read-only operational projection used by both panels. It:
