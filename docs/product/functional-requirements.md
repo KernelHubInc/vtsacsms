@@ -63,6 +63,7 @@
 - **FR-ORG-003:** Permission grants MUST be constrained by the grantor's permissions and tenant/organization/resource scope.
 - **FR-ORG-004:** Organization history and membership/role changes MUST be audited.
 - **FR-ORG-005:** The system SHOULD support teams for operational assignment without treating teams as security boundaries unless explicitly configured.
+- **FR-ORG-006:** Authorized administrators MUST be able to compose custom roles by module and individual function, clear a module's grants, preview assignment impact, and audit old/new grants. Changes MUST preserve tenant scope, grantor-subset enforcement, immutable system roles and additive multi-role access. Portal navigation and server authorization MUST reflect the resulting effective permissions.
 
 ## 7. Locations
 

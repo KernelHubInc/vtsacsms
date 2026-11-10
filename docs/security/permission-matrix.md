@@ -49,6 +49,16 @@ The code-owned catalog is [`PermissionKey`](../../apps/platform/app/Modules/Orga
 
 The catalog reserves permissions for future bounded contexts without implementing their workflows.
 
+### Editing module access
+
+The administration panel's **Identity and audit → Roles** editor groups the code-owned permission catalog into modules and individual functions. Module groups present existing permissions; they do not introduce wildcard grants or independent feature flags. Portal access, KYC and charging-account permissions have separate groups so business access can be selected independently of panel entry and workforce administration.
+
+Opening a module grants nothing. Administrators explicitly select each function; **Remove module** clears every grant in that group. A role may have no permissions. Existing roles load their current grants without a data migration. System roles remain immutable; create a custom role for tailored access.
+
+`RoleManager` owns role creation/update transactions. It requires tenant-wide `identity.roles.manage`, rejects cross-tenant and system-role updates, validates exact permission keys and tenant-unique role keys, and verifies that the actor holds every resulting grant at tenant scope. Audit snapshots contain both the old and new permission lists.
+
+Navigation and route/action authorization continue to evaluate effective permissions live in both panels. A module with no effective grants has no authorized navigation entries; dependent pages can require additional permissions. Removing a role's grant does not override another active role granting the same capability. The editor previews assigned membership and assignment counts; all assignments to the shared role use its updated bundle. See the [role administration guide](../runbooks/module-role-administration.md).
+
 ## 3. Persona-to-Capability Analysis
 
 Legend: **V** view, **M** manage/operate, **A** approve/high risk, **—** no baseline grant. Each mark remains subject to the scope and separation rules below.
