@@ -28,7 +28,8 @@ final class PanelAccessService
             default => null,
         };
 
-        if ($permission === null || ! $user->isEnabled()) {
+        // Enrollment metadata is not proof of a completed browser MFA challenge.
+        if ($permission === null || ! $user->isEnabled() || $user->mfa_required) {
             return null;
         }
 

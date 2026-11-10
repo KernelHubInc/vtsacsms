@@ -35,6 +35,8 @@ No SMS vendor, sender identity, production credential, or regional delivery rule
 
 Accounts carry explicit MFA requirement and enrollment timestamps. Login consults `MfaChallengeProvider`; when MFA is required and no production provider exists, token issuance fails closed with `mfa_unavailable`. This phase does not invent a TOTP, WebAuthn, SMS, recovery-code, or help-desk reset policy.
 
+Admin and operator panel eligibility also denies accounts with `mfa_required`, including existing browser sessions. An enrollment timestamp alone never proves a completed challenge. Until a verified browser challenge flow exists, these accounts cannot use either panel; do not clear their MFA requirement to work around the denial. Review affected administrators before deploying this security fix and retain an approved recovery access path.
+
 ## Panels
 
 | Panel | Path | Eligibility | Tenant context |
