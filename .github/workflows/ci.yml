@@ -181,7 +181,26 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: services/kyc-service/requirements.lock
-      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the KYC test image
+        uses: docker/build-push-action@v6
+        with:
+          context: services/kyc-service
+          target: test
+          load: true
+          tags: vtsa-kyc-test:ci
+          cache-from: type=gha,scope=vtsa-kyc
+          cache-to: type=gha,mode=max,scope=vtsa-kyc-test
+      - name: Use the test image's Tesseract in host tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/kyc-bin"
+          cat > "$RUNNER_TEMP/kyc-bin/tesseract" <<'EOF'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network none --entrypoint tesseract vtsa-kyc-test:ci "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/kyc-bin/tesseract"
+          "$RUNNER_TEMP/kyc-bin/tesseract" --version
+          echo "$RUNNER_TEMP/kyc-bin" >> "$GITHUB_PATH"
       - run: pip install -r requirements.lock && pip install -e '.[dev]'
       - run: ruff format --check app tests scripts migrations
       - run: ruff check app tests scripts migrations
@@ -196,7 +215,7 @@ jobs:
       - run: pip-audit -r requirements.lock
       - run: python scripts/export_openapi.py
       - run: git diff --exit-code -- ../../packages/contracts/openapi/kyc.internal.v1.json
-      - run: docker build --target test -t vtsa-kyc-test . && docker run --rm vtsa-kyc-test
+      - run: docker run --rm vtsa-kyc-test:ci
       - name: Exercise real KYC gateway, worker, callback and manual review
         run: |
           python scripts/setup_local.py
