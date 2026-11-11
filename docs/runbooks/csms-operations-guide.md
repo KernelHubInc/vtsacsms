@@ -14,7 +14,7 @@ MFA-required accounts cannot use panels until a verified browser challenge flow 
 
 ## 2. Configure an operator and location
 
-An authorized administrator uses the operator onboarding wizard to select/create the charge-point operator and issue its scoped invitation. Assign only the permissions and organization/site scope the operator needs. Preserve the grantor's authority limits. Use membership suspension and role workflows to remove access; deleting an invitation is not equivalent to revoking an accepted membership.
+An authorized administrator opens **Onboard operator** directly below **Dashboard** to select or create the charge-point operator and issue its scoped invitation. Assign only the permissions and organization/site scope the operator needs. Preserve the grantor's authority limits. Use membership suspension and role workflows to remove access; deleting an invitation is not equivalent to revoking an accepted membership.
 
 In Charging network, create the Site with the actual operator, address, coordinates and IANA timezone. Enter the real weekly opening hours. Enable Active/Public and use Publish location only when ready for discovery. A site is a physical place, a charging station is an OCPP device, an EVSE is an independently controlled outlet, and a connector is its physical plug.
 
@@ -63,6 +63,8 @@ Use Session diagnostics, Command diagnostics, Status and faults and the Session 
 Record tenant-safe session/command reference, exact station identity, EVSE/connector, timestamp and timezone, displayed error and correlation ID. Share only redacted diagnostics. Never include tokens, raw identity documents, passwords or payment secrets.
 
 ## 8. Reports, finance and audit
+
+On the dashboard, use Location and Reporting period to view **Charging revenue by station**. With tenant-wide access, administrators see the tenant's stations. Scoped operators see their assigned sites and sessions attributed to the current operator. The section requires Locations, Charging equipment, Reporting and Payments view access in scope. Figures show finalized charging activity after any explicit platform fee, grouped by currency, before refunds and revenue sharing. Use settlement records for payout amounts.
 
 Open the reports available to the assigned role and scope. Queued exports require reporting permissions at request, execution and download. A revoked membership can legitimately prevent completion. Keep exports private; possession of a file path is not authorization. Re-request a failed export through the UI instead of changing its requester or tenant.
 

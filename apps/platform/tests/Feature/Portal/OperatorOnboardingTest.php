@@ -63,6 +63,17 @@ final class OperatorOnboardingTest extends TenantSecurityTestCase
         return ['mode' => 'new', 'name' => 'North Coast Charging', 'code' => 'north-coast', 'organization_id' => null, 'email' => 'operator@example.test', 'role_id' => $this->role, 'scope' => 'organization', 'site_id' => null];
     }
 
+    public function test_admin_sidebar_places_onboard_operator_immediately_after_dashboard(): void
+    {
+        $this->withinTenant($this->tenant, $this->admin, function (): void {
+            $navigation = Filament::getNavigation();
+            $firstGroup = collect($navigation)->first();
+
+            self::assertNotNull($firstGroup);
+            self::assertSame(['Dashboard', 'Onboard operator'], collect($firstGroup->getItems())->map->getLabel()->take(2)->all());
+        });
+    }
+
     public function test_onboarding_is_atomic_idempotent_scoped_and_audited(): void
     {
         $this->withinTenant($this->tenant, $this->admin, function (): void {
