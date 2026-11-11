@@ -24,10 +24,10 @@ final class WorkforceEnrollmentController extends Controller
     public function complete(CompleteWorkforceEnrollmentRequest $request, WorkforceEnrollmentService $enrollments): JsonResponse
     {
         try {
-            $enrollments->complete($request->validated('enrollment_token'), $request->validated('name'), $request->validated('password'), (string) Str::ulid());
+            $enrollments->complete($request->validated('enrollment_token'), $request->validated('name'), $request->validated('password'), (string) Str::ulid(), $request->validated('email'));
         } catch (ValidationException $exception) {
             return response()->json(['error' => [
-                'code' => 'enrollment_unavailable', 'message' => 'This setup link is unavailable. Ask the administrator for a new setup email.',
+                'code' => 'enrollment_unavailable', 'message' => 'This setup credential is unavailable. Ask the administrator for a new one.',
                 'correlation_id' => $request->attributes->get('correlation_id'), 'fields' => $exception->errors(),
             ]], 422)->header('Cache-Control', 'no-store')->header('Referrer-Policy', 'no-referrer');
         }

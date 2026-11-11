@@ -2,25 +2,30 @@ const form = document.getElementById('workforce-setup');
 const message = document.getElementById('setup-message');
 const submit = document.getElementById('setup-submit');
 const completed = document.getElementById('setup-completed');
-let token = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
+const manualFields = document.getElementById('manual-setup-fields');
+let emailToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? '';
 
 // Fragments never reach HTTP access logs; remove the credential from visible history immediately.
 window.history.replaceState(null, '', window.location.pathname);
 
-if (/^[a-f0-9]{64}$/.test(token)) {
+if (/^[a-f0-9]{64}$/.test(emailToken)) {
+    manualFields.hidden = true;
+    manualFields.disabled = true;
     message.textContent = 'Choose a password you will use only for this administrator account.';
-    submit.disabled = false;
 } else {
-    token = '';
+    emailToken = '';
 }
+submit.disabled = false;
 
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!token || submit.disabled) return;
+    if (submit.disabled) return;
     submit.disabled = true;
     message.textContent = 'Saving your private password…';
     const data = new FormData(form);
-    data.set('enrollment_token', token);
+    if (emailToken) {
+        data.set('enrollment_token', emailToken);
+    }
 
     try {
         const response = await fetch(form.action, {
@@ -33,7 +38,7 @@ form.addEventListener('submit', async (event) => {
             submit.disabled = false;
             return;
         }
-        token = '';
+        emailToken = '';
         form.reset();
         form.hidden = true;
         completed.hidden = false;

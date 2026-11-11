@@ -7,6 +7,7 @@ namespace Tests\Feature\Security;
 use App\Foundation\Audit\Models\AuditEvent;
 use App\Models\User;
 use App\Modules\Identity\Application\PanelAccessService;
+use App\Modules\Identity\Application\WorkforceEnrollmentService;
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Identity\Domain\Models\WorkforceEnrollment;
 use App\Modules\Identity\Notifications\WorkforceEnrollmentNotification;
@@ -78,6 +79,71 @@ final class AdministratorEnrollmentTest extends TenantSecurityTestCase
     private function setupData(string $email): array
     {
         return ['enrollment_token' => $this->token($email), 'name' => 'Account owner', 'password' => 'Private-Password-2026!', 'password_confirmation' => 'Private-Password-2026!'];
+    }
+
+    private function issueTemporaryPassword(string $email, ?Tenant $tenant = null): string
+    {
+        $context = new TenantContext((string) ($tenant ?? $this->tenant)->getKey(), ActorType::Platform, null, (string) Str::ulid());
+
+        return app(CurrentTenant::class)->run($context, fn (): string => app(WorkforceEnrollmentService::class)->issueTemporaryPassword($email, 'manual-setup-test'));
+    }
+
+    public function test_temporary_password_replaces_email_setup_and_requires_a_new_password_for_the_intended_account(): void
+    {
+        $this->bootstrap();
+        $email = 'admin@example.test';
+        $oldSetup = $this->setupData($email);
+        $temporaryPassword = $this->issueTemporaryPassword($email);
+        $otherTemporaryPassword = $this->issueTemporaryPassword('super.admin@example.test');
+        self::assertNotSame($temporaryPassword, $otherTemporaryPassword);
+        $this->assertFalse($this->emails[$email]->shouldSend((object) [], 'mail'));
+        Notification::assertSentOnDemandTimes(WorkforceEnrollmentNotification::class, 2);
+        $user = User::query()->where('email', $email)->sole();
+        $this->assertFalse(Hash::check($temporaryPassword, $user->password));
+        $this->assertFalse(app(PanelAccessService::class)->canAccess($user, 'admin'));
+        $this->postJson('/workforce/setup', $oldSetup)->assertUnprocessable();
+
+        $setup = array_replace($oldSetup, ['enrollment_token' => $temporaryPassword, 'email' => $email]);
+        $this->postJson('/workforce/setup', array_replace($setup, ['email' => 'super.admin@example.test']))->assertUnprocessable();
+        $this->postJson('/workforce/setup', array_replace($setup, ['password' => $temporaryPassword, 'password_confirmation' => $temporaryPassword]))->assertUnprocessable();
+        $this->postJson('/workforce/setup', $setup)->assertOk();
+        $this->travel(2)->minutes();
+        $this->postJson('/workforce/setup', $setup)->assertUnprocessable();
+
+        $user->refresh();
+        $this->assertTrue(Hash::check($setup['password'], $user->password));
+        $this->assertNull($user->email_verified_at);
+        $this->assertTrue(app(PanelAccessService::class)->canAccess($user, 'admin'));
+        $this->assertGuest();
+        $this->assertSame(2, AuditEvent::query()->where('action', 'identity.workforce_enrollment.temporary_password_issued')->where('reason', 'manual-setup-test')->count());
+        $this->expectException(ValidationException::class);
+        $this->issueTemporaryPassword($email);
+    }
+
+    public function test_manual_bootstrap_requires_no_mail_and_temporary_password_is_tenant_scoped_and_expires(): void
+    {
+        $context = new TenantContext((string) $this->tenant->getKey(), ActorType::Platform, null, (string) Str::ulid());
+        app(CurrentTenant::class)->run($context, fn (): array => app(AdministratorBootstrap::class)->create(
+            'super.admin@example.test', 'admin@example.test', 'Power Solutions Platform', 'owner-approval-test', manualSetup: true,
+        ));
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('identity_workforce_enrollments', 2);
+        $email = 'admin@example.test';
+        $temporaryPassword = $this->issueTemporaryPassword($email);
+        $this->travel(25)->hours();
+        $this->postJson('/workforce/setup', [
+            'email' => $email, 'enrollment_token' => $temporaryPassword, 'name' => 'Account owner',
+            'password' => 'Private-Password-2026!', 'password_confirmation' => 'Private-Password-2026!',
+        ])->assertUnprocessable();
+        $this->expectException(ValidationException::class);
+        $this->issueTemporaryPassword($email, $this->createTenant('different-tenant'));
+    }
+
+    public function test_temporary_password_command_rejects_noninteractive_output_before_issuing(): void
+    {
+        $this->assertSame(1, Artisan::call('security:issue-workforce-temporary-password', ['--no-interaction' => true]));
+        $this->assertStringContainsString('interactive private terminal', Artisan::output());
+        $this->assertDatabaseCount('identity_workforce_enrollments', 0);
     }
 
     public function test_bootstrap_is_atomic_idempotent_audited_and_accounts_are_disabled_until_private_setup(): void

@@ -46,7 +46,7 @@ final readonly class AdministratorBootstrap
     }
 
     /** @return array{organization_id:string,super_subject_id:string,admin_subject_id:string,super_role_id:string,admin_role_id:string} */
-    public function create(string $superEmail, string $adminEmail, string $organizationName, string $approvalReference, bool $resend = false): array
+    public function create(string $superEmail, string $adminEmail, string $organizationName, string $approvalReference, bool $resend = false, bool $manualSetup = false): array
     {
         $context = $this->tenant->get();
         if ($context->actorType !== ActorType::Platform || ! $this->tenants->isActive($context->tenantId)) {
@@ -64,12 +64,12 @@ final readonly class AdministratorBootstrap
         if (! hash_equals(self::REVIEWED_PERMISSION_CATALOG, $catalogHash) || count($this->administratorPermissions()) !== 27) {
             throw ValidationException::withMessages(['permissions' => 'Review and approve the administrator permission templates before bootstrapping this application version.']);
         }
-        if (! app()->environment('testing') && (config('mail.default') !== 'smtp' || parse_url((string) config('app.url'), PHP_URL_SCHEME) !== 'https')) {
-            throw ValidationException::withMessages(['delivery' => 'Secure enrollment requires HTTPS and private SMTP delivery.']);
+        if (! app()->environment('testing') && (parse_url((string) config('app.url'), PHP_URL_SCHEME) !== 'https' || ((! $manualSetup || $resend) && config('mail.default') !== 'smtp'))) {
+            throw ValidationException::withMessages(['delivery' => 'Secure enrollment requires HTTPS. Email enrollment also requires private SMTP delivery.']);
         }
         $planHash = hash('sha256', json_encode([$superEmail, $adminEmail, $organizationName, array_column(PermissionKey::cases(), 'value'), array_column($this->administratorPermissions(), 'value')], JSON_THROW_ON_ERROR));
 
-        return DB::transaction(function () use ($context, $superEmail, $adminEmail, $organizationName, $approvalReference, $planHash, $resend): array {
+        return DB::transaction(function () use ($context, $superEmail, $adminEmail, $organizationName, $approvalReference, $planHash, $resend, $manualSetup): array {
             DB::table('organization_administrator_bootstraps')->insertOrIgnore([
                 'id' => (string) Str::ulid(), 'tenant_id' => $context->tenantId, 'plan_hash' => $planHash, 'created_at' => now('UTC'),
             ]);
@@ -101,7 +101,7 @@ final readonly class AdministratorBootstrap
                 ['super', $superEmail, 'production-super-administrator', 'Production super administrator', true, PermissionKey::cases()],
                 ['admin', $adminEmail, 'production-administrator', 'Production administrator', false, $this->administratorPermissions()],
             ] as [$kind, $email, $key, $name, $system, $permissions]) {
-                $subject = $this->enrollments->prepare($email, $planHash);
+                $subject = $this->enrollments->prepare($email, $planHash, sendSetupEmail: ! $manualSetup);
                 $role = Role::query()->create(['key' => $key, 'name' => $name, 'is_system' => $system]);
                 foreach ($permissions as $permission) {
                     DB::table('role_permissions')->insert(['tenant_id' => $context->tenantId, 'role_id' => $role->getKey(), 'permission_key' => $permission->value, 'created_at' => now('UTC')]);

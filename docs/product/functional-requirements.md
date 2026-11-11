@@ -47,7 +47,7 @@
 - **FR-IDN-003:** Identity MUST publish stable subject identifiers without exposing credential data to other contexts.
 - **FR-IDN-004:** Administrators MUST be able to revoke sessions and machine credentials within their permitted scope.
 - **FR-IDN-005:** Authentication and recovery events MUST be auditable and security-notifiable without logging secrets.
-- **FR-IDN-006:** An approved initial administrator bootstrap MUST bind exact new recipients, tenant scope and permission templates to an audited, idempotent platform operation. Accounts MUST remain inactive until private, expiring, single-use email enrollment sets their passwords; the flow MUST preserve MFA requirements and reject revoked authority.
+- **FR-IDN-006:** An approved initial administrator bootstrap MUST bind exact new recipients, tenant scope and permission templates to an audited, idempotent platform operation. Accounts MUST remain inactive until a private, expiring, single-use setup credential is exchanged for a personal password. Setup MUST preserve MFA requirements and reject revoked authority. Only the email-link method may verify email ownership.
 
 ## 5. Tenancy
 
