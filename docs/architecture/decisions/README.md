@@ -41,6 +41,7 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 | [0031](0031-device-local-welcome-name-hint.md) | Device-local first-name hint on secure welcome | Accepted by explicit product-owner request |
 
 | [0032](0032-initial-administrator-enrollment.md) | Audited initial administrator bootstrap and private enrollment | Accepted by explicit tenant-owner approval |
+| [0033](0033-manual-administrator-enrollment.md) | Temporary passwords for pending administrator enrollment | Accepted |
 
 ## ADR Template
 
