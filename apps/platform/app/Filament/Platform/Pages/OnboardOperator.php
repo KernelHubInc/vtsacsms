@@ -14,13 +14,12 @@ use Filament\Pages\Page;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
-use UnitEnum;
 
 final class OnboardOperator extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-plus';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Platform governance';
+    protected static ?int $navigationSort = -1;
 
     protected static ?string $navigationLabel = 'Onboard operator';
 

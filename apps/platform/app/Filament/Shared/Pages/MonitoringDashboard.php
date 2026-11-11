@@ -29,10 +29,15 @@ abstract class MonitoringDashboard extends Dashboard
 
     public int $stationPage = 1;
 
+    public int $revenuePage = 1;
+
     public function updated(string $property): void
     {
         if (in_array($property, ['site', 'search', 'status'], true)) {
             $this->stationPage = 1;
+        }
+        if (in_array($property, ['site', 'days'], true)) {
+            $this->revenuePage = 1;
         }
     }
 
@@ -46,6 +51,16 @@ abstract class MonitoringDashboard extends Dashboard
         $this->stationPage = max(1, $this->stationPage - 1);
     }
 
+    public function nextRevenue(): void
+    {
+        $this->revenuePage++;
+    }
+
+    public function previousRevenue(): void
+    {
+        $this->revenuePage = max(1, $this->revenuePage - 1);
+    }
+
     /** @return array<string, mixed> */
     protected function getViewData(): array
     {
@@ -54,7 +69,7 @@ abstract class MonitoringDashboard extends Dashboard
         $authorized = app(AuthorizationService::class)->holdsAnywhere($user, PermissionKey::ReportingView);
 
         return ['authorized' => $authorized, 'dashboard' => $authorized
-            ? app(MonitoringDashboardQuery::class)->read($user, $this->days, $this->site, mb_substr($this->search, 0, 100), $this->status, $this->stationPage)
+            ? app(MonitoringDashboardQuery::class)->read($user, $this->days, $this->site, mb_substr($this->search, 0, 100), $this->status, $this->stationPage, $this->revenuePage)
             : null];
     }
 }

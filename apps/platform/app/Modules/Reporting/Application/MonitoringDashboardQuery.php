@@ -24,10 +24,11 @@ final readonly class MonitoringDashboardQuery
         private AuthorizationService $authorization,
         private CurrentTenant $tenant,
         private StationConnectionQuery $connections,
+        private StationRevenueQuery $revenue,
     ) {}
 
     /** @return array<string, mixed> */
-    public function read(User $user, int $days = 7, string $siteId = '', string $search = '', string $status = '', int $page = 1): array
+    public function read(User $user, int $days = 7, string $siteId = '', string $search = '', string $status = '', int $page = 1, int $revenuePage = 1): array
     {
         abort_unless($this->authorization->holdsAnywhere($user, PermissionKey::ReportingView), 403);
         abort_unless(in_array($days, [7, 30, 90], true), 422);
@@ -162,6 +163,7 @@ final readonly class MonitoringDashboardQuery
             'session_states' => $sessionStates, 'live_sessions' => $liveSessions, 'top_sites' => $topSites,
             'energy_wh' => (int) (clone $completed)->sum('energy_wh'), 'completed_sessions' => (clone $completed)->count(),
             'trend' => $trend, 'charges' => $charges, 'topups' => $topups, 'wallet_visible' => $walletVisible,
+            'station_revenue' => $this->revenue->read($user, $from, $now, $siteId, $revenuePage),
             'finance_visible' => $this->authorization->holdsAnywhere($user, PermissionKey::PaymentView),
             'attention_count' => count($attention), 'attention' => array_slice($attention, 0, 10), 'waiting' => $waiting, 'review' => $review,
             'payment_exceptions' => $paymentExceptions, 'open_work_orders' => (clone $work)->count(),
