@@ -4,7 +4,9 @@ Audience: platform administrators, operators, support and release engineers. The
 
 ## 1. Access and roles
 
-Use the approved production HTTPS origin. Administrators enter `/admin`, operators enter `/operator`, and drivers use the approved mobile app or `/mobile/` browser app. Staging is a separate environment for synthetic data and rehearsals. Never use demo accounts or demo seeders in production.
+Use `https://staging.evcspowersolutions.com` for training with synthetic data and `https://evcspowersolutions.com` for approved live operations. Administrators enter `/admin`, operators enter `/operator`, and drivers use the approved mobile app or `/mobile/` browser app. Keep demo accounts, seeders and practice records in staging.
+
+For a pending administrator account, an authorized deployment operator can issue a unique temporary password and hand it directly to the intended recipient. On the same environment's `/workforce/setup` page, enter the account email, temporary password and display name, then choose and confirm a personal password. The temporary password works once within 24 hours. After setup, sign in at `/admin` with the personal password. See the RBAC user guide for the training walkthrough and the initial administrator enrollment runbook for issuance.
 
 Sign in with an activated account and current membership. Invitations are scoped, expire and must be accepted by their intended recipient. Use the password-recovery workflow; do not send passwords in chat. Disabled accounts, inactive tenants and expired/revoked memberships must be denied by the server. Ask an authorized administrator for missing permissions rather than working around hidden buttons.
 

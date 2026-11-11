@@ -21,6 +21,7 @@ final class BootstrapAdministrators extends Command
         {--organization= : Approved platform organization name}
         {--approval-reference= : Owner approval or change reference}
         {--confirm-bootstrap : Acknowledge initial persistent privileged access}
+        {--manual-setup : Prepare accounts for temporary passwords without sending setup email}
         {--resend-pending : Replace setup links for accounts still awaiting enrollment}';
 
     protected $description = 'Initialize an owner-approved tenant administrator pair and queue private one-time password enrollment';
@@ -32,13 +33,21 @@ final class BootstrapAdministrators extends Command
 
             return self::FAILURE;
         }
+        $manualSetup = (bool) $this->option('manual-setup');
+        if ($manualSetup && $this->option('resend-pending')) {
+            $this->error('Choose either manual setup or resending setup email.');
+
+            return self::FAILURE;
+        }
         $data = Validator::make($this->options(), [
             'tenant' => ['required', 'ulid'], 'super-admin' => ['required', 'email'], 'admin' => ['required', 'email'],
             'organization' => ['required', 'string', 'max:180'], 'approval-reference' => ['required', 'string', 'max:180'],
         ])->validate();
         $context = new TenantContext($data['tenant'], ActorType::Platform, null, (string) Str::ulid());
-        $result = $tenant->run($context, fn (): array => $bootstrap->create($data['super-admin'], $data['admin'], $data['organization'], $data['approval-reference'], (bool) $this->option('resend-pending')));
-        $this->info('Administrator bootstrap recorded. Pending setup emails are queued for private delivery.');
+        $result = $tenant->run($context, fn (): array => $bootstrap->create($data['super-admin'], $data['admin'], $data['organization'], $data['approval-reference'], (bool) $this->option('resend-pending'), $manualSetup));
+        $this->info($manualSetup
+            ? 'Administrator bootstrap recorded. Use security:issue-workforce-temporary-password for each pending account.'
+            : 'Administrator bootstrap recorded. Pending setup emails are queued for private delivery.');
         $this->line(json_encode($result, JSON_THROW_ON_ERROR));
 
         return self::SUCCESS;

@@ -27,7 +27,7 @@ final readonly class WorkforceEnrollmentService
     public function __construct(private CurrentTenant $tenant, private AuditRecorder $audit, private RegistrationTenantQuery $tenants, private AuthorizationService $authorization) {}
 
     /** @return array{user_id:int,subject_id:string} Credential-free projection for the existing membership foreign key. */
-    public function prepare(string $email, string $planHash): array
+    public function prepare(string $email, string $planHash, bool $sendSetupEmail = true): array
     {
         $this->assertTrustedBootstrap();
         if (User::query()->whereRaw('lower(email) = ?', [$email])->exists()) {
@@ -42,7 +42,9 @@ final readonly class WorkforceEnrollmentService
             'token_hash' => null,
             'expires_at' => now('UTC'),
         ]);
-        $this->issue($enrollment, $user);
+        if ($sendSetupEmail) {
+            $this->issue($enrollment, $user);
+        }
 
         return ['user_id' => (int) $user->getKey(), 'subject_id' => (string) $user->public_id];
     }
@@ -61,7 +63,38 @@ final readonly class WorkforceEnrollmentService
         }
     }
 
-    public function complete(#[\SensitiveParameter] string $token, string $name, #[\SensitiveParameter] string $password, string $correlationId): void
+    public function issueTemporaryPassword(string $email, string $approvalReference): string
+    {
+        $context = $this->tenant->get();
+        if ($context->actorType !== ActorType::Platform || ! $this->tenants->isActive($context->tenantId)) {
+            throw new AuthorizationException('Issuing a temporary password requires a trusted platform operation in an active tenant.');
+        }
+        if (! app()->environment('testing') && parse_url((string) config('app.url'), PHP_URL_SCHEME) !== 'https') {
+            throw ValidationException::withMessages(['delivery' => 'Temporary password enrollment requires an HTTPS application URL.']);
+        }
+
+        return DB::transaction(function () use ($email, $approvalReference): string {
+            $emailHash = hash('sha256', Str::lower(trim($email)));
+            $enrollment = WorkforceEnrollment::query()->where('email_hash', $emailHash)->lockForUpdate()->first();
+            if ($enrollment === null || $enrollment->completed_at !== null) {
+                $this->invalid();
+            }
+            $user = User::query()->where('public_id', $enrollment->subject_id)->lockForUpdate()->firstOrFail();
+            if ($user->activated_at !== null || $user->disabled_at !== null
+                || ! hash_equals($emailHash, hash('sha256', Str::lower(trim($user->email))))) {
+                $this->invalid();
+            }
+
+            $temporaryPassword = 'CSMS-'.bin2hex(random_bytes(16));
+            $enrollment->update(['token_hash' => hash('sha256', $temporaryPassword), 'expires_at' => now('UTC')->addDay(), 'email_sent_at' => null]);
+            $this->audit->record(new AuditEntry('identity.workforce_enrollment.temporary_password_issued', 'workforce_enrollment', (string) $enrollment->getKey(), AuditResult::Succeeded,
+                reason: $approvalReference, after: ['subject_id' => $user->public_id, 'expires_at' => $enrollment->expires_at->toIso8601String()]));
+
+            return $temporaryPassword;
+        });
+    }
+
+    public function complete(#[\SensitiveParameter] string $token, string $name, #[\SensitiveParameter] string $password, string $correlationId, ?string $email = null): void
     {
         // This is a pre-authentication credential lookup. Tenant scope comes only from the stored hash.
         $enrollment = WorkforceEnrollment::withoutGlobalScopes()->where('token_hash', hash('sha256', $token))->first();
@@ -69,23 +102,30 @@ final readonly class WorkforceEnrollmentService
             $this->invalid();
         }
         $context = new TenantContext($enrollment->tenant_id, ActorType::Human, $enrollment->subject_id, $correlationId);
-        $this->tenant->run($context, function () use ($enrollment, $token, $name, $password): void {
-            DB::transaction(function () use ($enrollment, $token, $name, $password): void {
+        $this->tenant->run($context, function () use ($enrollment, $token, $name, $password, $email): void {
+            DB::transaction(function () use ($enrollment, $token, $name, $password, $email): void {
                 $enrollment = WorkforceEnrollment::query()->whereKey($enrollment->getKey())->lockForUpdate()->firstOrFail();
                 $user = User::query()->where('public_id', $enrollment->subject_id)->lockForUpdate()->firstOrFail();
+                $manual = str_starts_with($token, 'CSMS-');
                 if (! is_string($enrollment->token_hash) || ! hash_equals($enrollment->token_hash, hash('sha256', $token))
                     || $enrollment->completed_at !== null || ! $enrollment->expires_at->isFuture()
                     || $user->activated_at !== null || $user->disabled_at !== null
+                    || ($manual && ($email === null || ! hash_equals($enrollment->email_hash, hash('sha256', Str::lower(trim($email))))))
+                    || hash_equals($token, $password)
                     || ! hash_equals($enrollment->email_hash, hash('sha256', Str::lower(trim($user->email))))) {
                     $this->invalid();
                 }
-                $user->forceFill(['name' => $name, 'password' => $password, 'email_verified_at' => now('UTC'), 'activated_at' => now('UTC')])->save();
+                $user->forceFill(['name' => $name, 'password' => $password, 'activated_at' => now('UTC')]);
+                if (! $manual) {
+                    $user->email_verified_at = now('UTC');
+                }
+                $user->save();
                 if (! $this->authorization->allows($user, PermissionKey::PlatformPanelAccess)) {
                     $this->invalid();
                 }
                 $enrollment->update(['completed_at' => now('UTC'), 'token_hash' => null]);
                 $this->audit->record(new AuditEntry('identity.workforce_enrollment.completed', 'identity', $user->public_id, AuditResult::Succeeded,
-                    after: ['enrollment_id' => $enrollment->getKey(), 'activated' => true, 'email_verified' => true]));
+                    after: ['enrollment_id' => $enrollment->getKey(), 'activated' => true, 'email_verified' => $user->hasVerifiedEmail(), 'method' => $manual ? 'temporary_password' : 'email_link']));
             });
         });
     }
@@ -122,6 +162,6 @@ final readonly class WorkforceEnrollmentService
 
     private function invalid(): never
     {
-        throw ValidationException::withMessages(['enrollment_token' => 'This setup link is unavailable. Ask the administrator for a new setup email.']);
+        throw ValidationException::withMessages(['enrollment_token' => 'This setup credential is unavailable. Ask the administrator for a new one.']);
     }
 }
