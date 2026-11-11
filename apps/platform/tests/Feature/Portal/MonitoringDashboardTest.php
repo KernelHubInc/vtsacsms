@@ -10,10 +10,12 @@ use App\Modules\Assets\Domain\Models\Connector;
 use App\Modules\Assets\Domain\Models\ConnectorStandard;
 use App\Modules\Billing\Domain\Models\PrepaidAccount;
 use App\Modules\Billing\Domain\Models\PrepaidEntry;
+use App\Modules\Charging\Domain\ChargingSessionOrigin;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\StationConnection;
 use App\Modules\Organizations\Domain\Models\Organization;
+use App\Modules\Organizations\Domain\OrganizationType;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Organizations\Domain\ResourceScope;
 use App\Modules\Organizations\Domain\ScopeType;
@@ -99,6 +101,7 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
             self::assertFalse($restricted['wallet_visible']);
             self::assertSame([], $restricted['topups']);
             self::assertSame([], $restricted['charges']);
+            self::assertNull($restricted['station_revenue']);
         });
     }
 
@@ -131,8 +134,8 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
         });
         $this->actingAs($user)->get('/admin')->assertOk()->assertSee('Operations overview')->assertSee('Confirmed wallet top-ups')
             ->assertSee('wire:poll.2s.visible', false)
-            ->assertSee('Connector status')->assertSee('Needs attention')->assertSee('Station management')->assertDontSee('ps-eyebrow');
-        $this->get('/operator')->assertOk()->assertSee('wire:poll.2s.visible', false);
+            ->assertSee('Charging revenue by station')->assertSee('Connector status')->assertSee('Needs attention')->assertSee('Station management')->assertDontSee('ps-eyebrow');
+        $this->get('/operator')->assertOk()->assertSee('wire:poll.2s.visible', false)->assertSee('Charging revenue by station');
         $this->withinTenant($tenant, $user, function () use ($site): void {
             Livewire::test(Dashboard::class)->set('site', $site)->set('days', 30)->set('search', 'nothing-matches')
                 ->assertSee('No stations match your filters')->assertSee('Last 30 days')->call('nextStations')->assertSee('page 1 of 1');
@@ -143,6 +146,68 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
         });
         $this->withinTenant($tenant, $user, function () use ($user): void {
             self::assertSame(1, app(MonitoringDashboardQuery::class)->read($user)['station_count']);
+        });
+    }
+
+    public function test_station_revenue_respects_operator_assignment_currency_and_financial_evidence(): void
+    {
+        $admin = $this->createUser();
+        $operator = $this->createUser();
+        $siteStaff = $this->createUser();
+        $tenant = $this->createTenant('revenue');
+        $otherTenant = $this->createTenant('other-revenue');
+        $this->withinTenant($otherTenant, $admin, function (): void {
+            $this->revenueSession($this->connector(), ['final_cost_minor' => 99000]);
+        });
+
+        $this->withinTenant($tenant, $admin, function () use ($tenant, $admin, $operator, $siteStaff): void {
+            $organization = Organization::factory()->create(['type' => OrganizationType::ChargePointOperator, 'is_active' => true]);
+            $role = $this->createRole($tenant, 'revenue-viewer', [PermissionKey::ReportingView, PermissionKey::LocationView, PermissionKey::AssetView, PermissionKey::PaymentView]);
+            $this->assignDirectly($tenant, $this->createMembership($tenant, $admin), $role);
+            $this->assignDirectly($tenant, $this->createMembership($tenant, $operator), $role, new ResourceScope(ScopeType::Organization, (string) $organization->getKey()));
+
+            $assigned = $this->connector();
+            $assigned->evse->station->update(['name' => 'Assigned charger']);
+            $assignedSite = $assigned->evse->station->site;
+            $assignedSite->update(['operator_organization_id' => $organization->getKey()]);
+            $assigned->evse->station->unsetRelation('site');
+            $another = $this->connector();
+            $otherSite = $another->evse->station->site;
+            $otherSite->update(['operator_organization_id' => $organization->getKey()]);
+            $another->evse->station->unsetRelation('site');
+            $hosted = $this->connector();
+            $hostedSite = $hosted->evse->station->site;
+            $hostedSite->update(['site_host_organization_id' => $organization->getKey()]);
+            $this->assignDirectly($tenant, $this->createMembership($tenant, $siteStaff), $role, new ResourceScope(ScopeType::Site, (string) $assignedSite->getKey()));
+
+            $this->revenueSession($assigned, ['final_cost_minor' => 1250, 'platform_fee_minor' => 250]);
+            $this->revenueSession($assigned, ['final_cost_minor' => 450]);
+            $this->revenueSession($assigned, ['final_cost_minor' => 700, 'currency' => 'USD']);
+            $this->revenueSession($assigned, ['state' => 'review_required', 'final_cost_minor' => 8100]);
+            $this->revenueSession($assigned, ['final_cost_minor' => null, 'estimated_cost_minor' => 8200]);
+            $this->revenueSession($assigned, ['final_cost_minor' => 4000, 'stopped_at' => now()->subDays(8)]);
+            $this->revenueSession($assigned, ['operator_id' => $hostedSite->operator_organization_id, 'final_cost_minor' => 350]);
+            $this->revenueSession($another, ['final_cost_minor' => 2000]);
+            $this->revenueSession($hosted, ['final_cost_minor' => 3000]);
+            $hostedSite->update(['is_active' => false, 'lifecycle_status' => 'retired']);
+
+            $dashboard = app(MonitoringDashboardQuery::class);
+            $all = $dashboard->read($admin)['station_revenue'];
+            self::assertSame(['PHP' => 6800, 'USD' => 700], $all['totals']);
+            self::assertSame(3, $all['count']);
+            $scoped = $dashboard->read($operator)['station_revenue'];
+            self::assertSame(['PHP' => 3450, 'USD' => 700], $scoped['totals']);
+            self::assertSame(2, $scoped['count']);
+            $atSite = $dashboard->read($siteStaff, siteId: (string) $assignedSite->getKey())['station_revenue'];
+            self::assertSame(['PHP' => 1450, 'USD' => 700], $atSite['totals']);
+            self::assertSame([['id' => $assigned->evse->charging_station_id, 'name' => 'Assigned charger', 'site' => $assignedSite->name, 'amounts' => [
+                ['currency' => 'PHP', 'amount_minor' => 1450, 'sessions' => 2],
+                ['currency' => 'USD', 'amount_minor' => 700, 'sessions' => 1],
+            ]]], $atSite['stations']);
+            self::assertSame(['PHP' => 7450, 'USD' => 700], $dashboard->read($operator, days: 30)['station_revenue']['totals']);
+
+            $hostedSite->update(['is_active' => true, 'lifecycle_status' => 'active']);
+            self::assertSame([], $dashboard->read($operator, siteId: (string) $hostedSite->getKey())['station_revenue']['totals']);
         });
     }
 
@@ -176,5 +241,29 @@ final class MonitoringDashboardTest extends TenantSecurityTestCase
         $connector->evse->station->update(['lifecycle_status' => 'active']);
 
         return $connector;
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function revenueSession(Connector $connector, array $attributes): void
+    {
+        $station = $connector->evse->station;
+        ChargingSession::query()->create(array_replace([
+            'site_id' => $station->site_id,
+            'operator_id' => $station->site->operator_organization_id,
+            'charging_station_id' => $station->getKey(),
+            'evse_id' => $connector->evse_id,
+            'connector_id' => $connector->getKey(),
+            'connector_maximum_power_w' => $connector->maximum_power_w,
+            'charge_point_identity' => $station->charge_point_identity,
+            'protocol' => 'ocpp1.6',
+            'origin' => ChargingSessionOrigin::Charger,
+            'state' => 'completed',
+            'tariff_snapshot' => [],
+            'tariff_snapshot_hash' => hash('sha256', '[]'),
+            'anomaly_flags' => [],
+            'requested_at' => now()->subHour(),
+            'stopped_at' => now()->subMinutes(5),
+            'currency' => 'PHP',
+        ], $attributes));
     }
 }

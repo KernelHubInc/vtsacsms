@@ -21,7 +21,7 @@ final readonly class AccessibleSitesQuery
     ) {}
 
     /** @return Builder<Site> */
-    public function for(User $user, PermissionKey $permission = PermissionKey::LocationView): Builder
+    public function for(User $user, PermissionKey $permission = PermissionKey::LocationView, bool $includeHostedSites = true): Builder
     {
         $query = Site::query();
 
@@ -57,18 +57,20 @@ final readonly class AccessibleSitesQuery
 
         $organizations = DB::table('organizations')->where('tenant_id', $tenantId)->where('is_active', true)->select('id');
 
-        return $query->where(function (Builder $sites) use ($assignments, $organizations): void {
+        return $query->where(function (Builder $sites) use ($assignments, $organizations, $includeHostedSites): void {
             $sites->whereIn('id', (clone $assignments)
                 ->where('assignments.scope_type', ScopeType::Site->value)
                 ->select('assignments.scope_id'))
                 ->orWhereIn('operator_organization_id', (clone $assignments)
                     ->where('assignments.scope_type', ScopeType::Organization->value)
                     ->whereIn('assignments.scope_id', clone $organizations)
-                    ->select('assignments.scope_id'))
-                ->orWhereIn('site_host_organization_id', (clone $assignments)
+                    ->select('assignments.scope_id'));
+            if ($includeHostedSites) {
+                $sites->orWhereIn('site_host_organization_id', (clone $assignments)
                     ->where('assignments.scope_type', ScopeType::Organization->value)
                     ->whereIn('assignments.scope_id', clone $organizations)
                     ->select('assignments.scope_id'));
+            }
         });
     }
 }

@@ -56,6 +56,60 @@
                 <article class="ps-ops-kpi ps-ops-kpi--navy"><span>Energy delivered</span><strong>{{ number_format($d['energy_wh'] / 1000, 2) }} <em>kWh</em></strong><small>{{ $d['completed_sessions'] }} completed sessions in period</small></article>
             </div>
 
+            @if ($d['station_revenue'] !== null)
+                @php
+                    $revenue = $d['station_revenue'];
+                    $formatRevenue = static fn (int $minor): string => ($minor < 0 ? '-' : '').number_format(abs(intdiv($minor, 100))).'.'.str_pad((string) abs($minor % 100), 2, '0', STR_PAD_LEFT);
+                @endphp
+                <section class="ps-ops-panel ps-ops-revenue" aria-labelledby="station-revenue-title">
+                    <div class="ps-ops-heading">
+                        <div>
+                            <h3 id="station-revenue-title">Charging revenue by station</h3>
+                            <p>Finalized session charges after the platform fee, grouped by currency.</p>
+                        </div>
+                    </div>
+                    @if ($revenue['count'] === 0)
+                        <p class="ps-ops-empty">No finalized charges for your authorized stations in this period.</p>
+                    @else
+                        <div class="ps-ops-revenue-total">
+                            <span>Total charging revenue in period</span>
+                            <div>
+                                @foreach ($revenue['totals'] as $currency => $minor)
+                                    <strong>{{ $currency }} {{ $formatRevenue($minor) }}</strong>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="ps-ops-table-wrap" role="region" aria-label="Charging revenue by station" tabindex="0">
+                            <table>
+                                <thead><tr><th scope="col">Station</th><th scope="col">Location</th><th scope="col">Finalized sessions</th><th scope="col">Charging revenue</th></tr></thead>
+                                <tbody>
+                                    @foreach ($revenue['stations'] as $row)
+                                        @foreach ($row['amounts'] as $amount)
+                                            <tr wire:key="revenue-{{ $row['id'] }}-{{ $amount['currency'] }}">
+                                                <td><strong>{{ $row['name'] }}</strong></td>
+                                                <td>{{ $row['site'] }}</td>
+                                                <td>{{ number_format($amount['sessions']) }}</td>
+                                                <td>{{ $amount['currency'] }} {{ $formatRevenue($amount['amount_minor']) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        @if ($revenue['pages'] > 1)
+                            <div class="ps-ops-pagination">
+                                <span>{{ $revenue['count'] }} stations · page {{ $revenue['page'] }} of {{ $revenue['pages'] }}</span>
+                                <div>
+                                    <x-filament::button color="gray" size="sm" wire:click="previousRevenue" :disabled="$revenue['page'] <= 1" aria-label="Previous revenue page">Previous</x-filament::button>
+                                    <x-filament::button color="gray" size="sm" wire:click="nextRevenue" :disabled="$revenue['page'] >= $revenue['pages']" aria-label="Next revenue page">Next</x-filament::button>
+                                </div>
+                            </div>
+                        @endif
+                    @endif
+                    <p class="ps-ops-note">Totals reflect billed charging activity before refunds and revenue sharing. Use settlement records to verify payouts.</p>
+                </section>
+            @endif
+
             <div class="ps-ops-main-grid">
                 <section class="ps-ops-panel">
                     <div class="ps-ops-heading"><div><h3>Charging activity</h3><p>Completed sessions and energy delivered · {{ $d['days'] }} days</p></div></div>

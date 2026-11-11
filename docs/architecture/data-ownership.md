@@ -7,7 +7,7 @@
 **Status:** Normative architecture baseline  
 **Rule:** A durable concept has exactly one context authorized to change it.
 
-The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composition of authorized Locations/Assets, Charging connection and session facts, posted Billing prepaid credits, session Payments and Maintenance work orders. It never writes these sources. Location lists intersect resource-specific permission scopes through `AccessibleSitesQuery`; wallet funding is tenant-wide and requires tenant-wide Reporting and Payment permissions. Metric semantics and operational limits are defined in `docs/runbooks/monitoring-dashboard.md`.
+The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composition of authorized Locations/Assets, Charging connection and session facts, posted Billing prepaid credits, session Payments and Maintenance work orders. It never writes these sources. Location lists intersect resource-specific permission scopes through `AccessibleSitesQuery`. `StationRevenueQuery` aggregates finalized Charging amounts less the recorded platform fee and limits scoped readers to their authorized sites and the current operator's session attribution. Wallet funding requires tenant-wide Reporting and Payment permissions. Metric semantics and operational limits are defined in `docs/runbooks/monitoring-dashboard.md`.
 
 ## 1. Ownership Rules
 
