@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vtsa_mobile/features/notices/driver_notice_banner.dart';
+import 'package:vtsa_mobile/features/notices/driver_notice_popup.dart';
 import 'package:vtsa_mobile/features/notices/driver_notices.dart';
 import 'package:vtsa_mobile/features/notices/driver_notices_screen.dart';
 
@@ -80,7 +80,7 @@ void main() {
     );
   });
 
-  testWidgets('opening banner can be dismissed without removing the update', (
+  testWidgets('opening popup can be dismissed without removing the update', (
     tester,
   ) async {
     final controller = DriverNoticesController(_Repository([notice()]));
@@ -88,15 +88,18 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: DriverNoticeBanner(
+          body: DriverNoticePopup(
             notice: controller.openingBanner!,
             onDismiss: () => controller.dismissBanner('notice-1'),
           ),
         ),
       ),
     );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.text('Charger service window'), findsOneWidget);
-    await tester.tap(find.byTooltip('Dismiss update'));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     expect(controller.openingBanner, isNull);
     expect(controller.items, hasLength(1));
   });

@@ -722,12 +722,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         if (initial) {
           await _loadDefaultArea();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Location is unavailable or permission was not granted.',
-              ),
-            ),
+          showVtsaAlert(
+            context,
+            message: 'Location is unavailable or permission was not granted.',
+            tone: VtsaAlertTone.warning,
           );
         }
         return;
@@ -749,10 +747,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         if (initial) {
           await _loadDefaultArea();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Your location could not be retrieved right now.'),
-            ),
+          showVtsaAlert(
+            context,
+            message: 'Your location could not be retrieved right now.',
           );
         }
       }

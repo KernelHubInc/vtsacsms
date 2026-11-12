@@ -103,6 +103,9 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
               'Your camera session was interrupted. Please retake the photo.',
         );
       }
+    } on MissingPluginException {
+      // Camera recovery is optional on platforms without the image picker.
+      return;
     } catch (_) {
       if (mounted) {
         setState(
@@ -279,19 +282,10 @@ class _KycScreenState extends State<KycScreen> with WidgetsBindingObserver {
                   LinearProgressIndicator(value: step.index / 5),
                   const SizedBox(height: VtsaSpacing.lg),
                 ],
-                if (kyc.error != null || captureError != null)
-                  Semantics(
-                    liveRegion: true,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        captureError ?? kyc.error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ),
+                VtsaAlertRegion(
+                  title: 'Identity verification needs attention',
+                  message: captureError ?? kyc.error,
+                ),
                 if (kyc.verification == null && kyc.busy)
                   const Center(child: CircularProgressIndicator())
                 else

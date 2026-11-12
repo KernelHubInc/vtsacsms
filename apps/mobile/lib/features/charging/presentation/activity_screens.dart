@@ -76,12 +76,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              if (charging.failure != null)
-                VtsaErrorState(
-                  title: 'Activity could not be refreshed',
-                  description: charging.failure!.message,
-                  correlationId: charging.failure!.correlationId,
-                ),
+              VtsaAlertRegion(
+                title: 'Activity could not be refreshed',
+                message: charging.failure?.message,
+                correlationId: charging.failure?.correlationId,
+              ),
               if (active != null && !active.isTerminal) ...[
                 if (active.attribution['payer'] case final String payer)
                   Text('Current session payer: $payer'),
@@ -408,7 +407,12 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
                 required: true,
               ),
               const SizedBox(height: VtsaSpacing.lg),
-              if (_error != null) Text(_error!),
+              VtsaAlertRegion(
+                title: 'Could not submit the review',
+                message: _error,
+                correlationId:
+                    widget.dependencies.charging.failure?.correlationId,
+              ),
               VtsaButton(
                 label: 'Submit review request',
                 loading: _busy,
@@ -421,7 +425,7 @@ class _RefundRequestScreenState extends State<RefundRequestScreen> {
   Future<void> _submit() async {
     if (_busy) return;
     if (_reason.text.trim().length < 10) {
-      showVtsaToast(context, message: 'Add at least 10 characters.');
+      showVtsaAlert(context, message: 'Add at least 10 characters.');
       return;
     }
     setState(() {
@@ -517,7 +521,12 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                 icon: const Icon(Icons.copy),
                 label: const Text('Copy session reference'),
               ),
-              if (_error != null) Text(_error!),
+              VtsaAlertRegion(
+                title: 'Could not submit the issue',
+                message: _error,
+                correlationId:
+                    widget.dependencies.charging.failure?.correlationId,
+              ),
               VtsaButton(
                 label: 'Submit issue',
                 loading: _busy,
@@ -541,7 +550,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
   Future<void> _submit() async {
     if (_busy) return;
     if (_description.text.trim().length < 10) {
-      showVtsaToast(context, message: 'Add at least 10 characters.');
+      showVtsaAlert(context, message: 'Add at least 10 characters.');
       return;
     }
     setState(() {

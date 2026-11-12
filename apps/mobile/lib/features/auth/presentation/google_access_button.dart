@@ -75,15 +75,13 @@ class _GoogleAccessButtonState extends State<GoogleAccessButton> {
             onSubmitted: (_) => _signIn(link: true),
           ),
           const SizedBox(height: 12),
-          if (auth.failure != null &&
-              auth.failure!.code != 'google_link_required')
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                auth.failure!.message,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
+          VtsaAlertRegion(
+            title: 'Could not connect your Google account',
+            message: auth.failure?.code == 'google_link_required'
+                ? null
+                : auth.failure?.message,
+            correlationId: auth.failure?.correlationId,
+          ),
           VtsaButton(
             label: 'Connect Google account',
             loading: auth.isBusy,
@@ -142,18 +140,11 @@ class _GoogleAccessButtonState extends State<GoogleAccessButton> {
               ],
             ),
           ),
-          if (_attempted &&
-              widget.onRegistration != null &&
-              auth.failure != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Semantics(
-                liveRegion: true,
-                child: Text(
-                  auth.failure!.message,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
+          if (_attempted && widget.onRegistration != null)
+            VtsaAlertRegion(
+              title: 'Could not continue with Google',
+              message: auth.failure?.message,
+              correlationId: auth.failure?.correlationId,
             ),
         ],
       ),

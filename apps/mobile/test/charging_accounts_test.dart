@@ -187,6 +187,8 @@ void main() {
     await tester.tap(find.text('Your private vehicles and wallet'));
     await tester.pumpAndSettle();
     expect(find.text('You appear to be offline.'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     repo.failure = null;
     await tester.ensureVisible(find.text('Refresh accounts'));
     await tester.pumpAndSettle();
@@ -388,6 +390,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(accounts.accountId, 'owned');
     expect(find.text('This account has charging history.'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
 
     repo.deleteFailure = null;
     await tester.scrollUntilVisible(find.text('Delete unused account'), 180);

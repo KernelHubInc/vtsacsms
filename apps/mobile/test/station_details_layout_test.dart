@@ -97,6 +97,8 @@ void main() {
         find.text('No navigation application could open directions.'),
         findsOneWidget,
       );
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(scan);
       await tester.pumpAndSettle();
       await tester.tap(scan);

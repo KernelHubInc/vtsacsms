@@ -211,6 +211,8 @@ void main() {
         find.text('Location is unavailable or permission was not granted.'),
         findsOneWidget,
       );
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Show charger list'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Show map'), findsOneWidget);

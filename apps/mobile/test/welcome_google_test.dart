@@ -144,6 +144,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Confirm your existing password.'), findsOneWidget);
     expect(fixture.dependencies.auth.status, AuthStatus.guest);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(password);
     await tester.enterText(password, 'ExistingPass1!');
     await tester.ensureVisible(find.text('Connect Google account'));
@@ -215,6 +217,8 @@ void main() {
       find.text('Google is temporarily unavailable. Try again.'),
       findsOneWidget,
     );
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign in'));
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();

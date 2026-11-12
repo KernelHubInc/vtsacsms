@@ -211,20 +211,14 @@ class _TopupAmountDialogState extends State<TopupAmountDialog> {
                 const Text(
                   'No top-up amounts are currently available. Please refresh Wallet or contact support.',
                 ),
-              if (_requestError != null) ...[
-                const SizedBox(height: 12),
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    _requestError!,
-                    style: TextStyle(color: errorColor),
-                  ),
+              VtsaAlertRegion(
+                title: 'Could not create the top-up',
+                message: _requestError,
+              ),
+              if (_requestError != null && _submitted != null)
+                const Text(
+                  'Retry keeps the same amount and request. Check Top-ups before creating another request.',
                 ),
-                if (_submitted != null)
-                  const Text(
-                    'Retry keeps the same amount and request. Check Top-ups before creating another request.',
-                  ),
-              ],
             ],
           ),
         ),

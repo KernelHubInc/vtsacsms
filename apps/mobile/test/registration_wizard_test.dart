@@ -133,6 +133,8 @@ void main() {
       'ABC 123',
     );
     expect(fixture.auth.registrationCalls, 1);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     fixture.auth.registrationFailure = null;
     await pressRegistrationAction(tester, 'Create account');
     expect(fixture.auth.registrationCalls, 2);

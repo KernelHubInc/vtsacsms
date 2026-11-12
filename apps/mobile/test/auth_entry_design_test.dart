@@ -94,6 +94,8 @@ void main() {
       await tester.tap(find.text('Send reset link'));
       await tester.pumpAndSettle();
       expect(find.text('Please try again later.'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
       fixture.auth.resetFailure = null;
       fixture.auth.resetCompleter = Completer<void>();
       await tester.ensureVisible(find.text('Send reset link'));

@@ -200,14 +200,6 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
                 required: true,
               ),
               const SizedBox(height: VtsaSpacing.md),
-              if (charging.failure != null) ...[
-                VtsaErrorState(
-                  title: 'Could not validate this connector',
-                  description: charging.failure!.message,
-                  correlationId: charging.failure!.correlationId,
-                ),
-                const SizedBox(height: VtsaSpacing.md),
-              ],
               VtsaButton(
                 label: 'Validate connector',
                 loading:
@@ -232,7 +224,6 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
     child: ChargerScannerView(
       onManualEntry: _closeCamera,
       loading: widget.dependencies.charging.mutationInFlight,
-      errorMessage: widget.dependencies.charging.failure?.message,
       camera: MobileScanner(
         controller: _scanner,
         onDetect: _onDetect,
@@ -305,6 +296,17 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
         _preparedHere = prepared || _preparedHere;
         _preparedVehicleId = vehicleId;
       });
+      final failure = widget.dependencies.charging.failure;
+      if (!prepared &&
+          failure != null &&
+          ModalRoute.isCurrentOf(context) == true) {
+        await showVtsaAlert(
+          context,
+          title: 'Could not validate this connector',
+          message: failure.message,
+          correlationId: failure.correlationId,
+        );
+      }
     }
   }
 
@@ -322,9 +324,16 @@ class _ChargingStartScreenState extends State<ChargingStartScreen> {
   Future<void> _confirmStart() async {
     final charging = widget.dependencies.charging;
     final started = await charging.start();
+    if (!mounted || ModalRoute.isCurrentOf(context) != true) return;
     final session = charging.session;
-    if (mounted && started && session != null) {
+    if (started && session != null) {
       context.go('/charging/${session.id}');
+    } else if (charging.failure case final failure?) {
+      showVtsaAlert(
+        context,
+        message: failure.message,
+        correlationId: failure.correlationId,
+      );
     }
   }
 
