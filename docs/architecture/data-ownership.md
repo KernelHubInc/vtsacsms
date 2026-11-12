@@ -9,6 +9,8 @@
 
 The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composition of authorized Locations/Assets, Charging connection and session facts, posted Billing prepaid credits, session Payments and Maintenance work orders. It never writes these sources. Location lists intersect resource-specific permission scopes through `AccessibleSitesQuery`. `StationRevenueQuery` aggregates finalized Charging amounts less the recorded platform fee and limits scoped readers to their authorized sites and the current operator's session attribution. Wallet funding requires tenant-wide Reporting and Payment permissions. Metric semantics and operational limits are defined in `docs/runbooks/monitoring-dashboard.md`.
 
+Identity owns workforce sidebar preferences by tenant, subject and panel. Preferences contain only navigation order and are deleted with the tenant or account. The portal applies the order to Filament's currently authorized navigation, using the default order for new items. The table is additive. An application rollback can leave saved preferences in place.
+
 ## 1. Ownership Rules
 
 1. The owning context defines the concept's invariants, schema, lifecycle, write API, and emitted facts.

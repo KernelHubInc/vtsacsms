@@ -10,11 +10,13 @@ For a pending administrator account, an authorized deployment operator can issue
 
 Sign in with an activated account and current membership. Invitations are scoped, expire and must be accepted by their intended recipient. Use the password-recovery workflow; do not send passwords in chat. Disabled accounts, inactive tenants and expired/revoked memberships must be denied by the server. Ask an authorized administrator for missing permissions rather than working around hidden buttons.
 
+In Administration or the Operator workspace, select **Customize sidebar**. In **Arrange**, choose **Sections and standalone links** or select a section to arrange its links. Drag items by their handles or use the up and down arrow buttons. Select **Save layout** to keep the order on your account across devices. **Reset to default** restores the workspace's standard order. Administration and Operator layouts are saved separately for each tenant. The sidebar reflects your current role permissions whenever it loads.
+
 MFA-required accounts cannot use panels until a verified browser challenge flow exists. This is a fail-closed safeguard, not a working MFA enrollment feature. A device PIN/biometric unlock is a local mobile gate and does not satisfy privileged server MFA. Google login is native-Android-first and disabled by default; production needs its own approved client/signing configuration.
 
 ## 2. Configure an operator and location
 
-An authorized administrator opens **Onboard operator** directly below **Dashboard** to select or create the charge-point operator and issue its scoped invitation. Assign only the permissions and organization/site scope the operator needs. Preserve the grantor's authority limits. Use membership suspension and role workflows to remove access; deleting an invitation is not equivalent to revoking an accepted membership.
+An authorized administrator opens **Onboard operator**, directly below **Dashboard** in the default sidebar, to select or create the charge-point operator and issue its scoped invitation. Assign only the permissions and organization/site scope the operator needs. Preserve the grantor's authority limits. Use membership suspension and role workflows to remove access; deleting an invitation is not equivalent to revoking an accepted membership.
 
 In Charging network, create the Site with the actual operator, address, coordinates and IANA timezone. Enter the real weekly opening hours. Enable Active/Public and use Publish location only when ready for discovery. A site is a physical place, a charging station is an OCPP device, an EVSE is an independently controlled outlet, and a connector is its physical plug.
 

@@ -6,6 +6,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
 use App\Filament\Operator\Pages\Dashboard;
+use App\Filament\Shared\Pages\CustomizeSidebar;
 use App\Http\Middleware\EstablishPanelTenantContext;
 use App\Http\Middleware\TrackPanelSession;
 use Filament\Http\Middleware\Authenticate;
@@ -15,6 +16,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -37,6 +39,7 @@ final class OperatorPanelProvider extends PanelProvider
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('branding/power-solutions-favicon.png?v=20261103'))
             ->navigationGroups(['Charging network', 'Maintenance', 'Procurement', 'Inventory', 'Finance', 'Support', 'People and access', 'Reports'])
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.shared.sidebar-customization-link'))
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->colors([
                 'danger' => Color::hex('#D64555'),
@@ -54,7 +57,7 @@ final class OperatorPanelProvider extends PanelProvider
                 in: app_path('Filament/Operator/Pages'),
                 for: 'App\Filament\Operator\Pages',
             )
-            ->pages([Dashboard::class])
+            ->pages([Dashboard::class, CustomizeSidebar::class])
             ->discoverWidgets(
                 in: app_path('Filament/Operator/Widgets'),
                 for: 'App\Filament\Operator\Widgets',
