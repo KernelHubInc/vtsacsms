@@ -27,7 +27,7 @@ final class CustomerChargingController extends Controller
         return $this->attempt($request, fn (): array => $this->charging->prepare($this->subject($request), $request->validated('charger_code'),
             $this->account($request), $request->validated('vehicle_id'),
             $request->validated('budget_minor') === null ? null : (int) $request->validated('budget_minor'),
-            (int) $request->validated('pricing_version', 1)));
+            (int) $request->validated('pricing_version', 1), $request->boolean('supports_idle_fee')));
     }
 
     public function start(CustomerChargingRequest $request): JsonResponse

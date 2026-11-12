@@ -33,6 +33,7 @@ final readonly class OcppEventConsumer
         private ConnectorReservationService $reservations,
         private MeterValueService $meters,
         private ChargeDetailRecordGenerator $cdrs,
+        private PostChargeIdle $idle,
         private FaultObservationContract $faults,
         private StationConnectionProjector $connections,
     ) {}
@@ -138,6 +139,10 @@ final readonly class OcppEventConsumer
     {
         $transactionId = $this->transactionId($data);
         $session = $this->sessionForStart($connector, $transactionId, $sourceAt);
+        if ($session->stopped_at !== null && ($session->tariff_snapshot['idle_fee_consent'] ?? false)) {
+            return;
+        }
+        $this->idle->superseded($connector->connectorId);
         $samples = is_array($data['samples'] ?? null) ? array_values($data['samples']) : [];
         $meterStart = $this->integerOrNull($data['meter_start_wh'] ?? null) ?? $this->registerWh($samples, true);
         $session->forceFill([
@@ -167,6 +172,9 @@ final readonly class OcppEventConsumer
     private function stop(ConnectorSnapshot $connector, array $event, array $data, CarbonImmutable $sourceAt): void
     {
         $session = $this->findSession($connector, $this->transactionId($data));
+        if ($session->stopped_at !== null && ($session->tariff_snapshot['idle_fee_consent'] ?? false)) {
+            return;
+        }
         $samples = is_array($data['samples'] ?? null) ? array_values($data['samples']) : [];
         $meterStop = $this->integerOrNull($data['meter_stop_wh'] ?? null) ?? $this->registerWh($samples, false);
         $session->forceFill([
@@ -184,7 +192,11 @@ final readonly class OcppEventConsumer
             ], (string) $event['event_id']);
         }
         $this->reservations->release((string) $session->getKey(), 'transaction_ended');
-        $this->cdrs->generate($session->refresh());
+        $connection = is_string($data['connection_id'] ?? null) ? $data['connection_id'] : null;
+        $reason = $data['reason'] ?? $data['trigger_reason'] ?? null;
+        if (! $this->idle->begin($session, $connection, CarbonImmutable::parse((string) $event['occurred_at'])->utc(), is_string($reason) ? $reason : null)) {
+            $this->cdrs->generate($session->refresh());
+        }
     }
 
     /** @param array<string, mixed> $event
@@ -199,6 +211,10 @@ final readonly class OcppEventConsumer
             $this->stop($connector, $event, $data, $sourceAt);
         } elseif ($eventType === 'updated') {
             $session = $this->findOrReconstruct($connector, $this->transactionId($data), $sourceAt);
+            if ($session->stopped_at !== null && ($session->tariff_snapshot['idle_fee_consent'] ?? false)) {
+                return;
+            }
+            $this->idle->superseded($connector->connectorId);
             $target = match (mb_strtolower((string) ($data['charging_state'] ?? ''))) {
                 'suspendedev' => ChargingSessionState::SuspendedByEv,
                 'suspendedevse' => ChargingSessionState::SuspendedByEvse,
@@ -233,6 +249,9 @@ final readonly class OcppEventConsumer
         $session = $transactionId === null
             ? $this->activeSession($connector)
             : $this->findSession($connector, $transactionId);
+        if ($session->stopped_at !== null && ($session->tariff_snapshot['idle_fee_consent'] ?? false)) {
+            return;
+        }
         $samples = is_array($data['samples'] ?? null) ? array_values($data['samples']) : [];
         $this->meters->record($session, (string) $event['event_id'], $samples, $receivedAt);
         if (($data['clock_skew_detected'] ?? false) === true) {
@@ -257,6 +276,7 @@ final readonly class OcppEventConsumer
         if (! $this->setConnectorStatus($connector, $status, 'ocpp_status_notification', $sourceAt, (string) $event['event_id'], $data['connection_id'] ?? null, mb_strtolower((string) ($data['status'] ?? '')))) {
             return;
         }
+        $this->idle->observe($connector->connectorId, mb_strtolower((string) ($data['status'] ?? '')), $data['connection_id'] ?? null, $sourceAt);
         $faultCode = $data['error_code'] ?? $data['vendor_error_code'] ?? null;
         $this->faults->observe(
             (string) $event['event_id'],

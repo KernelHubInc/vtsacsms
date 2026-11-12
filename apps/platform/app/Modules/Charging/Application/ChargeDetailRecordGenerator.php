@@ -10,6 +10,7 @@ use App\Modules\Charging\Domain\Models\ChargeDetailRecord;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\SessionAnomaly;
 use App\Modules\Tariffs\Application\RatingInput;
+use App\Modules\Tariffs\Application\RatingResult;
 use App\Modules\Tariffs\Application\TariffEngine;
 use Illuminate\Support\Facades\DB;
 use JsonException;
@@ -74,14 +75,37 @@ final readonly class ChargeDetailRecordGenerator
             }
 
             $startedAt = $locked->started_at ?? $locked->requested_at;
-            $rating = $this->tariffs->rate($locked->tariff_snapshot, new RatingInput(
+            $rate = fn (int $idleSeconds): RatingResult => $this->tariffs->rate($locked->tariff_snapshot, new RatingInput(
                 energyWh: (int) $locked->energy_wh,
                 durationSeconds: (int) $locked->duration_seconds,
                 parkingSeconds: (int) $locked->parking_seconds,
-                idleSeconds: (int) $locked->idle_seconds,
+                idleSeconds: $idleSeconds,
                 startedAt: $startedAt,
                 energyFlowSeconds: $flow['seconds'],
             ));
+            $managedIdle = ($locked->tariff_snapshot['idle_fee_consent'] ?? false) === true;
+            $ratedIdleSeconds = $managedIdle ? $locked->confirmedPostChargeSeconds() : $locked->idle_seconds;
+            $rating = $rate($ratedIdleSeconds);
+            $idleFee = null;
+            if ($managedIdle) {
+                $baseRating = $rate(0);
+                $budget = $locked->customer->budget_minor ?? 0;
+                if ($rating->totalMinor > $budget) {
+                    $low = 0;
+                    $high = $ratedIdleSeconds;
+                    while ($low < $high) {
+                        $mid = intdiv($low + $high + 1, 2);
+                        if ($rate($mid)->totalMinor <= $budget) {
+                            $low = $mid;
+                        } else {
+                            $high = $mid - 1;
+                        }
+                    }
+                    $ratedIdleSeconds = $low;
+                    $rating = $rate($ratedIdleSeconds);
+                }
+                $idleFee = $rating->totalMinor - $baseRating->totalMinor;
+            }
             $snapshot = [
                 'session_id' => (string) $locked->getKey(),
                 'tenant_id' => (string) $locked->tenant_id,
@@ -104,6 +128,15 @@ final readonly class ChargeDetailRecordGenerator
                 'anomaly_flags' => $anomalies,
                 'finalization_outcome' => $outcome,
             ];
+            if ($idleFee !== null) {
+                $snapshot['post_charge_idle'] = [
+                    'started_at' => $locked->idle_started_at?->toISOString(),
+                    'occupied_at' => $locked->idle_occupied_at?->toISOString(),
+                    'ended_at' => $locked->idle_ended_at?->toISOString(),
+                    'rated_seconds' => $ratedIdleSeconds,
+                    'fee_minor' => $idleFee,
+                ];
+            }
             $hash = $this->hash($snapshot);
             $billable = $outcome !== 'unbillable';
             $cdr->forceFill([
@@ -124,6 +157,7 @@ final readonly class ChargeDetailRecordGenerator
                 'final_cost_minor' => $billable ? $rating->totalMinor : null,
                 'platform_fee_minor' => $billable ? $rating->platformFeeMinor : null,
                 'platform_fee_tax_minor' => $billable ? $rating->platformFeeTaxMinor : null,
+                'idle_fee_minor' => $billable ? $idleFee : null,
                 'estimated_cost_minor' => $billable ? $rating->totalMinor : $locked->estimated_cost_minor,
                 'finalization_outcome' => $outcome,
             ])->save();

@@ -35,7 +35,7 @@ final readonly class CustomerCharging
     public function __construct(private CurrentTenant $tenant, private ConnectorSnapshotQuery $connectors, private PrepaidWallet $wallet) {}
 
     /** @return array<string, mixed> */
-    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null, ?int $requestedBudget = null, int $pricingVersion = 1): array
+    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null, ?int $requestedBudget = null, int $pricingVersion = 1, bool $supportsIdleFee = false): array
     {
         $user = User::query()->where('public_id', $subject)->firstOrFail();
         $accounts = app(ChargingAccounts::class);
@@ -53,14 +53,20 @@ final readonly class CustomerCharging
         if ($version->tariff->currency !== 'PHP') {
             throw new DomainException('The prepaid wallet supports PHP charging only.');
         }
-        $line = $version->components->first();
-        if ($version->components->count() !== 1 || $line === null || $version->discounts->isNotEmpty()
-            || ! in_array($line->dimension->value, ['energy', 'time', 'session'], true)
+        $line = $version->components->first(fn ($item): bool => in_array($item->dimension->value, ['energy', 'time', 'session'], true));
+        $idle = $version->idle_grace_seconds === null ? null : $version->components->first(fn ($item): bool => $item->dimension->value === 'idle');
+        if ($version->components->count() !== ($idle === null ? 1 : 2) || $line === null || $version->discounts->isNotEmpty()
             || (int) $line->day_of_week_mask !== 127 || $line->starts_at_local !== null || $line->ends_at_local !== null
             || $version->minimum_fee_minor !== null || $version->maximum_fee_minor !== null) {
             throw new DomainException('Mobile prepaid charging currently requires one all-day energy, session or energy-flow time price without discounts or extra fees.');
         }
+        if ($idle !== null && ! $supportsIdleFee) {
+            throw new DomainException('Update the app to review the idle fee before starting a new session.');
+        }
         $snapshot = app(TariffSnapshotFactory::class)->create($version, $connector, $at)['snapshot'];
+        if ($idle !== null) {
+            $snapshot['idle_fee_consent'] = true;
+        }
         $fee = app(PlatformFees::class)->current();
         if ($fee['enabled'] && $pricingVersion < 2) {
             throw new DomainException('Update the app to review the platform fee before starting a new session.');
@@ -92,7 +98,7 @@ final readonly class CustomerCharging
             'id' => (string) $quote->getKey(), 'tariff_version_id' => (string) $version->getKey(),
             'name' => $version->tariff->name, 'currency' => 'PHP', 'tax_inclusive' => $version->tax_treatment->value === 'inclusive',
             'tax_rate_basis_points' => (int) $version->tax_rate_basis_points,
-            'lines' => $version->components->map(fn ($line): array => [
+            'lines' => $version->components->reject(fn ($line): bool => $line->dimension->value === 'idle')->values()->map(fn ($line): array => [
                 'dimension' => $line->dimension->value, 'price_minor' => (int) $line->price_minor,
                 'unit_quantity' => (int) $line->unit_quantity,
                 'description' => match ($line->dimension->value) {
@@ -105,6 +111,7 @@ final readonly class CustomerCharging
             'estimated_preauthorization' => ['amount_minor' => $budget, 'currency' => 'PHP'],
             'budget_policy' => [...$policy, 'available_minor' => min($available, $policy['maximum_minor'])],
             'platform_fee' => $fee,
+            'idle_policy' => $idle === null ? null : ['grace_seconds' => $version->idle_grace_seconds, 'price_per_minute_minor' => (int) $idle->price_minor],
             'expires_at' => $quote->expires_at->toISOString(),
         ], 'payment_methods' => [['id' => 'prepaid_wallet', 'label' => $quote->disclosure['attribution']['payer'].' (PHP)', 'is_default' => true]]];
     }
@@ -281,7 +288,10 @@ final readonly class CustomerCharging
             'currency' => $session->currency, 'estimated_cost_minor' => $session->estimated_cost_minor === null ? null : (int) $session->estimated_cost_minor,
             'final_cost_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor,
             'platform_fee_minor' => $session->platform_fee_minor === null ? null : (int) $session->platform_fee_minor,
-            'charging_total_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor - (int) ($session->platform_fee_minor ?? 0),
+            'charging_total_minor' => $session->final_cost_minor === null ? null : (int) $session->final_cost_minor - (int) ($session->platform_fee_minor ?? 0) - (int) ($session->idle_fee_minor ?? 0),
+            'idle_fee_minor' => $session->idle_fee_minor,
+            'idle_grace_ends_at' => $session->idle_connection_id === null ? null
+                : $session->idle_started_at?->addSeconds((int) $session->tariff_snapshot['idle_grace_seconds'])->toISOString(),
             'requested_at' => $session->requested_at->toISOString(), 'started_at' => $session->started_at?->toISOString(),
             'stopped_at' => $session->stopped_at?->toISOString(), 'start_deadline_at' => $session->start_deadline_at?->toISOString(),
             'updated_at' => $session->updated_at?->toISOString(), 'aggregate_version' => (int) $session->aggregate_version,

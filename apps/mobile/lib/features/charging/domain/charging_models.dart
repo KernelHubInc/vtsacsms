@@ -166,6 +166,14 @@ final class TariffLine {
 }
 
 @immutable
+final class IdlePricing {
+  const IdlePricing({required this.graceSeconds, required this.pricePerMinute});
+
+  final int graceSeconds;
+  final Money pricePerMinute;
+}
+
+@immutable
 final class TariffQuote {
   const TariffQuote({
     required this.id,
@@ -177,6 +185,7 @@ final class TariffQuote {
     required this.lines,
     this.budgetPolicy = const {},
     this.platformFee = const {},
+    this.idlePricing,
     required this.estimatedPreauthorization,
     required this.expiresAt,
   });
@@ -197,6 +206,20 @@ final class TariffQuote {
     platformFee: Map<String, dynamic>.from(
       json['platform_fee'] as Map? ?? const {},
     ),
+    idlePricing: switch (json['idle_policy']) {
+      {
+        'grace_seconds': final int seconds,
+        'price_per_minute_minor': final int price,
+      } =>
+        IdlePricing(
+          graceSeconds: seconds,
+          pricePerMinute: Money(
+            minorUnits: price,
+            currency: (json['currency']! as String).toUpperCase(),
+          ),
+        ),
+      _ => null,
+    },
     estimatedPreauthorization: Money.fromJson(
       json['estimated_preauthorization']! as Map<String, dynamic>,
     ),
@@ -212,6 +235,7 @@ final class TariffQuote {
   final List<TariffLine> lines;
   final Map<String, dynamic> budgetPolicy;
   final Map<String, dynamic> platformFee;
+  final IdlePricing? idlePricing;
   final Money estimatedPreauthorization;
   final DateTime expiresAt;
 }
@@ -318,6 +342,8 @@ final class ChargingSession {
     this.reservedBudget,
     this.platformFee,
     this.chargingTotal,
+    this.idleFee,
+    this.idleGraceEndsAt,
     this.startDeadlineAt,
     this.failureReason,
     this.anomalyFlags = const [],
@@ -360,6 +386,11 @@ final class ChargingSession {
       reservedBudget: money('reserved_budget_minor'),
       platformFee: money('platform_fee_minor'),
       chargingTotal: money('charging_total_minor'),
+      idleFee: money('idle_fee_minor'),
+      idleGraceEndsAt: switch (json['idle_grace_ends_at']) {
+        final String value => DateTime.parse(value).toUtc(),
+        _ => null,
+      },
       requestedAt: DateTime.parse(json['requested_at']! as String).toUtc(),
       startedAt: json['started_at'] == null
           ? null
@@ -412,6 +443,8 @@ final class ChargingSession {
   final Money? reservedBudget;
   final Money? platformFee;
   final Money? chargingTotal;
+  final Money? idleFee;
+  final DateTime? idleGraceEndsAt;
   final DateTime requestedAt;
   final DateTime? startedAt;
   final DateTime? stoppedAt;

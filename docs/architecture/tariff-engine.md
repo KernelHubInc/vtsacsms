@@ -25,9 +25,13 @@ Every session stores canonical tariff JSON and its SHA-256 hash. Publishing make
 
 The baseline supports per-kWh-equivalent energy, per-minute-equivalent time, session, parking, idle, minimum/maximum fee, day-of-week, time-of-day, operator/site/connector scopes, inclusive/exclusive tax treatment, automatic promotions, supplied promotion codes, and effective dates.
 
+Admin **Tariffs → Set pricing** can publish an optional post-charge idle price with 30 free minutes as the default. The price is prorated by the second after the free window and uses the tariff’s tax settings. Normal tariff selection lets a connector version override a site version. The session snapshots the price and free time at authorization. Existing sessions keep their quoted price.
+
+The idle price applies to compatible mobile prepaid sessions with a disclosed quote. Charging preserves the wallet reservation while the confirmed stop awaits connector release. An uninterrupted charger connection, a post-charge occupied report, and a subsequent Available report on that connection establish the interval. A lost connection, a conflicting status or an unconfirmed release two hours after the free window finalizes charging with zero idle fee. The prepaid cap can reduce the idle charge. Platform fee waiver thresholds use charging usage before idle pricing.
+
 ## Assumptions and open decisions
 
 - Currency is chosen by the operator when creating a tariff; seed data creates no production currency or tax rate by default.
-- Parking and idle seconds are accepted rating inputs, but product rules that derive them from connector/session/site evidence are unresolved.
-- Cross-midnight windows, band splitting, discount stacking policy, tax rounding jurisdiction, grace periods, tiered/block pricing, reservation fees, roaming tariffs, demand charges, and retroactive corrections need explicit product/legal decisions.
+- Parking bay occupancy requires independent evidence and remains an open decision.
+- Cross-midnight windows, band splitting, discount stacking policy, tax rounding jurisdiction, tiered/block pricing, reservation fees, roaming tariffs, demand charges, and retroactive corrections need explicit product/legal decisions.
 

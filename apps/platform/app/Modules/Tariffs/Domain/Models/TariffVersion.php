@@ -33,6 +33,7 @@ use LogicException;
  * @property string|null $connector_id
  * @property string $timezone
  * @property string $time_basis
+ * @property int|null $idle_grace_seconds
  * @property CarbonImmutable|null $published_at
  * @property string|null $published_by
  * @property Tariff $tariff
@@ -68,6 +69,7 @@ final class TariffVersion extends Model
             'effective_from' => 'immutable_datetime',
             'effective_to' => 'immutable_datetime',
             'published_at' => 'immutable_datetime',
+            'idle_grace_seconds' => 'integer',
         ];
     }
 

@@ -79,6 +79,10 @@
                       2
                     ],
                     "description": "Declares support for displaying the platform fee. Required when an enabled fee applies."
+                  },
+                  "supports_idle_fee": {
+                    "type": "boolean",
+                    "description": "Declares support for displaying the post-charge idle price and grace period. Required when idle pricing applies."
                   }
                 },
                 "required": [
@@ -707,6 +711,16 @@
               "null"
             ],
             "minimum": 0
+          },
+          "idle_fee_minor": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "Final post-charge idle fee, including applicable tax."
+          },
+          "idle_grace_ends_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Free time deadline while the server awaits charger confirmation that the connector has been released."
           }
         },
         "required": [
@@ -899,6 +913,15 @@
                     "type": "boolean"
                   }
                 },
+                "additionalProperties": false
+              },
+              "idle_policy": {
+                "type": ["object", "null"],
+                "properties": {
+                  "grace_seconds": {"type": "integer", "minimum": 0, "maximum": 86400},
+                  "price_per_minute_minor": {"type": "integer", "minimum": 1}
+                },
+                "required": ["grace_seconds", "price_per_minute_minor"],
                 "additionalProperties": false
               },
               "platform_fee": {

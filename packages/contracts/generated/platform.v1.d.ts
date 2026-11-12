@@ -2429,6 +2429,10 @@ export interface components {
                     presets?: number[];
                     allow_custom_amount?: boolean;
                 };
+                idle_policy?: {
+                    grace_seconds: number;
+                    price_per_minute_minor: number;
+                } | null;
                 /** @description Frozen inclusive fee; disabled until tax and beneficiary are confirmed. Threshold compares the tax-inclusive charging total before this fee. No usage means no fee. */
                 platform_fee?: {
                     id?: string | null;
@@ -2498,6 +2502,13 @@ export interface components {
             cancellation_requested: boolean;
             platform_fee_minor?: number | null;
             charging_total_minor?: number | null;
+            /** @description Final post-charge idle fee, including applicable tax. */
+            idle_fee_minor?: number | null;
+            /**
+             * Format: date-time
+             * @description Free time deadline while the server awaits charger confirmation that the connector has been released.
+             */
+            idle_grace_ends_at?: string | null;
         };
     };
     responses: {
@@ -3630,6 +3641,8 @@ export interface operations {
                      * @enum {integer}
                      */
                     pricing_version?: 2;
+                    /** @description Declares support for displaying the post-charge idle price and grace period. Required when idle pricing applies. */
+                    supports_idle_fee?: boolean;
                 };
             };
         };

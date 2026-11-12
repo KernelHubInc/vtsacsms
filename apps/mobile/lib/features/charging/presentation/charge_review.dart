@@ -148,6 +148,19 @@ class _ChargeReviewState extends State<ChargeReview> {
                       ? 'Included'
                       : '${(quote.taxRateBasisPoints / 100).toStringAsFixed(2)}% additional',
                 ),
+                if (quote.idlePricing case final IdlePricing idle) ...[
+                  _row(
+                    'Free time to unplug',
+                    '${idle.graceSeconds ~/ 60} min after charging ends',
+                  ),
+                  _row(
+                    'Idle fee after free time',
+                    '${formatMoney(idle.pricePerMinute)} / min',
+                  ),
+                  const Text(
+                    'Verified plugged-in time is prorated by the second. The wallet budget covers charging and idle fees.',
+                  ),
+                ],
                 if (quote.platformFee['enabled'] == true) ...[
                   _row(
                     'Platform fee · tax included',

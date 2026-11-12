@@ -34,11 +34,24 @@ final readonly class PortalPricing
             'timezone' => ['required', 'timezone:all'],
             'tax_treatment' => ['required', Rule::in(['inclusive', 'exclusive'])],
             'tax_rate_basis_points' => ['required', 'integer', 'between:0,10000'],
+            'idle_fee_enabled' => ['sometimes', 'boolean'],
+            'idle_grace_minutes' => ['nullable', 'integer', 'between:0,1440'],
+            'idle_price' => ['nullable', Rule::requiredIf(fn (): bool => filter_var($input['idle_fee_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)), 'string', 'regex:/^\d{1,6}(\.\d{1,2})?$/'],
         ])->validate();
-        [$whole, $fraction] = array_pad(explode('.', $data['price'], 2), 2, '');
-        $minor = ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
+        $components = [[
+            'dimension' => $data['mode'], 'price_minor' => $this->minor($data['price']),
+            'unit_quantity' => match ($data['mode']) {
+                'energy' => 1000, 'session' => 1,
+                default => $data['time_unit'] === 'hour' ? 3600 : 60,
+            },
+        ]];
+        $grace = null;
+        if ($data['idle_fee_enabled'] ?? false) {
+            $grace = (int) ($data['idle_grace_minutes'] ?? 30) * 60;
+            $components[] = ['dimension' => 'idle', 'price_minor' => $this->minor($data['idle_price']), 'unit_quantity' => 60];
+        }
 
-        return DB::transaction(function () use ($tariff, $data, $minor): TariffVersion {
+        return DB::transaction(function () use ($tariff, $data, $components, $grace): TariffVersion {
             $locked = Tariff::query()->whereKey($tariff->getKey())->lockForUpdate()->firstOrFail();
             $previousName = $locked->name;
             if (isset($data['name'])) {
@@ -70,13 +83,8 @@ final readonly class PortalPricing
                 'tax_rate_basis_points' => (int) $data['tax_rate_basis_points'],
                 'timezone' => $data['timezone'], 'time_basis' => 'energy_flow',
                 'connector_id' => $data['connector_id'] ?? null, 'site_id' => $data['site_id'] ?? null,
-                'components' => [[
-                    'dimension' => $data['mode'], 'price_minor' => $minor,
-                    'unit_quantity' => match ($data['mode']) {
-                        'energy' => 1000, 'session' => 1,
-                        default => $data['time_unit'] === 'hour' ? 3600 : 60,
-                    },
-                ]],
+                'components' => $components,
+                'idle_grace_seconds' => $grace,
             ]);
 
             $published = $this->tariffs->publish($version);
@@ -87,5 +95,12 @@ final readonly class PortalPricing
 
             return $published;
         });
+    }
+
+    private function minor(string $amount): int
+    {
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+
+        return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
     }
 }

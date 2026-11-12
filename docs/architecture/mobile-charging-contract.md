@@ -42,6 +42,8 @@ The live Flutter screen displays elapsed session time once per second from the c
 
 Preparation responses need an expiring quote ID and tariff-version ID. A start request references those IDs; the app never sends a client-calculated amount. Payment methods contain provider-independent token references and safe labels only. PAN, CVV, provider secrets, raw authorization data, and internal tenant-wide identifiers are forbidden.
 
+Clients that show idle pricing send `supports_idle_fee` on prepare. An opted-in tariff returns `idle_policy` with the free seconds and the per-minute price in the quote currency. Clients without that capability must update before accepting such a quote. `idle_grace_ends_at` is the server deadline during the post-charge window. The settled session reports `idle_fee_minor` separately from `charging_total_minor` and the platform fee.
+
 ## Idempotency and recovery
 
 - Start, stop, refund-review, and issue mutations accept `Idempotency-Key` and return the original semantic result for a duplicate key and actor.

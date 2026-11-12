@@ -204,3 +204,7 @@ A pending cancellation now revokes its unused session authorization token. The p
 - No unprocessed or quarantined transaction/meter evidence has arrived for that station since the request.
 
 The transition and audit retain the command ID, its original outcome, current connection ID and idle report timestamp. Charging invokes Billing's existing idempotent zero-cost settlement contract to release the hold in the same transaction. It does not manufacture a StopTransaction or rewrite unknown delivery as rejection. Confirmed physical starts continue through stop/finalization. The pending-session correlation query excludes requests created after a delayed start's source timestamp, preventing old evidence from being assigned to a newer request.
+
+## Post-charge grace
+
+A prepaid session whose accepted tariff includes an idle fee stays `FINALIZING` after a confirmed transaction end while the charger verifies that the connector is still plugged in. A pause in energy flow does not start the grace period. The charger must report post-charge occupancy and then Available on the same active connection for a fee to apply. A disconnect, conflicting report or unresolved window two hours past the grace deadline ends the wait without an idle fee. Charging finalizes the CDR and the prepaid monitor settles the existing wallet reservation once.

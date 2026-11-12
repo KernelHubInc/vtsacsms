@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 
 final readonly class PrepaidChargingMonitor
 {
-    public function __construct(private PrepaidWallet $wallet, private ChargingSummaryQueue $summaries) {}
+    public function __construct(private PrepaidWallet $wallet, private ChargingSummaryQueue $summaries, private PostChargeIdle $idle) {}
 
     public function reconcile(string $sessionId): void
     {
@@ -55,6 +55,10 @@ final readonly class PrepaidChargingMonitor
                 app(AutomaticStopRecovery::class)->recover($session);
 
                 return;
+            }
+            if ($session->idle_connection_id !== null) {
+                $this->idle->expireUnverified($session);
+                $session->refresh();
             }
             if ($session->state->value === 'completed') {
                 $cdr = ChargeDetailRecord::query()->where('session_id', $sessionId)->where('state', 'finalized')->latest('version')->first();

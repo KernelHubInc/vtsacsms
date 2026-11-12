@@ -51,6 +51,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\TenantSecurityTestCase;
 
@@ -938,7 +939,88 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         $job->middleware()[0]->handle($job, fn (DispatchChargerCommand $job) => app()->call([$job, 'handle']));
     }
 
-    private function fixture(User $actor): Connector
+    #[DataProvider('idleWindows')]
+    public function test_post_charge_idle_fees_use_charger_evidence_and_wallet_limit(int $seconds, int $budget, string $release, int $idleFee): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-13T01:00:00Z'));
+        config(['mobile_charging.maximum_reservation_minor' => $budget]);
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('idle-window');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant, $seconds, $budget, $release, $idleFee): void {
+            $connector = $this->fixture($actor, idlePricing: true);
+            if ($budget > 100) {
+                app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), $budget - 100);
+            }
+            $tenantId = (string) $tenant->getKey();
+            $connection = ['connection_id' => (string) Str::ulid()];
+            $this->event($tenantId, $connector, 'charger_connected', $connection);
+            $this->event($tenantId, $connector, 'status_notification', [...$connection, 'connector_id' => 1, 'status' => 'Preparing']);
+            $service = app(CustomerCharging::class);
+            $connectorId = (string) $connector->getKey();
+            $quote = $service->prepare($actor->public_id, $connectorId, requestedBudget: $budget, supportsIdleFee: true);
+            self::assertSame(['grace_seconds' => 1800, 'price_per_minute_minor' => 100], $quote['quote']['idle_policy']);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], $connectorId, 'idle-window-start');
+            $sessionId = (string) $session->getKey();
+            $this->event($tenantId, $connector, 'start_transaction', [...$connection, 'connector_id' => 1, 'protocol_transaction_id' => 81, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $this->travel(120)->seconds();
+            $this->event($tenantId, $connector, 'stop_transaction', [...$connection, 'connector_id' => 1, 'protocol_transaction_id' => 81, 'meter_stop_wh' => 1500, 'reason' => 'Remote']);
+            $deadline = now('UTC')->addMinutes(30)->toISOString();
+            self::assertSame($deadline, $service->present($session->refresh())['idle_grace_ends_at']);
+            self::assertSame('finalizing', $session->state->value);
+            if ($release !== 'unproven') {
+                $this->event($tenantId, $connector, 'status_notification', [...$connection, 'connector_id' => 1, 'status' => 'Finishing']);
+            }
+            $monitor = app(PrepaidChargingMonitor::class);
+            $monitor->reconcile($sessionId);
+            self::assertSame($budget, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+
+            $this->travel($seconds)->seconds();
+            if ($release === 'disconnect') {
+                $this->event($tenantId, $connector, 'charger_disconnected', $connection);
+            } elseif ($release === 'timeout') {
+                $this->event($tenantId, $connector, 'heartbeat', $connection);
+            } else {
+                $this->event($tenantId, $connector, 'status_notification', [...$connection, 'connector_id' => 1, 'status' => 'Available']);
+                $this->event($tenantId, $connector, 'status_notification', [...$connection, 'connector_id' => 1, 'status' => 'Available']);
+            }
+            $monitor->reconcile($sessionId);
+            $monitor->reconcile($sessionId);
+            $final = $service->present($session->refresh());
+            self::assertSame('completed', $final['state']);
+            self::assertNull($final['idle_grace_ends_at']);
+            self::assertSame(50, $final['charging_total_minor']);
+            self::assertSame($idleFee, $final['idle_fee_minor']);
+            self::assertSame(50 + $idleFee, $final['final_cost_minor']);
+            self::assertSame($budget - 50 - $idleFee, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['available_minor']);
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
+    /** @return array<string, array{int, int, string, int}> */
+    public static function idleWindows(): array
+    {
+        return [
+            'exactly 30 minutes free' => [1800, 500, 'available', 0],
+            'one minute of idle fees' => [1860, 500, 'available', 100],
+            'fee capped by prepaid consent' => [1860, 100, 'available', 50],
+            'unproven occupancy' => [1860, 500, 'unproven', 0],
+            'station disconnect' => [1860, 500, 'disconnect', 0],
+            'unplug never confirmed' => [9001, 500, 'timeout', 0],
+        ];
+    }
+
+    public function test_older_client_must_update_before_accepting_idle_pricing(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('idle-disclosure');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor, idlePricing: true);
+            $this->expectExceptionMessage('Update the app to review the idle fee');
+            app(CustomerCharging::class)->prepare($actor->public_id, (string) $connector->getKey(), pricingVersion: 2);
+        });
+    }
+
+    private function fixture(User $actor, bool $idlePricing = false): Connector
     {
         Membership::query()->firstOrCreate(['user_id' => $actor->getKey()], ['status' => 'active', 'joined_at' => now('UTC')]);
         $site = Site::factory()->activePublic()->create();
@@ -948,7 +1030,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         $connector = Connector::factory()->create(['evse_id' => $evse->id, 'lifecycle_status' => 'active', 'connector_number' => 1, 'maximum_power_w' => 7000]);
         ConnectorStatus::query()->create(['connector_id' => (string) $connector->getKey(), 'status' => 'occupied', 'reported_status' => 'preparing', 'observed_at' => now(), 'stale_after_seconds' => 300]);
         $tariff = app(TariffManagementService::class)->create(['name' => 'PHP 1/kWh', 'currency' => 'PHP']);
-        app(PortalPricing::class)->publish($tariff, ['mode' => 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => (string) $connector->getKey()]);
+        app(PortalPricing::class)->publish($tariff, ['mode' => 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => (string) $connector->getKey(), 'idle_fee_enabled' => $idlePricing, 'idle_price' => $idlePricing ? '1.00' : null]);
         app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 100);
 
         return $connector;
