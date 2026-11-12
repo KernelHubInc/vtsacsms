@@ -8501,6 +8501,14 @@
             "type": "integer",
             "minimum": 0
           },
+          "energy_reported_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Timestamp of the latest accepted charger energy register sample for this session. Null when the charger has sent no such sample."
+          },
           "duration_seconds": {
             "type": "integer",
             "minimum": 0

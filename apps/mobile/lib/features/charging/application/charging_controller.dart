@@ -583,7 +583,9 @@ final class ChargingController extends ChangeNotifier {
     final current = _session;
     if (current != null &&
         current.id == authoritative.id &&
-        authoritative.aggregateVersion < current.aggregateVersion) {
+        (authoritative.aggregateVersion < current.aggregateVersion ||
+            (authoritative.aggregateVersion == current.aggregateVersion &&
+                authoritative.updatedAt.isBefore(current.updatedAt)))) {
       return;
     }
     if (current?.id != authoritative.id) _stopIdempotencyKey = null;

@@ -2457,6 +2457,11 @@ export interface components {
             connector_id: string;
             connector_name: string;
             energy_wh: number;
+            /**
+             * Format: date-time
+             * @description Timestamp of the latest accepted charger energy register sample for this session. Null when the charger has sent no such sample.
+             */
+            energy_reported_at?: string | null;
             duration_seconds: number;
             energy_flow_seconds: number;
             current_power_w: number | null;

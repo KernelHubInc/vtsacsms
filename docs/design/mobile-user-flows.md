@@ -56,6 +56,8 @@ MOB-CHG-UX-001: A selected connector is prepared directly; a scan or manually en
 
 An accepted request opens the existing pending session; only charger transaction evidence marks charging active. The session view distinguishes estimated budget usage, confirmed readings, physical stopping, finalization and payment status. A completion/receipt summary uses actual server totals and supplied document links. Do not add a second payment or invent battery, power, remaining funds or final-cost values.
 
+The live session groups energy delivered, estimated cost, power and elapsed time above budget progress. Energy is shown to the nearest Wh as three decimal places in kWh. The app refreshes the session automatically, shows the latest energy sample time, and retains the last readings between charger reports. The elapsed clock can tick independently while charging remains connected.
+
 ```mermaid
 flowchart TD
     Entry["Location or connector context"] --> Identify["Scan approved code or enter identifier"]

@@ -51,7 +51,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('₱25.00'), findsOneWidget);
-      expect(find.text('of ₱1,000.00 budget'), findsOneWidget);
+      final budget = find.text('of ₱1,000.00 budget');
+      await tester.scrollUntilVisible(budget, 160);
+      expect(budget, findsOneWidget);
       await preview(tester, 'charging-budget-$width-$scale');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

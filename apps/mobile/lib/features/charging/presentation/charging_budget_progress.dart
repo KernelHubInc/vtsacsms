@@ -21,10 +21,10 @@ class ChargingBudgetProgress extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          cost == null ? 'Awaiting readings' : formatMoney(cost),
+          ratio == null ? 'Awaiting readings' : '${(ratio * 100).round()}%',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: cost == null ? 18 : 32,
+            fontSize: ratio == null ? 18 : 32,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -35,7 +35,7 @@ class ChargingBudgetProgress extends StatelessWidget {
           style: const TextStyle(fontSize: 12),
         ),
         const SizedBox(height: 4),
-        const Text('Estimated usage', style: TextStyle(fontSize: 12)),
+        const Text('Estimated budget usage', style: TextStyle(fontSize: 12)),
       ],
     );
     return Padding(

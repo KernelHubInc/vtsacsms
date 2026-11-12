@@ -55,6 +55,8 @@ void main() {
     await fixture.dependencies.charging.refresh();
     await tester.pump();
     expect(find.text('Charging in progress'), findsOneWidget);
+    expect(find.text('6.400 kWh'), findsOneWidget);
+    expect(find.text('₱25.00'), findsOneWidget);
 
     await tester.ensureVisible(find.text('End charging'));
     await tester.tap(find.text('End charging'));
@@ -102,16 +104,16 @@ void main() {
     );
     expect(find.text('Session complete'), findsOneWidget);
     await tester.scrollUntilVisible(
+      find.text('6.600 kWh'),
+      300,
+      scrollable: sessionScroll,
+    );
+    expect(find.text('6.600 kWh'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('Open receipt'),
       300,
       scrollable: sessionScroll,
     );
     expect(find.text('Open receipt'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('6.60 kWh'),
-      300,
-      scrollable: sessionScroll,
-    );
-    expect(find.text('6.60 kWh'), findsOneWidget);
   });
 }

@@ -259,7 +259,7 @@ final readonly class CustomerCharging
     /** @return array<string, mixed> */
     public function present(ChargingSession $session): array
     {
-        $session->loadMissing(['customer.quote', 'latestPower', 'latestStateOfCharge']);
+        $session->loadMissing(['customer.quote', 'latestPower', 'latestEnergyRegister', 'latestStateOfCharge']);
         $owner = $session->customer ?? throw new DomainException('This session has no customer ownership record.');
         $quote = $owner->quote;
         $target = $quote->disclosure['target'];
@@ -274,6 +274,7 @@ final readonly class CustomerCharging
             'station_id' => $session->charging_station_id, 'station_name' => $target['station_name'],
             'connector_id' => $session->connector_id, 'connector_name' => $target['connector_name'],
             'energy_wh' => (int) $session->energy_wh, 'duration_seconds' => (int) $session->duration_seconds,
+            'energy_reported_at' => $session->latestEnergyRegister?->sampled_at->toISOString(),
             'energy_flow_seconds' => (int) $session->energy_flow_seconds, 'current_power_w' => $power === null ? null : (int) $power->value,
             'battery_percentage' => $battery === null ? null : (int) $battery->value,
             'battery_reported_at' => $battery?->sampled_at->toISOString(),
