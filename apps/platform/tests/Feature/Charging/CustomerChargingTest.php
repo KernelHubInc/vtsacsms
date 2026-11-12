@@ -264,6 +264,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
 
     public function test_optional_charger_state_of_charge_is_reported_without_affecting_billing(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-13T08:00:00Z'));
         $actor = $this->createUser();
         $tenant = $this->createTenant('charger-soc');
         $this->withinTenant($tenant, $actor, function () use ($actor, $tenant): void {
@@ -272,6 +273,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
             $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'soc-start-01');
             self::assertNull($service->present($session)['battery_percentage']);
+            self::assertNull($service->present($session)['energy_reported_at']);
 
             $this->event((string) $tenant->getKey(), $connector, 'start_transaction', [
                 'connector_id' => 1, 'protocol_transaction_id' => 94, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted',
@@ -288,6 +290,9 @@ final class CustomerChargingTest extends TenantSecurityTestCase
             self::assertSame(64, $projection['battery_percentage']);
             self::assertNotNull($projection['battery_reported_at']);
             self::assertSame(250, $projection['energy_wh']);
+            self::assertSame(now('UTC')->toISOString(), $projection['energy_reported_at']);
+            self::assertSame(25, $projection['estimated_cost_minor']);
+            self::assertNull($projection['final_cost_minor']);
             self::assertNotContains('invalid_meter_value', $session->anomaly_flags);
             self::assertNotContains('out_of_order_meter', $session->anomaly_flags);
 
@@ -299,7 +304,11 @@ final class CustomerChargingTest extends TenantSecurityTestCase
                     ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 1300],
                 ],
             ]);
-            self::assertSame(66, $service->present($session->refresh())['battery_percentage']);
+            $next = $service->present($session->refresh());
+            self::assertSame(66, $next['battery_percentage']);
+            self::assertSame(300, $next['energy_wh']);
+            self::assertSame(now('UTC')->toISOString(), $next['energy_reported_at']);
+            self::assertSame(30, $next['estimated_cost_minor']);
 
             $this->travel(10)->seconds();
             $this->event((string) $tenant->getKey(), $connector, 'stop_transaction', [

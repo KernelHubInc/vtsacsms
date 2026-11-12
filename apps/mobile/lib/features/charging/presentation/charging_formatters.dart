@@ -10,8 +10,8 @@ String formatMoney(Money? money) {
   ).format(money.minorUnits / 100);
 }
 
-String formatEnergy(int wattHours) =>
-    '${(wattHours / 1000).toStringAsFixed(2)} kWh';
+String formatEnergy(int wattHours, {int fractionDigits = 2}) =>
+    '${(wattHours / 1000).toStringAsFixed(fractionDigits)} kWh';
 
 String formatPower(int? watts) {
   if (watts == null) {

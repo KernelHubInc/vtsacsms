@@ -72,7 +72,7 @@ final class CustomerChargingController extends Controller
             }
         }
         $page = ChargingSession::query()->whereIn('id', $owners->select('session_id'))
-            ->with(['customer.quote', 'latestPower', 'latestStateOfCharge'])->orderByDesc('id')->cursorPaginate(20);
+            ->with(['customer.quote', 'latestPower', 'latestEnergyRegister', 'latestStateOfCharge'])->orderByDesc('id')->cursorPaginate(20);
 
         return response()->json(['data' => $page->map(fn (ChargingSession $session): array => $this->charging->present($session))->all(),
             'meta' => ['next_cursor' => $page->nextCursor()?->encode()]])->header('Cache-Control', 'no-store');

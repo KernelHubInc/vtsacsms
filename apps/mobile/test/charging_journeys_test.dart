@@ -182,6 +182,90 @@ void main() {
       }
     },
   );
+  testWidgets(
+    'prepaid live metrics follow fresh meter polls beside the clock',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const budget = Money(minorUnits: 5000, currency: 'PHP');
+      final pending = sampleChargingSession(
+        state: ChargingSessionState.charging,
+        reservedBudget: budget,
+        estimatedCost: null,
+      );
+      final repository = FakeChargingRepository()
+        ..sessions[pending.id] = pending;
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      final charging = fixture.dependencies.charging;
+      await charging.recoverSession(pending.id);
+      var now = pending.startedAt!;
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: VtsaTheme.light(),
+            home: LiveChargingScreen(
+              dependencies: fixture.dependencies,
+              sessionId: pending.id,
+              now: () => now,
+            ),
+          ),
+        );
+        expect(
+          find.text('Waiting for an energy reading from the charger.'),
+          findsOneWidget,
+        );
+        expect(find.text('ESTIMATED COST'), findsOneWidget);
+        expect(find.text('Pending'), findsOneWidget);
+
+        final first = sampleChargingSession(
+          state: ChargingSessionState.charging,
+          energyWh: 123,
+          energyReportedAt: now.add(const Duration(seconds: 1)),
+          updatedAt: now.add(const Duration(seconds: 1)),
+          reservedBudget: budget,
+          estimatedCost: const Money(minorUnits: 250, currency: 'PHP'),
+        );
+        repository.sessions[pending.id] = first;
+        now = now.add(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+        expect(find.text('0.123 kWh'), findsOneWidget);
+        expect(find.text('₱2.50'), findsOneWidget);
+        expect(find.text('00:00:02'), findsOneWidget);
+        expect(find.textContaining('Last energy reading'), findsOneWidget);
+
+        repository.sessions[pending.id] = sampleChargingSession(
+          state: ChargingSessionState.charging,
+          energyWh: 124,
+          energyReportedAt: now.add(const Duration(seconds: 1)),
+          updatedAt: now.add(const Duration(seconds: 1)),
+          reservedBudget: budget,
+          estimatedCost: const Money(minorUnits: 252, currency: 'PHP'),
+        );
+        now = now.add(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+        expect(find.text('0.124 kWh'), findsOneWidget);
+        expect(find.text('₱2.52'), findsOneWidget);
+
+        repository.sessions[pending.id] = first;
+        now = now.add(const Duration(seconds: 2));
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+        expect(find.text('0.124 kWh'), findsOneWidget);
+        expect(find.text('₱2.52'), findsOneWidget);
+        expect(find.text('00:00:06'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        fixture.dependencies.dispose();
+      }
+    },
+  );
   for (final width in [320.0, 390.0]) {
     testWidgets('pending start can be cancelled before timeout at $width', (
       tester,
@@ -410,7 +494,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Charging in progress'), findsOneWidget);
-    expect(find.text('6.42 kWh'), findsOneWidget);
+    expect(find.text('6.420 kWh'), findsOneWidget);
     expect(find.text('SESSION TIME'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Charging timeline & vehicle'),

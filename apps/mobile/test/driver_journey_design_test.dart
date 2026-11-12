@@ -200,7 +200,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('6.42 kWh · Charging'));
     await tester.pumpAndSettle();
-    expect(find.text('6.42 kWh'), findsOneWidget);
+    expect(find.text('6.420 kWh'), findsOneWidget);
     await preview(tester, 'active-390');
     await tester.scrollUntilVisible(
       find.text('End charging'),

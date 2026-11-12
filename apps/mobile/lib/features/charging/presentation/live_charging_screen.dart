@@ -139,14 +139,6 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                   title: 'Connection lost',
                   description:
                       'Values are the last confirmed server state. Start and stop requests are disabled until the connection returns.',
-                )
-              else if (!charging.realtimeConnected && !session.isTerminal)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    'Updates refresh periodically. Last confirmed readings are shown.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
                 ),
               if (session.chargerDisconnected)
                 const _Notice(
@@ -160,11 +152,10 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
               if (charging.phase != ChargingFlowPhase.live &&
                   charging.phase != ChargingFlowPhase.completed)
                 _Actions(dependencies: widget.dependencies, session: session),
-              if (charging.phase == ChargingFlowPhase.completed)
-                ChargingReceiptSummary(session: session)
-              else if (session.reservedBudget != null)
-                ChargingBudgetProgress(session: session),
-              const SizedBox(height: VtsaSpacing.md),
+              if (charging.phase == ChargingFlowPhase.completed) ...[
+                ChargingReceiptSummary(session: session),
+                const SizedBox(height: VtsaSpacing.md),
+              ],
               _Metrics(
                 session: session,
                 now: widget.now,
@@ -176,6 +167,9 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                     session.startedAt != null &&
                     session.stoppedAt == null,
               ),
+              if (charging.phase != ChargingFlowPhase.completed &&
+                  session.reservedBudget != null)
+                ChargingBudgetProgress(session: session),
               const SizedBox(height: VtsaSpacing.md),
               if (session.batteryPercentage case final int percentage
                   when percentage >= 0 && percentage <= 100) ...[
@@ -417,27 +411,6 @@ class _Metrics extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const SizedBox(height: 8),
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: _Metric(
-              width: double.infinity,
-              label: 'ENERGY DELIVERED',
-              value: formatEnergy(session.energyWh),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _Metric(
-              width: double.infinity,
-              label: 'POWER',
-              value: formatPower(session.currentPowerW),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
       LayoutBuilder(
         builder: (context, constraints) {
           final wideText = MediaQuery.textScalerOf(context).scale(14) > 20;
@@ -448,22 +421,28 @@ class _Metrics extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
+              _Metric(
+                width: width,
+                label: 'ENERGY DELIVERED',
+                value: formatEnergy(session.energyWh, fractionDigits: 3),
+              ),
+              if (session.finalCost == null)
+                _Metric(
+                  width: width,
+                  label: 'ESTIMATED COST',
+                  value: formatMoney(session.estimatedCost),
+                ),
               _SessionTimeMetric(
                 width: width,
                 startedAt: liveTime ? session.startedAt : null,
                 confirmedSeconds: session.durationSeconds,
                 now: now,
               ),
-              if (session.reservedBudget == null && session.finalCost == null)
-                _Metric(
-                  width: width,
-                  label: session.finalCost == null
-                      ? 'ESTIMATED COST'
-                      : 'FINAL COST',
-                  value: formatMoney(
-                    session.finalCost ?? session.estimatedCost,
-                  ),
-                ),
+              _Metric(
+                width: width,
+                label: 'POWER',
+                value: formatPower(session.currentPowerW),
+              ),
               if (session.platformFee != null)
                 _Metric(
                   width: width,
@@ -481,12 +460,14 @@ class _Metrics extends StatelessWidget {
         },
       ),
       const SizedBox(height: 8),
-      Text(
-        liveTime
-            ? 'Session time counts from the confirmed start. Energy and cost update with charger readings.'
-            : 'Time, energy and cost reflect the last confirmed server update.',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      if (session.isPhysicalActive)
+        Text(switch (session.energyReportedAt) {
+          final DateTime time =>
+            'Last energy reading ${DateFormat.Hms().format(time.toLocal())}. Energy and estimated cost update as readings arrive.',
+          null when session.energyWh > 0 =>
+            'Energy and estimated cost update as charger readings arrive.',
+          null => 'Waiting for an energy reading from the charger.',
+        }, style: Theme.of(context).textTheme.bodySmall),
     ],
   );
 }
@@ -512,10 +493,6 @@ class _ChargerReadings extends StatelessWidget {
             value: time(session.startedAt, 'Waiting for charger'),
           ),
           _Reading(label: 'Ended', value: time(session.stoppedAt, 'Not ended')),
-          _Reading(
-            label: 'Current power',
-            value: formatPower(session.currentPowerW),
-          ),
           const SizedBox(height: 8),
           _Reading(
             label: 'Energy-flow time',
@@ -666,7 +643,10 @@ class _Metric extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: 19,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ],
     ),
