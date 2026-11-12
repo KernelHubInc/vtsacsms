@@ -132,10 +132,15 @@ void main() {
     await tester.tap(find.text('Resend verification email'));
     await tester.pumpAndSettle();
     expect(fixture.auth.verificationEmailsSent, 1);
+    expect(find.text('Verification email sent.'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text("I've verified my email"));
     await tester.pumpAndSettle();
     expect(find.text('Email verification is required.'), findsOneWidget);
     expect(find.text('One tap from verified.'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     fixture.auth.user = verifiedUser;
     await tester.tap(find.text("I've verified my email"));
     await tester.pumpAndSettle();

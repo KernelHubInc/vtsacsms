@@ -38,6 +38,8 @@ Scan after connecting the EV, before reviewing the price and requesting a start.
 6. Verify LUMINA SUBIC, Connector 1, Type 2 AC, the live tariff and reserved budget. For this test the intended tariff is PHP 1/kWh; do not proceed if the quote is different. Tap **Review and request start**, read the **Start charging?** confirmation, then tap **Request start** once.
 7. Continue the evidence checks in test one: charger-confirmed transaction ID, physical energy flow, telemetry, stop confirmation and one wallet settlement. Pending or Waiting for charger is not proof of charging.
 
+For chargers that require the EV to be connected before accepting an app start, set `MOBILE_CHARGING_PLUG_BEFORE_START_STATIONS` in that environment to the comma-separated charge-point identities. For those stations the app can review the price while the connector is Available. A start request sends no command and reserves no funds until the connector has fresh Preparing status. Reuse the quote while valid or review a fresh price after it expires. Apply this setting only to stations whose behavior has been verified.
+
 ## Test two: operator remote stop
 
 Run a **new** short session and complete steps 1–6. An authorized operator opens **Session diagnostics**, identifies the live session by station and transaction ID, chooses **Remote stop**, and confirms. Verify steps 8–9 and confirm the driver's app updates too. The operator must have remote-command permission for this site. A cancelled request or a request with no charger transaction ID cannot be remotely stopped as an active transaction.

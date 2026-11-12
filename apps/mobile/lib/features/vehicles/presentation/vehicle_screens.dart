@@ -258,7 +258,7 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
             !RegExp(
               r'^[A-Z0-9][A-Z0-9 -]{0,19}$',
             ).hasMatch(_plate.text.trim().toUpperCase()))) {
-      showVtsaToast(
+      showVtsaAlert(
         context,
         message: 'Enter a nickname and valid plate, or select Plate pending.',
       );
@@ -279,7 +279,7 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       );
       if (mounted) context.pop();
     } on AppFailure catch (error) {
-      if (mounted) showVtsaToast(context, message: error.message);
+      if (mounted) showVtsaAlert(context, message: error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -302,7 +302,7 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
       await widget.dependencies.vehicles.remove(_existing!.id);
       if (mounted) context.pop();
     } on AppFailure catch (error) {
-      if (mounted) showVtsaToast(context, message: error.message);
+      if (mounted) showVtsaAlert(context, message: error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

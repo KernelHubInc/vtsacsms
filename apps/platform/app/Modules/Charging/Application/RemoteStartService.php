@@ -47,6 +47,7 @@ final readonly class RemoteStartService
         string $idempotencyKey,
         ?string $tariffVersionId = null,
         ?string $promotionCode = null,
+        bool $requireVehicleConnection = false,
     ): RemoteCommandResult {
         app(KycEligibility::class)->assertAllowed($this->tenant->get()->actorId, 'charging');
         $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();
@@ -67,7 +68,7 @@ final readonly class RemoteStartService
         $now = CarbonImmutable::now('UTC');
         $expiresAt = $now->addSeconds(max(30, (int) config('services.ocpp_gateway.start_expiry_seconds', 120)));
 
-        $result = DB::transaction(function () use ($connector, $idempotencyKey, $tariffVersionId, $promotionCode, $context, $now, $expiresAt): RemoteCommandResult {
+        $result = DB::transaction(function () use ($connector, $idempotencyKey, $tariffVersionId, $promotionCode, $requireVehicleConnection, $context, $now, $expiresAt): RemoteCommandResult {
             $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->lockForUpdate()->first();
             if ($existing !== null) {
                 $this->assertSameIntent($existing, $connector->connectorId, $tariffVersionId, $promotionCode);
@@ -90,6 +91,9 @@ final readonly class RemoteStartService
                 ->whereNotIn('state', ['completed', 'failed', 'cancelled', 'expired'])->exists();
             if ($status === null || ! $ready || $occupied) {
                 throw new DomainException('Connector is not currently available for remote start.');
+            }
+            if ($requireVehicleConnection && $status->reported_status !== 'preparing') {
+                throw new DomainException('Plug in your vehicle and wait for the charger to show it is connected, then try again.');
             }
 
             $session = $this->sessions->create(

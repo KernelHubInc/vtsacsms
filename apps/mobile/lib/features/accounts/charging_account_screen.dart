@@ -78,10 +78,11 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
         final message = error is AppFailure
             ? error.message
             : 'Could not complete this account request. Refresh and try again.';
-        setState(() => _error = message);
-        ScaffoldMessenger.of(
+        showVtsaAlert(
           context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+          message: message,
+          correlationId: error is AppFailure ? error.correlationId : null,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -190,11 +191,13 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
               const SizedBox(height: 16),
               if (controller.loading || _busy || _loadingDetails)
                 const LinearProgressIndicator(),
-              if (_error != null || controller.failure != null)
-                VtsaErrorState(
-                  title: 'Account request failed',
-                  description: _error ?? controller.failure!.message,
-                ),
+              VtsaAlertRegion(
+                title: 'Account request failed',
+                message: _error ?? controller.failure?.message,
+                correlationId: _error == null
+                    ? controller.failure?.correlationId
+                    : null,
+              ),
               if (charging.hasUnfinishedSession) ...[
                 const DriverNotice(
                   title: 'Your current charge keeps its original wallet',
@@ -806,14 +809,13 @@ class _ChargingAccountsScreenState extends State<ChargingAccountsScreen> {
       ),
     );
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Invitation sent. The user must accept it in their app.',
-          ),
-        ),
+      await showVtsaAlert(
+        context,
+        title: 'Invitation sent',
+        message: 'The user must accept it in their app.',
+        tone: VtsaAlertTone.success,
       );
-      await _details();
+      if (mounted) await _details();
     }
   }
 

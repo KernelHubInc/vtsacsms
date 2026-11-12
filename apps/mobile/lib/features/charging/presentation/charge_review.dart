@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/components/evcs_access.dart';
-import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
@@ -277,12 +276,6 @@ class _ChargeReviewState extends State<ChargeReview> {
             TextButton(
               onPressed: () => context.push('/wallet'),
               child: const Text('Open wallet'),
-            ),
-          if (charging.failure != null)
-            VtsaErrorState(
-              title: 'Could not continue',
-              description: charging.failure!.message,
-              correlationId: charging.failure!.correlationId,
             ),
           if (expired || widget.quoteRefreshFailed)
             TextButton(

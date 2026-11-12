@@ -38,7 +38,7 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
       longitude: station.longitude,
     );
     if (mounted && !opened) {
-      showVtsaToast(
+      showVtsaAlert(
         context,
         message: 'No navigation application could open directions.',
       );

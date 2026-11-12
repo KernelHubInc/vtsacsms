@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/vtsa_app.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_theme.dart';
@@ -13,6 +14,81 @@ import 'support/test_fonts.dart';
 
 void main() {
   setUpAll(loadTestFonts);
+
+  testWidgets('a rejected start opens a popup and can be retried', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const message =
+        'Plug in your vehicle and wait for the charger to show it is connected, then try again.';
+    final repository = FakeChargingRepository()
+      ..startFailure = const AppFailure(
+        kind: FailureKind.validation,
+        code: 'charging_request_rejected',
+        message: message,
+        correlationId: 'plug-in-reference',
+      );
+    final fixture = await buildTestDependencies(
+      signedIn: true,
+      chargingRepository: repository,
+    );
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const ValueKey('driver-preview'),
+        child: VtsaApp(dependencies: fixture.dependencies),
+      ),
+    );
+    await tester.pumpAndSettle();
+    GoRouter.of(
+      tester.element(find.text('Where would you like to charge?')),
+    ).go('/charge?code=lumina-test');
+    await tester.pumpAndSettle();
+    expect(find.text('Ready to charge'), findsOneWidget);
+
+    final start = find.text('Start charging');
+    final alternative = find.text('Can’t swipe? Start with a button');
+    await tester.scrollUntilVisible(
+      alternative,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(alternative);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(of: dialog, matching: find.text(message)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('Reference plug-in-reference'),
+      ),
+      findsOneWidget,
+    );
+    expect(repository.startCalls, 1);
+    expect(repository.active, isNull);
+    await preview(tester, 'charging-start-error-popup');
+
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.text(message), findsNothing);
+    repository.startFailure = null;
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(repository.startCalls, 2);
+    expect(find.text('Waiting for physical start'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets(
     'session clock ticks independently and uses confirmed final time',
@@ -174,6 +250,9 @@ void main() {
     await tester.tap(find.text('Sessions'));
     await tester.pumpAndSettle();
     expect(find.text('History service unavailable.'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     expect(find.text('No sessions in this view'), findsNothing);
     repository.historyFailure = null;
     await fixture.dependencies.charging.loadHistory();

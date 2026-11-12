@@ -148,155 +148,160 @@ class _WalletScreenState extends State<WalletScreen> {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            ?widget.accountSelector,
-            if (_loading) const LinearProgressIndicator(),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(_error!, semanticsLabel: 'Wallet error: $_error'),
-              ),
-            if (wallet != null) ...[
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: DriverTheme.navy,
-                  borderRadius: BorderRadius.circular(16),
+      body: VtsaAlertRegion(
+        title: 'Wallet needs attention',
+        message: widget.repository == null ? null : _error,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              ?widget.accountSelector,
+              if (_loading) const LinearProgressIndicator(),
+              if (widget.repository == null && _error != null) Text(_error!),
+              if (wallet != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: DriverTheme.navy,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        wallet['book'] == 'simulated'
+                            ? 'TEST BALANCE · NO REAL MONEY'
+                            : 'AVAILABLE BALANCE',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        walletMoney(wallet['available_minor'] as int),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${walletMoney(wallet['reserved_minor'] as int)} reserved',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 20),
+                Text(
+                  wallet['mode'] == 'simulated' &&
+                          !widget.allowSimulatedPayments
+                      ? 'Top-ups are unavailable while this wallet is in test mode.'
+                      : wallet['mode'] == 'simulated'
+                      ? 'Practice top-ups use simulated funds. They cannot pay for charging.'
+                      : wallet['topups_enabled'] == true
+                      ? 'Add prepaid credit with QR Ph. Your balance updates after payment confirmation.'
+                      : 'Top-ups are not available yet. Your existing balance and history remain available.',
+                ),
+                const SizedBox(height: 16),
+                if (wallet['mode'] != 'simulated' ||
+                    widget.allowSimulatedPayments)
+                  VtsaButton(
+                    label: wallet['mode'] == 'simulated'
+                        ? 'Create test top-up'
+                        : 'Add money',
+                    onPressed: wallet['topups_enabled'] == true && !_loading
+                        ? _add
+                        : null,
+                    icon: Icons.add,
+                  ),
+                const SizedBox(height: 28),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Text(
-                      wallet['book'] == 'simulated'
-                          ? 'TEST BALANCE · NO REAL MONEY'
-                          : 'AVAILABLE BALANCE',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    DriverFilterChip(
+                      label: 'Top-ups',
+                      selected: !_showTransactions,
+                      onSelected: (_) =>
+                          setState(() => _showTransactions = false),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      walletMoney(wallet['available_minor'] as int),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${walletMoney(wallet['reserved_minor'] as int)} reserved',
-                      style: const TextStyle(color: Colors.white70),
+                    DriverFilterChip(
+                      label: 'Transactions',
+                      selected: _showTransactions,
+                      onSelected: (_) =>
+                          setState(() => _showTransactions = true),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                wallet['mode'] == 'simulated' && !widget.allowSimulatedPayments
-                    ? 'Top-ups are unavailable while this wallet is in test mode.'
-                    : wallet['mode'] == 'simulated'
-                    ? 'Practice top-ups use simulated funds. They cannot pay for charging.'
-                    : wallet['topups_enabled'] == true
-                    ? 'Add prepaid credit with QR Ph. Your balance updates after payment confirmation.'
-                    : 'Top-ups are not available yet. Your existing balance and history remain available.',
-              ),
-              const SizedBox(height: 16),
-              if (wallet['mode'] != 'simulated' ||
-                  widget.allowSimulatedPayments)
-                VtsaButton(
-                  label: wallet['mode'] == 'simulated'
-                      ? 'Create test top-up'
-                      : 'Add money',
-                  onPressed: wallet['topups_enabled'] == true && !_loading
-                      ? _add
-                      : null,
-                  icon: Icons.add,
-                ),
-              const SizedBox(height: 28),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  DriverFilterChip(
-                    label: 'Top-ups',
-                    selected: !_showTransactions,
-                    onSelected: (_) =>
-                        setState(() => _showTransactions = false),
+                const SizedBox(height: 16),
+                if (!_showTransactions) ...[
+                  Text(
+                    'Top-ups',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  DriverFilterChip(
-                    label: 'Transactions',
-                    selected: _showTransactions,
-                    onSelected: (_) => setState(() => _showTransactions = true),
+                  if (_orders.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'No top-ups yet. Your pending and completed requests will appear here.',
+                      ),
+                    ),
+                  for (final row in _orders)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        row['status'] == 'paid'
+                            ? Icons.check_circle_outline
+                            : Icons.schedule,
+                      ),
+                      title: Text(walletMoney(row['amount_minor'] as int)),
+                      subtitle: Text(_topupStatus(row)),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _open(row),
+                    ),
+                  if (_topupCursor != null)
+                    TextButton(
+                      onPressed: _loading ? null : () => _more(false),
+                      child: const Text('More top-ups'),
+                    ),
+                ] else ...[
+                  Text(
+                    'Balance activity',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
+                  if (_entries.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'Confirmed credits and charging activity will appear here.',
+                      ),
+                    ),
+                  for (final entry in _entries)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(switch (entry['kind']) {
+                        'topup' => 'Top-up received',
+                        'reserved' => 'Reserved for charging',
+                        'released' => 'Reservation released',
+                        'spent' => 'Charging payment',
+                        _ => 'Balance activity',
+                      }),
+                      subtitle: Text(_date(entry['created_at'] as String?)),
+                      trailing: Text(walletMoney(entry['amount_minor'] as int)),
+                    ),
+                  if (_historyCursor != null)
+                    TextButton(
+                      onPressed: _loading ? null : () => _more(true),
+                      child: const Text('More activity'),
+                    ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              if (!_showTransactions) ...[
-                Text('Top-ups', style: Theme.of(context).textTheme.titleLarge),
-                if (_orders.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'No top-ups yet. Your pending and completed requests will appear here.',
-                    ),
-                  ),
-                for (final row in _orders)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      row['status'] == 'paid'
-                          ? Icons.check_circle_outline
-                          : Icons.schedule,
-                    ),
-                    title: Text(walletMoney(row['amount_minor'] as int)),
-                    subtitle: Text(_topupStatus(row)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _open(row),
-                  ),
-                if (_topupCursor != null)
-                  TextButton(
-                    onPressed: _loading ? null : () => _more(false),
-                    child: const Text('More top-ups'),
-                  ),
-              ] else ...[
-                Text(
-                  'Balance activity',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (_entries.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Confirmed credits and charging activity will appear here.',
-                    ),
-                  ),
-                for (final entry in _entries)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(switch (entry['kind']) {
-                      'topup' => 'Top-up received',
-                      'reserved' => 'Reserved for charging',
-                      'released' => 'Reservation released',
-                      'spent' => 'Charging payment',
-                      _ => 'Balance activity',
-                    }),
-                    subtitle: Text(_date(entry['created_at'] as String?)),
-                    trailing: Text(walletMoney(entry['amount_minor'] as int)),
-                  ),
-                if (_historyCursor != null)
-                  TextButton(
-                    onPressed: _loading ? null : () => _more(true),
-                    child: const Text('More activity'),
-                  ),
               ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -414,10 +419,11 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
       }
       if (mounted) {
         setState(() => _qrSaved = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('QR saved to Photos. Import it in your payment app.'),
-          ),
+        showVtsaAlert(
+          context,
+          title: 'QR saved',
+          message: 'QR saved to Photos. Import it in your payment app.',
+          tone: VtsaAlertTone.success,
         );
       }
     } on Object catch (error) {
@@ -428,9 +434,7 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
                     error.type == GalExceptionType.accessDenied)
             ? 'Allow photo access to save the QR, or scan it with another device.'
             : 'Could not save the QR. Please try again or scan it with another device.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        showVtsaAlert(context, message: message);
       }
     } finally {
       if (mounted) setState(() => _savingQr = false);
@@ -443,22 +447,19 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
         'package': packageName,
       });
       if (mounted && opened != true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
+        showVtsaAlert(
+          context,
+          message:
               '$appName is not installed. Open another wallet and import the saved QR.',
-            ),
-          ),
+          tone: VtsaAlertTone.warning,
         );
       }
     } on PlatformException {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+        showVtsaAlert(
+          context,
+          message:
               'Could not open the payment app. Open your wallet and import the saved QR.',
-            ),
-          ),
         );
       }
     }
@@ -481,189 +482,197 @@ class _WalletTopupScreenState extends State<WalletTopupScreen>
     return VtsaPageShell(
       eyebrow: simulated ? 'SIMULATED TOP-UP' : 'QR PH',
       title: 'Add prepaid credit',
-      body: ListView(
-        children: [
-          Text(
-            walletMoney(_row['amount_minor'] as int),
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 12),
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              qrUnavailable
-                  ? 'Payment QR unavailable'
-                  : _status(
-                      status == 'pending' && expired ? 'expired' : status,
-                    ),
-              style: Theme.of(context).textTheme.titleLarge,
+      body: VtsaAlertRegion(
+        title: 'Could not check payment status',
+        message: _error,
+        child: ListView(
+          children: [
+            Text(
+              walletMoney(_row['amount_minor'] as int),
+              style: Theme.of(context).textTheme.headlineLarge,
             ),
-          ),
-          const SizedBox(height: 20),
-          if (status == 'paid')
-            const Icon(Icons.check_circle, color: Color(0xFF16845B), size: 76)
-          else if (simulated)
-            const VtsaCard(
+            const SizedBox(height: 12),
+            Semantics(
+              liveRegion: true,
               child: Text(
-                'TEST ONLY — no money will move. Ask the staging operator to confirm this test request, then check its status.',
+                qrUnavailable
+                    ? 'Payment QR unavailable'
+                    : _status(
+                        status == 'pending' && expired ? 'expired' : status,
+                      ),
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            )
-          else if (qrUnavailable)
-            const Text(
-              'We could not prepare a usable payment QR for this request. '
-              'Keep the reference below and contact support before creating another top-up. '
-              'Refreshing checks this request; it does not create a new QR. '
-              'If you already paid, do not pay again while confirmation is pending.',
-            )
-          else if (qr != null &&
-              qr.isNotEmpty &&
-              expiry != null &&
-              !expired &&
-              status == 'pending') ...[
-            Center(
-              child: Container(
-                width: 292,
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFD8E4EB)),
-                  borderRadius: BorderRadius.circular(20),
+            ),
+            const SizedBox(height: 20),
+            if (status == 'paid')
+              const Icon(Icons.check_circle, color: Color(0xFF16845B), size: 76)
+            else if (simulated)
+              const VtsaCard(
+                child: Text(
+                  'TEST ONLY — no money will move. Ask the staging operator to confirm this test request, then check its status.',
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      spacing: 16,
-                      runSpacing: 8,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF15386A),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'QR Ph',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
+              )
+            else if (qrUnavailable)
+              const Text(
+                'We could not prepare a usable payment QR for this request. '
+                'Keep the reference below and contact support before creating another top-up. '
+                'Refreshing checks this request; it does not create a new QR. '
+                'If you already paid, do not pay again while confirmation is pending.',
+              )
+            else if (qr != null &&
+                qr.isNotEmpty &&
+                expiry != null &&
+                !expired &&
+                status == 'pending') ...[
+              Center(
+                child: Container(
+                  width: 292,
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: const Color(0xFFD8E4EB)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF15386A),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'QR Ph',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        const Text(
-                          'Scan to pay',
-                          style: TextStyle(
-                            color: Color(0xFF435665),
-                            fontWeight: FontWeight.w600,
+                          const Text(
+                            'Scan to pay',
+                            style: TextStyle(
+                              color: Color(0xFF435665),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        walletMoney(_row['amount_minor'] as int),
+                        style: const TextStyle(
+                          color: Color(0xFF15386A),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      walletMoney(_row['amount_minor'] as int),
-                      style: const TextStyle(
-                        color: Color(0xFF15386A),
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    QrImageView(
-                      data: qr,
-                      size: 260,
-                      padding: const EdgeInsets.all(16),
-                      backgroundColor: Colors.white,
-                      semanticsLabel: 'QR Ph payment code',
-                    ),
-                    const Text(
-                      'Pay through your bank or e-wallet',
-                      style: TextStyle(color: Color(0xFF435665), fontSize: 12),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Expires ${_date(_row['expires_at'] as String?)} · Use once',
-                      style: const TextStyle(
-                        color: Color(0xFF435665),
-                        fontSize: 11,
+                      const SizedBox(height: 8),
+                      QrImageView(
+                        data: qr,
+                        size: 260,
+                        padding: const EdgeInsets.all(16),
+                        backgroundColor: Colors.white,
+                        semanticsLabel: 'QR Ph payment code',
                       ),
+                      const Text(
+                        'Pay through your bank or e-wallet',
+                        style: TextStyle(
+                          color: Color(0xFF435665),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Expires ${_date(_row['expires_at'] as String?)} · Use once',
+                        style: const TextStyle(
+                          color: Color(0xFF435665),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _savingQr ? null : _saveQr,
+                icon: _savingQr
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_outlined),
+                label: const Text('Save QR to Photos'),
+              ),
+              if (_qrSaved &&
+                  defaultTargetPlatform == TargetPlatform.android) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    TextButton(
+                      onPressed: () =>
+                          _openPaymentApp('com.globe.gcash.android', 'GCash'),
+                      child: const Text('Open GCash'),
+                    ),
+                    TextButton(
+                      onPressed: () => _openPaymentApp('com.paymaya', 'Maya'),
+                      child: const Text('Open Maya'),
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _savingQr ? null : _saveQr,
-              icon: _savingQr
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.download_outlined),
-              label: const Text('Save QR to Photos'),
-            ),
-            if (_qrSaved &&
-                defaultTargetPlatform == TargetPlatform.android) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  TextButton(
-                    onPressed: () =>
-                        _openPaymentApp('com.globe.gcash.android', 'GCash'),
-                    child: const Text('Open GCash'),
-                  ),
-                  TextButton(
-                    onPressed: () => _openPaymentApp('com.paymaya', 'Maya'),
-                    child: const Text('Open Maya'),
-                  ),
-                ],
-              ),
+                const Text(
+                  'Opening a wallet does not load or pay the QR. Use its Scan or Upload QR option to select the saved image.',
+                ),
+              ],
+              const SizedBox(height: 12),
               const Text(
-                'Opening a wallet does not load or pay the QR. Use its Scan or Upload QR option to select the saved image.',
+                'Using this phone? Save the QR, open your bank or e-wallet, then choose Scan or Upload QR and select the saved image. Check the merchant and amount before approving payment. Return here for confirmation.',
               ),
-            ],
+              const SizedBox(height: 8),
+              const Text(
+                'If your payment app cannot import an image, scan this code with another phone. Saving a QR does not pay it.',
+              ),
+            ] else if (status != 'paid')
+              const Text(
+                'Do not pay an expired code. If money has already been deducted, keep this reference and wait for confirmation before trying again.',
+              ),
+            const SizedBox(height: 20),
+            if (status != 'paid')
+              VtsaButton(
+                label: qrUnavailable
+                    ? 'Refresh request'
+                    : 'Check payment status',
+                onPressed: _busy ? null : _refresh,
+                loading: _busy,
+              ),
+            const SizedBox(height: 16),
+            SelectableText('Reference: ${_row['id']}'),
+            TextButton.icon(
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: _row['id'] as String)),
+              icon: const Icon(Icons.copy),
+              label: const Text('Copy reference'),
+            ),
             const SizedBox(height: 12),
             const Text(
-              'Using this phone? Save the QR, open your bank or e-wallet, then choose Scan or Upload QR and select the saved image. Check the merchant and amount before approving payment. Return here for confirmation.',
+              'You can leave this screen. Your request remains in Wallet → Top-ups.',
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'If your payment app cannot import an image, scan this code with another phone. Saving a QR does not pay it.',
-            ),
-          ] else if (status != 'paid')
-            const Text(
-              'Do not pay an expired code. If money has already been deducted, keep this reference and wait for confirmation before trying again.',
-            ),
-          const SizedBox(height: 20),
-          if (_error != null) Text(_error!),
-          if (status != 'paid')
-            VtsaButton(
-              label: qrUnavailable ? 'Refresh request' : 'Check payment status',
-              onPressed: _busy ? null : _refresh,
-              loading: _busy,
-            ),
-          const SizedBox(height: 16),
-          SelectableText('Reference: ${_row['id']}'),
-          TextButton.icon(
-            onPressed: () =>
-                Clipboard.setData(ClipboardData(text: _row['id'] as String)),
-            icon: const Icon(Icons.copy),
-            label: const Text('Copy reference'),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'You can leave this screen. Your request remains in Wallet → Top-ups.',
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

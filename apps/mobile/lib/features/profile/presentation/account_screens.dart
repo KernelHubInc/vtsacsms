@@ -216,7 +216,7 @@ class AccountScreen extends StatelessWidget {
       // A browser failure uses the same recovery message as an unavailable browser.
     }
     if (context.mounted) {
-      showVtsaToast(context, message: 'Unable to open this page. Try again.');
+      showVtsaAlert(context, message: 'Unable to open this page. Try again.');
     }
   }
 }

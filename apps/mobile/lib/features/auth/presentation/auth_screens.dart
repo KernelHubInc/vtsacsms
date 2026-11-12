@@ -154,17 +154,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         : () => context.push('/forgot-password'),
                   ),
                 ),
-                if (auth.failure != null) ...[
-                  const SizedBox(height: 16),
-                  Semantics(
-                    liveRegion: true,
-                    child: VtsaErrorState(
-                      title: 'Could not sign in',
-                      description: auth.failure!.message,
-                      correlationId: auth.failure!.correlationId,
-                    ),
-                  ),
-                ],
+                VtsaAlertRegion(
+                  title: 'Could not sign in',
+                  message: auth.googleLinkRequired
+                      ? null
+                      : auth.failure?.message,
+                  correlationId: auth.failure?.correlationId,
+                ),
               ],
             ),
           ),
@@ -705,17 +701,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       ),
                       const SizedBox(height: 20),
                     ],
-                    if (_requestFailure != null) ...[
-                      VtsaErrorState(
-                        title: 'Account creation was not successful',
-                        description:
-                            _requestFailure!.kind == FailureKind.validation
-                            ? 'We could not create this account. If you already have an account, sign in or reset your password.'
-                            : _requestFailure!.message,
-                        correlationId: _requestFailure!.correlationId,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
+                    VtsaAlertRegion(
+                      title: 'Account creation was not successful',
+                      message: _requestFailure?.kind == FailureKind.validation
+                          ? 'We could not create this account. If you already have an account, sign in or reset your password.'
+                          : _requestFailure?.message,
+                      correlationId: _requestFailure?.correlationId,
+                    ),
                     if (_invalid.any(_stepFields[_step].contains)) ...[
                       Semantics(
                         liveRegion: true,
@@ -827,7 +819,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (!mounted) return;
     }
     if (mounted) {
-      showVtsaToast(
+      showVtsaAlert(
         context,
         message: 'Unable to open this page. Please try again.',
       );
@@ -1010,11 +1002,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   required: true,
                 ),
                 const SizedBox(height: VtsaSpacing.lg),
-                if (widget.dependencies.auth.failure != null)
-                  VtsaErrorState(
-                    title: 'Could not send reset link',
-                    description: widget.dependencies.auth.failure!.message,
-                  ),
+                VtsaAlertRegion(
+                  title: 'Could not send reset link',
+                  message: widget.dependencies.auth.failure?.message,
+                  correlationId:
+                      widget.dependencies.auth.failure?.correlationId,
+                ),
                 VtsaButton(
                   label: 'Send reset link',
                   loading: widget.dependencies.auth.isBusy,
@@ -1027,7 +1020,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _submit() async {
     if (!_email.text.contains('@')) {
-      showVtsaToast(context, message: 'Enter a valid email address.');
+      showVtsaAlert(context, message: 'Enter a valid email address.');
       return;
     }
     final sent = await widget.dependencies.auth.requestPasswordReset(
@@ -1068,14 +1061,11 @@ class EmailVerificationScreen extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (auth.failure != null) ...[
-              VtsaErrorState(
-                title: 'Verification needed',
-                description: auth.failure!.message,
-                correlationId: auth.failure!.correlationId,
-              ),
-              const SizedBox(height: VtsaSpacing.md),
-            ],
+            VtsaAlertRegion(
+              title: 'Verification needed',
+              message: auth.failure?.message,
+              correlationId: auth.failure?.correlationId,
+            ),
             if (signedIn) ...[
               VtsaButton(
                 label: "I've verified my email",
@@ -1098,9 +1088,10 @@ class EmailVerificationScreen extends StatelessWidget {
                     : () async {
                         final sent = await auth.resendVerification();
                         if (context.mounted && sent) {
-                          showVtsaToast(
+                          showVtsaAlert(
                             context,
                             message: 'Verification email sent.',
+                            tone: VtsaAlertTone.success,
                           );
                         }
                       },

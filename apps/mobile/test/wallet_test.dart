@@ -358,6 +358,9 @@ void main() {
     expect(saved, isNotNull);
     expect(saved!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     expect(savedName, 'Power-Solutions-QRPh-${row['id']}');
+    expect(find.text('QR saved'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open GCash'));
     await tester.pumpAndSettle();
     expect(openedApp, 'com.globe.gcash.android');
@@ -535,6 +538,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Connection interrupted'), findsOneWidget);
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
       repository.failCreate = false;
       await tester.tap(find.text('Retry same request'));
       await tester.pumpAndSettle();

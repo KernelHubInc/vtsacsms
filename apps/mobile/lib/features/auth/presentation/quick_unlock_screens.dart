@@ -353,8 +353,10 @@ class _QuickUnlockSettingsScreenState extends State<QuickUnlockSettingsScreen> {
           biometrics: _biometrics,
         ) &&
         mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quick unlock is ready on this phone.')),
+      showVtsaAlert(
+        context,
+        message: 'Quick unlock is ready on this phone.',
+        tone: VtsaAlertTone.success,
       );
     }
   }
@@ -464,15 +466,11 @@ class _QuickUnlockSettingsScreenState extends State<QuickUnlockSettingsScreen> {
                   const Text(
                     'Quick unlock is available in the Android and iOS app.',
                   ),
-                if (auth.failure != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    auth.failure!.message,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+                VtsaAlertRegion(
+                  title: 'Could not set up quick unlock',
+                  message: auth.failure?.message,
+                  correlationId: auth.failure?.correlationId,
+                ),
               ],
             ),
           ),

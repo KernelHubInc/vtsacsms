@@ -331,8 +331,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(camera.closed, 1);
     expect(camera.photos, 0);
-    expect(find.textContaining('Camera session interrupted'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Camera session interrupted'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
 

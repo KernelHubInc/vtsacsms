@@ -12,10 +12,10 @@ class DesignSystemCatalogPage extends StatelessWidget {
     actions: [
       IconButton(
         tooltip: 'Show feedback example',
-        onPressed: () => showVtsaToast(
+        onPressed: () => showVtsaAlert(
           context,
           message: 'Fresh evidence retrieved.',
-          actionLabel: 'Dismiss',
+          tone: VtsaAlertTone.info,
         ),
         icon: const Icon(Icons.notifications_none),
       ),
@@ -146,6 +146,7 @@ class DesignSystemCatalogPage extends StatelessWidget {
               ),
               VtsaErrorState(
                 title: 'Evidence could not refresh',
+                showPopup: false,
                 description: 'Last known values may be stale. Retry safely.',
                 correlationId: '01K0M0JJ5X0M0JJ5X0M0JJ5X0M',
                 action: VtsaButton(

@@ -126,138 +126,135 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                 : const Icon(Icons.refresh),
           ),
         ],
-        body: ListView(
-          controller: _scroll,
-          children: [
-            if (!charging.isOnline)
-              const _Notice(
-                icon: Icons.cloud_off_outlined,
-                title: 'Connection lost',
-                description:
-                    'Values are the last confirmed server state. Start and stop requests are disabled until the connection returns.',
-              )
-            else if (!charging.realtimeConnected && !session.isTerminal)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'Updates refresh periodically. Last confirmed readings are shown.',
-                  style: Theme.of(context).textTheme.bodySmall,
+        body: VtsaAlertRegion(
+          title: 'The latest request needs attention',
+          message: charging.failure?.message,
+          correlationId: charging.failure?.correlationId,
+          child: ListView(
+            controller: _scroll,
+            children: [
+              if (!charging.isOnline)
+                const _Notice(
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Connection lost',
+                  description:
+                      'Values are the last confirmed server state. Start and stop requests are disabled until the connection returns.',
+                )
+              else if (!charging.realtimeConnected && !session.isTerminal)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Updates refresh periodically. Last confirmed readings are shown.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
+              if (session.chargerDisconnected)
+                const _Notice(
+                  icon: Icons.power_off_outlined,
+                  title: 'Charger connection interrupted',
+                  description:
+                      'The physical session is not assumed stopped. Power Solutions will wait for authoritative charger evidence.',
+                ),
+              _PhasePanel(dependencies: widget.dependencies, session: session),
+              const SizedBox(height: VtsaSpacing.md),
+              if (charging.phase != ChargingFlowPhase.live &&
+                  charging.phase != ChargingFlowPhase.completed)
+                _Actions(dependencies: widget.dependencies, session: session),
+              if (charging.phase == ChargingFlowPhase.completed)
+                ChargingReceiptSummary(session: session)
+              else if (session.reservedBudget != null)
+                ChargingBudgetProgress(session: session),
+              const SizedBox(height: VtsaSpacing.md),
+              _Metrics(
+                session: session,
+                now: widget.now,
+                liveTime:
+                    charging.isOnline &&
+                    charging.failure == null &&
+                    !session.chargerDisconnected &&
+                    session.isPhysicalActive &&
+                    session.startedAt != null &&
+                    session.stoppedAt == null,
               ),
-            if (session.chargerDisconnected)
-              const _Notice(
-                icon: Icons.power_off_outlined,
-                title: 'Charger connection interrupted',
-                description:
-                    'The physical session is not assumed stopped. Power Solutions will wait for authoritative charger evidence.',
-              ),
-            _PhasePanel(dependencies: widget.dependencies, session: session),
-            const SizedBox(height: VtsaSpacing.md),
-            if (charging.phase != ChargingFlowPhase.live &&
-                charging.phase != ChargingFlowPhase.completed)
-              _Actions(dependencies: widget.dependencies, session: session),
-            if (charging.phase == ChargingFlowPhase.completed)
-              ChargingReceiptSummary(session: session)
-            else if (session.reservedBudget != null)
-              ChargingBudgetProgress(session: session),
-            const SizedBox(height: VtsaSpacing.md),
-            _Metrics(
-              session: session,
-              now: widget.now,
-              liveTime:
+              const SizedBox(height: VtsaSpacing.md),
+              if (session.batteryPercentage case final int percentage
+                  when percentage >= 0 && percentage <= 100) ...[
+                VehicleBatteryProgress(
+                  percentage: percentage,
+                  reportedAt: session.batteryReportedAt,
+                  connected: charging.isOnline && !session.chargerDisconnected,
+                  sessionEnded: session.isTerminal,
+                ),
+                const SizedBox(height: VtsaSpacing.md),
+              ],
+              if (charging.phase == ChargingFlowPhase.live ||
+                  charging.phase == ChargingFlowPhase.completed)
+                _Actions(dependencies: widget.dependencies, session: session),
+              const SizedBox(height: 16),
+              _ChargerReadings(session: session),
+              const SizedBox(height: VtsaSpacing.md),
+              if (charging.phase == ChargingFlowPhase.live &&
                   charging.isOnline &&
-                  charging.failure == null &&
-                  !session.chargerDisconnected &&
-                  session.isPhysicalActive &&
-                  session.startedAt != null &&
-                  session.stoppedAt == null,
-            ),
-            const SizedBox(height: VtsaSpacing.md),
-            if (session.batteryPercentage case final int percentage
-                when percentage >= 0 && percentage <= 100) ...[
-              VehicleBatteryProgress(
-                percentage: percentage,
-                reportedAt: session.batteryReportedAt,
-                connected: charging.isOnline && !session.chargerDisconnected,
-                sessionEnded: session.isTerminal,
-              ),
-              const SizedBox(height: VtsaSpacing.md),
-            ],
-            if (charging.phase == ChargingFlowPhase.live ||
-                charging.phase == ChargingFlowPhase.completed)
-              _Actions(dependencies: widget.dependencies, session: session),
-            const SizedBox(height: 16),
-            _ChargerReadings(session: session),
-            const SizedBox(height: VtsaSpacing.md),
-            if (charging.phase == ChargingFlowPhase.live &&
-                charging.isOnline &&
-                !session.chargerDisconnected)
-              const DriverNotice(
-                title: 'Your session stays with you',
-                message:
-                    'Check progress here or return through Activity. Final cost is confirmed after the charger stops.',
-              ),
-            const SizedBox(height: 12),
-            if (charging.failure != null) ...[
-              const SizedBox(height: VtsaSpacing.md),
-              VtsaErrorState(
-                title: 'The latest request needs attention',
-                description: charging.failure!.message,
-                correlationId: charging.failure!.correlationId,
-              ),
-            ],
-            const SizedBox(height: VtsaSpacing.lg),
-            VtsaButton(
-              label: 'Need help? We’re here',
-              variant: VtsaButtonVariant.secondary,
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                builder: (context) => SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Your charging session',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'If charging has not started, check the cable and the vehicle’s charging schedule. Do not submit another start while this request is pending.',
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'To finish, request a stop and wait for charger confirmation before disconnecting. If a payment needs review, keep this session reference for your operator.',
-                        ),
-                        const SizedBox(height: 12),
-                        SelectableText(session.id),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Close'),
-                        ),
-                      ],
+                  !session.chargerDisconnected)
+                const DriverNotice(
+                  title: 'Your session stays with you',
+                  message:
+                      'Check progress here or return through Activity. Final cost is confirmed after the charger stops.',
+                ),
+              const SizedBox(height: 12),
+              const SizedBox(height: VtsaSpacing.lg),
+              VtsaButton(
+                label: 'Need help? We’re here',
+                variant: VtsaButtonVariant.secondary,
+                onPressed: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (context) => SafeArea(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your charging session',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'If charging has not started, check the cable and the vehicle’s charging schedule. Do not submit another start while this request is pending.',
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'To finish, request a stop and wait for charger confirmation before disconnecting. If a payment needs review, keep this session reference for your operator.',
+                          ),
+                          const SizedBox(height: 12),
+                          SelectableText(session.id),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            if (session.canRequestRemoteStop)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'We’ll ask you to confirm before ending.',
-                  style: Theme.of(context).textTheme.bodySmall,
+              const SizedBox(height: 12),
+              if (session.canRequestRemoteStop)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'We’ll ask you to confirm before ending.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
+              SelectableText(
+                'Session ${session.id}',
+                style: Theme.of(context).textTheme.labelSmall,
               ),
-            SelectableText(
-              'Session ${session.id}',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
+            ],
+          ),
         ),
       );
     },

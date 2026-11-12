@@ -6,13 +6,11 @@ class ChargerScannerView extends StatelessWidget {
     required this.camera,
     required this.onManualEntry,
     this.loading = false,
-    this.errorMessage,
     super.key,
   });
   final Widget camera;
   final VoidCallback onManualEntry;
   final bool loading;
-  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -85,15 +83,6 @@ class ChargerScannerView extends StatelessWidget {
                         ),
                       ),
                       if (loading) const LinearProgressIndicator(),
-                      if (errorMessage case final message?)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            message,
-                            style: const TextStyle(color: Colors.white),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
                       const Text(
                         'OR',
                         style: TextStyle(color: Colors.white70),

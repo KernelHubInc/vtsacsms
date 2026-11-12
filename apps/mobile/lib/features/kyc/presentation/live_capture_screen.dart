@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:vtsa_mobile/core/errors/app_failure.dart';
+import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/features/kyc/data/capture_cleanup.dart';
 import 'package:vtsa_mobile/features/kyc/domain/kyc_repository.dart';
 import 'package:vtsa_mobile/features/kyc/domain/live_challenge.dart';
@@ -219,19 +220,10 @@ class _LiveCaptureScreenState extends State<LiveCaptureScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              ),
+            VtsaAlertRegion(
+              title: 'Live check needs attention',
+              message: error,
+            ),
             if (serviceDisabled)
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(false),

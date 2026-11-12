@@ -4,6 +4,10 @@
 
 The mobile app requires sign-in before browsing. Provider selection, reservation policy, roaming, tax terminology, and charger-specific recovery remain unresolved product decisions. Authenticated Phase 10 UI presents only server-supplied connector, tariff, preauthorization, payment-status, and document facts.
 
+## App feedback
+
+Action errors, warnings and confirmations use a centered Flutter dialog with a status icon, a short message and an explicit dismissal. When the server supplies a support reference, the dialog displays it as selectable text. Keep field validation at the relevant input and preserve persistent statuses and retry controls on their screens. A rejected charging start leaves the price review open so the driver can correct the issue and retry. Driver notices configured to appear on open use the same dialog and remain available in Updates after dismissal.
+
 ## Sign in before browsing
 
 MOB-AUTH-001: A guest opens the EVCS welcome screen, including on first launch, with Sign in, Create account and sign-in help. Sign in opens the password form. Registration, password recovery and email-verification instructions remain accessible before authentication. There is no guest continuation or bottom navigation before authentication. Station, charging, KYC, favorites, wallet and session links pass through the same router guard; new screens are protected by default.

@@ -411,6 +411,7 @@ class VtsaErrorState extends StatelessWidget {
     required this.description,
     this.correlationId,
     this.action,
+    this.showPopup = true,
     super.key,
   });
 
@@ -418,10 +419,13 @@ class VtsaErrorState extends StatelessWidget {
   final String description;
   final String? correlationId;
   final Widget? action;
+  final bool showPopup;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
+  Widget build(BuildContext context) => VtsaAlertRegion(
+    title: title,
+    message: showPopup ? description : null,
+    correlationId: correlationId,
     child: _VtsaStatePanel(
       icon: Icons.error_outline,
       iconColor: context.vtsaColors.danger,
@@ -500,9 +504,10 @@ Future<bool> showVtsaConfirmationDialog({
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: Text(description),
+    builder: (context) => _VtsaAlertDialog(
+      title: title,
+      message: description,
+      tone: dangerous ? VtsaAlertTone.warning : VtsaAlertTone.info,
       actions: [
         VtsaButton(
           label: 'Cancel',
@@ -523,20 +528,186 @@ Future<bool> showVtsaConfirmationDialog({
   return result ?? false;
 }
 
-void showVtsaToast(
+enum VtsaAlertTone { info, success, warning, error }
+
+Future<void> showVtsaAlert(
   BuildContext context, {
   required String message,
-  String? actionLabel,
-  VoidCallback? onAction,
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message),
-      action: actionLabel == null
-          ? null
-          : SnackBarAction(label: actionLabel, onPressed: onAction ?? () {}),
-    ),
-  );
+  String? title,
+  String? correlationId,
+  VtsaAlertTone tone = VtsaAlertTone.error,
+}) => showDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  builder: (context) => _VtsaAlertDialog(
+    title:
+        title ??
+        switch (tone) {
+          VtsaAlertTone.info => 'Information',
+          VtsaAlertTone.success => 'Success',
+          VtsaAlertTone.warning => 'Attention needed',
+          VtsaAlertTone.error => 'Could not continue',
+        },
+    message: message,
+    correlationId: correlationId,
+    tone: tone,
+    actions: [
+      VtsaButton(label: 'OK', onPressed: () => Navigator.of(context).pop()),
+    ],
+  ),
+);
+
+class _VtsaAlertDialog extends StatelessWidget {
+  const _VtsaAlertDialog({
+    required this.title,
+    required this.message,
+    required this.tone,
+    required this.actions,
+    this.correlationId,
+  });
+
+  final String title;
+  final String message;
+  final String? correlationId;
+  final VtsaAlertTone tone;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.vtsaColors;
+    final (icon, accent, surface) = switch (tone) {
+      VtsaAlertTone.info => (
+        Icons.info_outline,
+        colors.information,
+        colors.informationSurface,
+      ),
+      VtsaAlertTone.success => (
+        Icons.check,
+        colors.success,
+        colors.successSurface,
+      ),
+      VtsaAlertTone.warning => (
+        Icons.priority_high,
+        colors.warning,
+        colors.warningSurface,
+      ),
+      VtsaAlertTone.error => (Icons.close, colors.danger, colors.dangerSurface),
+    };
+    return AlertDialog(
+      scrollable: true,
+      constraints: const BoxConstraints(maxWidth: 400),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: colors.surfaceRaised,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Column(
+        children: [
+          ExcludeSemantics(
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: accent, width: 2),
+              ),
+              child: Icon(icon, color: accent, size: 34),
+            ),
+          ),
+          const SizedBox(height: VtsaSpacing.md),
+          Text(title, textAlign: TextAlign.center),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          if (correlationId case final reference?) ...[
+            const SizedBox(height: VtsaSpacing.sm),
+            SelectableText(
+              'Reference $reference',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ],
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: actions,
+    );
+  }
+}
+
+/// Presents a newly observed error once, outside the widget build.
+class VtsaAlertRegion extends StatefulWidget {
+  const VtsaAlertRegion({
+    required this.title,
+    required this.message,
+    this.correlationId,
+    this.tone = VtsaAlertTone.error,
+    this.onDismiss,
+    this.child = const SizedBox.shrink(),
+    super.key,
+  });
+
+  final String title;
+  final String? message;
+  final String? correlationId;
+  final VtsaAlertTone tone;
+  final VoidCallback? onDismiss;
+  final Widget child;
+
+  @override
+  State<VtsaAlertRegion> createState() => _VtsaAlertRegionState();
+}
+
+class _VtsaAlertRegionState extends State<VtsaAlertRegion> {
+  String? _shownMessage;
+  bool _showing = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleAlert();
+  }
+
+  @override
+  void didUpdateWidget(VtsaAlertRegion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.message == null) _shownMessage = null;
+    if (oldWidget.message != widget.message) _scheduleAlert();
+  }
+
+  void _scheduleAlert() {
+    final route = ModalRoute.of(context);
+    final message = widget.message;
+    if (message == null || message == _shownMessage || _showing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted ||
+          widget.message != message ||
+          message == _shownMessage ||
+          _showing ||
+          route?.isCurrent == false) {
+        return;
+      }
+      _shownMessage = message;
+      _showing = true;
+      await showVtsaAlert(
+        context,
+        title: widget.title,
+        message: message,
+        correlationId: widget.correlationId,
+        tone: widget.tone,
+      );
+      if (mounted) {
+        _showing = false;
+        if (widget.message == message) widget.onDismiss?.call();
+        _scheduleAlert();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class VtsaPageShell extends StatelessWidget {
