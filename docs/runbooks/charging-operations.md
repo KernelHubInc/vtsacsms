@@ -51,6 +51,8 @@ The expiry command is idempotent and tenant-aware. It may be run manually after 
 
 Check the operator Filament diagnostics for session state/evidence, command correlation and terminal outcome, CDR state, anomalies, and review queue. Never resolve a meter anomaly without examining the retained normalized event timestamps and readings.
 
+For post-charge idle pricing, publish a new tariff version through **Admin → Tariffs → Set pricing**. Enable **Post-charge idle fee**, set the free minutes and enter the idle price per minute. Pilot on a verified connector and check that the charger reports its post-charge occupancy and Available status before enabling the site tariff. The prepaid monitor settles unverified idle windows without idle fees. When rolling back the feature, stop publishing idle prices and resolve pending post-charge sessions first. Keep the additive database columns until the release is retired.
+
 ## Failure triage
 
 | Symptom | Check | Safe action |

@@ -242,6 +242,8 @@ ChargingSession sampleChargingSession({
   Money? estimatedCost = const Money(minorUnits: 2500, currency: 'PHP'),
   Money? finalCost,
   Money? reservedBudget,
+  Money? idleFee,
+  DateTime? idleGraceEndsAt,
   List<String> anomalyFlags = const [],
   ChargingDocument? receipt,
   ChargingDocument? invoice,
@@ -263,6 +265,8 @@ ChargingSession sampleChargingSession({
   estimatedCost: estimatedCost,
   finalCost: finalCost,
   reservedBudget: reservedBudget,
+  idleFee: idleFee,
+  idleGraceEndsAt: idleGraceEndsAt,
   requestedAt: DateTime.utc(2026, 7, 26, 3),
   startedAt: state == ChargingSessionState.starting
       ? null

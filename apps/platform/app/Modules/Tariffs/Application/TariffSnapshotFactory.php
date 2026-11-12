@@ -74,6 +74,10 @@ final class TariffSnapshotFactory
             'discounts' => $discounts,
         ];
 
+        if ($version->idle_grace_seconds !== null) {
+            $snapshot['idle_grace_seconds'] = $version->idle_grace_seconds;
+        }
+
         return ['snapshot' => $snapshot, 'hash' => $this->hash($snapshot)];
     }
 

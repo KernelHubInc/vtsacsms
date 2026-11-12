@@ -58,6 +58,8 @@ An accepted request opens the existing pending session; only charger transaction
 
 The live session groups energy delivered, estimated cost, power and elapsed time above budget progress. Energy is shown to the nearest Wh as three decimal places in kWh. The app refreshes the session automatically, shows the latest energy sample time, and retains the last readings between charger reports. The elapsed clock can tick independently while charging remains connected.
 
+When idle pricing applies, **Ready to charge** displays the free unplug time and rate before the driver accepts the wallet budget. A charger-confirmed stop shows the server deadline and a countdown. After the deadline, the app explains that idle fees may apply until the charger confirms unplugging. The final charge summary itemizes the actual idle fee within the same budget.
+
 ```mermaid
 flowchart TD
     Entry["Location or connector context"] --> Identify["Scan approved code or enter identifier"]

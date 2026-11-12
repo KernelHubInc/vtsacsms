@@ -48,6 +48,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property bool $energy_flow_evidence_complete
  * @property int $parking_seconds
  * @property int $idle_seconds
+ * @property string|null $idle_connection_id
+ * @property CarbonImmutable|null $idle_started_at
+ * @property CarbonImmutable|null $idle_occupied_at
+ * @property CarbonImmutable|null $idle_ended_at
+ * @property int|null $idle_fee_minor
  * @property int|null $estimated_cost_minor
  * @property int|null $platform_fee_minor
  * @property int|null $platform_fee_tax_minor
@@ -68,6 +73,19 @@ final class ChargingSession extends Model
     use BelongsToTenant, HasFactory, HasUlids;
 
     protected $guarded = [];
+
+    public function confirmedPostChargeSeconds(): int
+    {
+        if ($this->idle_started_at === null || $this->idle_occupied_at === null || $this->idle_ended_at === null) {
+            return 0;
+        }
+
+        $grace = (int) ($this->tariff_snapshot['idle_grace_seconds'] ?? 0);
+        $billableFrom = $this->idle_started_at->addSeconds($grace)->max($this->idle_occupied_at);
+        $elapsed = max(0, (int) $this->idle_started_at->diffInSeconds($this->idle_ended_at));
+
+        return min($grace, $elapsed) + max(0, (int) $billableFrom->diffInSeconds($this->idle_ended_at));
+    }
 
     /** @return HasOne<CustomerChargingSession, $this> */
     public function customer(): HasOne
@@ -118,6 +136,10 @@ final class ChargingSession extends Model
             'start_deadline_at' => 'immutable_datetime',
             'started_at' => 'immutable_datetime',
             'stopped_at' => 'immutable_datetime',
+            'idle_started_at' => 'immutable_datetime',
+            'idle_occupied_at' => 'immutable_datetime',
+            'idle_ended_at' => 'immutable_datetime',
+            'idle_fee_minor' => 'integer',
             'last_protocol_event_at' => 'immutable_datetime',
         ];
     }

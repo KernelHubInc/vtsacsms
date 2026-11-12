@@ -147,7 +147,17 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                   description:
                       'The physical session is not assumed stopped. Power Solutions will wait for authoritative charger evidence.',
                 ),
-              _PhasePanel(dependencies: widget.dependencies, session: session),
+              if (session.idleGraceEndsAt case final DateTime deadline)
+                _UnplugCountdown(
+                  deadline: deadline,
+                  now: widget.now,
+                  online: charging.isOnline && charging.failure == null,
+                )
+              else
+                _PhasePanel(
+                  dependencies: widget.dependencies,
+                  session: session,
+                ),
               const SizedBox(height: VtsaSpacing.md),
               if (charging.phase != ChargingFlowPhase.live &&
                   charging.phase != ChargingFlowPhase.completed)
@@ -253,6 +263,68 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
       );
     },
   );
+}
+
+class _UnplugCountdown extends StatefulWidget {
+  const _UnplugCountdown({
+    required this.deadline,
+    required this.now,
+    required this.online,
+  });
+
+  final DateTime deadline;
+  final DateTime Function() now;
+  final bool online;
+
+  @override
+  State<_UnplugCountdown> createState() => _UnplugCountdownState();
+}
+
+class _UnplugCountdownState extends State<_UnplugCountdown> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (widget.online) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.deadline.difference(widget.now());
+    return VtsaCard(
+      title: 'Charging ended',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!widget.online)
+            const Text('Reconnect to check the charger and free time.')
+          else if (remaining > Duration.zero) ...[
+            Text(
+              'Free time to unplug',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            Text(
+              formatDuration((remaining.inMilliseconds + 999) ~/ 1000),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const Text('Unplug before the free time ends to avoid idle fees.'),
+          ] else
+            const Text(
+              'Free time ended. Idle fees may apply until the charger confirms you’ve unplugged.',
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PhasePanel extends StatelessWidget {
@@ -454,6 +526,12 @@ class _Metrics extends StatelessWidget {
                   width: width,
                   label: 'CHARGING',
                   value: formatMoney(session.chargingTotal),
+                ),
+              if (session.idleFee != null)
+                _Metric(
+                  width: width,
+                  label: 'IDLE FEE',
+                  value: formatMoney(session.idleFee),
                 ),
             ],
           );

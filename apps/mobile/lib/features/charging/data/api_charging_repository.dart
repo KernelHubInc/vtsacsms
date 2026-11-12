@@ -29,6 +29,7 @@ final class ApiChargingRepository implements ChargingRepository {
           'vehicle_id': ?vehicleId,
           'budget_minor': ?budgetMinor,
           'pricing_version': 2,
+          'supports_idle_fee': true,
         },
         options: _options(),
       );

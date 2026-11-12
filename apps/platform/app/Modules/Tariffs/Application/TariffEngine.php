@@ -27,6 +27,7 @@ final class TariffEngine
         $selected = $this->selectComponents(array_values($components), $localStart);
         $lines = [];
         $subtotal = 0;
+        $postChargeAmount = 0;
 
         foreach ($selected as $component) {
             $dimension = TariffDimension::from((string) $component['dimension']);
@@ -35,7 +36,7 @@ final class TariffEngine
                 TariffDimension::Time => ($snapshot['time_basis'] ?? 'elapsed') === 'energy_flow'
                     ? $input->energyFlowSeconds : $input->durationSeconds,
                 TariffDimension::Parking => $input->parkingSeconds,
-                TariffDimension::Idle => $input->idleSeconds,
+                TariffDimension::Idle => max(0, $input->idleSeconds - (int) ($snapshot['idle_grace_seconds'] ?? 0)),
                 TariffDimension::Session => 1,
             };
             $amount = $this->multiplyAndDivide(
@@ -44,6 +45,9 @@ final class TariffEngine
                 (int) $component['unit_quantity'],
             );
             $subtotal = $this->safeAdd($subtotal, $amount);
+            if ($dimension === TariffDimension::Idle && isset($snapshot['idle_grace_seconds'])) {
+                $postChargeAmount = $amount;
+            }
             $lines[] = [
                 'dimension' => $dimension->value,
                 'quantity' => $quantity,
@@ -74,9 +78,16 @@ final class TariffEngine
         $fee = $snapshot['platform_fee'] ?? [];
         $feeMinor = 0;
         $feeTax = 0;
+        $chargingUsage = $total;
+        if ($postChargeAmount > 0) {
+            $chargingUsage = $net - $postChargeAmount;
+            if ($taxTreatment === TaxTreatment::Exclusive) {
+                $chargingUsage = $this->safeAdd($chargingUsage, $this->multiplyAndDivide($chargingUsage, $taxRate, 10_000));
+            }
+        }
         if (is_array($fee) && ($fee['enabled'] ?? false) === true
             && ($input->energyWh > 0 || $input->energyFlowSeconds > 0)
-            && $total >= (int) $fee['waiver_threshold_minor']) {
+            && $chargingUsage >= (int) $fee['waiver_threshold_minor']) {
             $feeMinor = (int) $fee['amount_minor'];
             $feeTax = $this->multiplyAndDivide($feeMinor, (int) $fee['tax_rate_basis_points'], 10000 + (int) $fee['tax_rate_basis_points']);
             $subtotal = $this->safeAdd($subtotal, $taxTreatment === TaxTreatment::Exclusive ? $feeMinor - $feeTax : $feeMinor);

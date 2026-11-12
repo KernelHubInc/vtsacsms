@@ -82,6 +82,7 @@ final readonly class TariffManagementService
                 'connector_id' => $data['connector_id'] ?? null,
                 'timezone' => $data['timezone'],
                 'time_basis' => $data['time_basis'] ?? 'energy_flow',
+                'idle_grace_seconds' => $data['idle_grace_seconds'] ?? null,
             ]);
             foreach ($data['components'] as $component) {
                 $dimension = TariffDimension::from($component['dimension']);
@@ -195,6 +196,17 @@ final readonly class TariffManagementService
     /** @param array<string, mixed> $data */
     private function validateRatingRules(array $data): void
     {
+        if (isset($data['idle_grace_seconds'])) {
+            $grace = $data['idle_grace_seconds'];
+            $components = $data['components'] ?? [];
+            $idle = array_values(array_filter($components, fn ($line): bool => is_array($line) && ($line['dimension'] ?? null) === 'idle'));
+            if (! is_int($grace) || $grace < 0 || $grace > 86_400 || count($idle) !== 1
+                || (int) ($idle[0]['price_minor'] ?? 0) <= 0 || ($idle[0]['unit_quantity'] ?? null) !== 60
+                || ($idle[0]['day_of_week_mask'] ?? 127) !== 127 || isset($idle[0]['starts_at_local'], $idle[0]['ends_at_local'])
+                || ($data['discounts'] ?? []) !== [] || isset($data['minimum_fee_minor']) || isset($data['maximum_fee_minor'])) {
+                throw new DomainException('A post-charge grace period requires one all-day positive idle price per minute, with no discounts or tariff limits.');
+            }
+        }
         if (isset($data['time_basis']) && $data['time_basis'] !== 'energy_flow') {
             throw new DomainException('New time tariffs must use metered energy-flow duration.');
         }

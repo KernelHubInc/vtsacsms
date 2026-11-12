@@ -20,8 +20,10 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -69,11 +71,13 @@ final class TariffResource extends Resource
                 Action::make('publishPricing')->label('Set pricing')->icon(Heroicon::OutlinedBanknotes)
                     ->visible(fn (Tariff $record): bool => Gate::allows('update', $record) && Gate::allows('publish', $record))
                     ->modalHeading('Publish a new price')
-                    ->modalDescription('Applies immediately to new sessions in the selected scope. Existing sessions keep their original price. Time pricing counts only metered energy-flow periods. This replaces all components for this scope; no session, parking or idle fee is added.')
+                    ->modalDescription('Applies to new sessions in the selected scope. This replaces the charging price and any post-charge idle pricing for that scope. Time pricing counts metered energy flow.')
                     ->fillForm(function (Tariff $record): array {
                         $version = $record->versions()->with('components')->where('status', 'published')->latest('version')->first();
-                        $line = $version?->components->first();
+                        $line = $version?->components->first(fn ($component): bool => in_array($component->dimension->value, ['energy', 'time', 'session'], true));
+                        $idle = $version?->components->first(fn ($component): bool => $component->dimension->value === 'idle');
                         $minor = (int) ($line->price_minor ?? 100);
+                        $idleMinor = (int) ($idle->price_minor ?? 0);
 
                         return [
                             'name' => $record->name,
@@ -84,6 +88,9 @@ final class TariffResource extends Resource
                             'timezone' => $version->timezone ?? 'Asia/Manila',
                             'tax_treatment' => $version?->tax_treatment->value ?? 'inclusive',
                             'tax_rate_basis_points' => $version->tax_rate_basis_points ?? 0,
+                            'idle_fee_enabled' => $version?->idle_grace_seconds !== null,
+                            'idle_grace_minutes' => intdiv($version->idle_grace_seconds ?? 1800, 60),
+                            'idle_price' => $idleMinor > 0 ? intdiv($idleMinor, 100).'.'.str_pad((string) ($idleMinor % 100), 2, '0', STR_PAD_LEFT) : null,
                         ];
                     })
                     ->schema([
@@ -96,6 +103,12 @@ final class TariffResource extends Resource
                         TextInput::make('timezone')->default('Asia/Manila')->required()->rules(['timezone:all']),
                         Select::make('tax_treatment')->options(['inclusive' => 'Tax included', 'exclusive' => 'Tax added'])->default('inclusive')->required(),
                         TextInput::make('tax_rate_basis_points')->label('Tax rate in basis points')->helperText('100 = 1%. Set the applicable rate; zero adds no tax.')->integer()->minValue(0)->maxValue(10000)->default(0)->required(),
+                        Toggle::make('idle_fee_enabled')->label('Enable post-charge idle fee')->default(false)->live(),
+                        TextInput::make('idle_grace_minutes')->label('Free minutes to unplug')->integer()->minValue(0)->maxValue(1440)->default(30)
+                            ->visible(fn (Get $get): bool => (bool) $get('idle_fee_enabled'))->required(),
+                        TextInput::make('idle_price')->label('Idle price per minute in tariff currency')->rules(['regex:/^\d{1,6}(\.\d{1,2})?$/'])
+                            ->visible(fn (Get $get): bool => (bool) $get('idle_fee_enabled'))->required()
+                            ->helperText('After the free window, verified plugged-in time is prorated by the second within the driver’s wallet budget.'),
                     ])
                     ->action(function (Tariff $record, array $data): void {
                         Gate::authorize('update', $record);

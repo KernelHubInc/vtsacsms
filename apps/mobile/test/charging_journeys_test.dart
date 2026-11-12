@@ -266,6 +266,62 @@ void main() {
       }
     },
   );
+  testWidgets('unplug countdown uses the server deadline until settlement', (
+    tester,
+  ) async {
+    var now = DateTime.utc(2026, 11, 13, 1);
+    final waiting = sampleChargingSession(
+      state: ChargingSessionState.finalizing,
+      durationSeconds: 125,
+      idleGraceEndsAt: now.add(const Duration(minutes: 30)),
+    );
+    final repository = FakeChargingRepository()..sessions[waiting.id] = waiting;
+    final fixture = await buildTestDependencies(
+      signedIn: true,
+      chargingRepository: repository,
+    );
+    final charging = fixture.dependencies.charging;
+    await charging.recoverSession(waiting.id);
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: LiveChargingScreen(
+            dependencies: fixture.dependencies,
+            sessionId: waiting.id,
+            now: () => now,
+          ),
+        ),
+      );
+      expect(find.text('Free time to unplug'), findsOneWidget);
+      expect(find.text('00:30:00'), findsOneWidget);
+      now = now.add(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('00:29:59'), findsOneWidget);
+      now = now.add(const Duration(minutes: 30));
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        find.textContaining('Free time ended. Idle fees may apply'),
+        findsOneWidget,
+      );
+      repository.sessions[waiting.id] = sampleChargingSession(
+        state: ChargingSessionState.completed,
+        paymentState: PaymentState.captured,
+        aggregateVersion: 2,
+        finalCost: const Money(minorUnits: 2700, currency: 'PHP'),
+        idleFee: const Money(minorUnits: 200, currency: 'PHP'),
+      );
+      await charging.refresh();
+      await tester.pump();
+      expect(find.text('Charging receipt'), findsOneWidget);
+      expect(find.textContaining('Free time ended.'), findsNothing);
+      await tester.ensureVisible(find.text('IDLE FEE'));
+      expect(find.text('₱2.00'), findsOneWidget);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dependencies.dispose();
+    }
+  });
   for (final width in [320.0, 390.0]) {
     testWidgets('pending start can be cancelled before timeout at $width', (
       tester,
