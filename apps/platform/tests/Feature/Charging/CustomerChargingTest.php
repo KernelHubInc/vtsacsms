@@ -133,6 +133,38 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         });
     }
 
+    public function test_configured_station_requires_vehicle_connection_before_dispatching_or_reserving_funds(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('plug-before-start');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $connectorId = (string) $connector->getKey();
+            config(['mobile_charging.plug_before_start_stations' => [$connector->evse->station->charge_point_identity]]);
+            $status = ConnectorStatus::query()->where('connector_id', $connectorId)->firstOrFail();
+            $status->update(['status' => 'available', 'reported_status' => 'available']);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, $connectorId);
+
+            try {
+                $service->start($actor->public_id, $quote['quote']['id'], $connectorId, 'plug-before-start');
+                self::fail('The unplugged connector should not accept a start request.');
+            } catch (DomainException $exception) {
+                self::assertSame('Plug in your vehicle and wait for the charger to show it is connected, then try again.', $exception->getMessage());
+            }
+
+            $this->assertDatabaseCount('charging_sessions', 0);
+            $this->assertDatabaseCount('charging_commands', 0);
+            self::assertSame(0, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+
+            $status->update(['status' => 'occupied', 'reported_status' => 'preparing']);
+            $session = $service->start($actor->public_id, $quote['quote']['id'], $connectorId, 'plug-before-start');
+            self::assertSame('starting', $session->state->value);
+            $this->assertDatabaseCount('charging_commands', 1);
+            self::assertSame(100, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+        });
+    }
+
     public function test_charging_receipt_email_and_pdf_show_the_same_confirmed_charge(): void
     {
         $summary = [

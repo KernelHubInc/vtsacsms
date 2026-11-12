@@ -161,7 +161,13 @@ final readonly class CustomerCharging
                 || (isset($quote->disclosure['budget_policy']) && $quote->disclosure['budget_policy'] != app(ChargingBudgets::class)->current())) {
                 throw new DomainException('Charging settings changed. Review a fresh quote before starting.');
             }
-            $result = app(RemoteStartService::class)->request($connectorId, 'mobile-start-'.hash('sha256', $subject.':'.$key), (string) $quote->tariff_version_id);
+            $plugBeforeStart = in_array($connector->chargePointIdentity, config('mobile_charging.plug_before_start_stations'), true);
+            $result = app(RemoteStartService::class)->request(
+                $connectorId,
+                'mobile-start-'.hash('sha256', $subject.':'.$key),
+                (string) $quote->tariff_version_id,
+                requireVehicleConnection: $plugBeforeStart,
+            );
             // The approved quote, including its fee, must reach every meter calculation and final CDR.
             $snapshot = $quote->disclosure['tariff'];
             $result->session->forceFill(['tariff_snapshot' => $snapshot,
