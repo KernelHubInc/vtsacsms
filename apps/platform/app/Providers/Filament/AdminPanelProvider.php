@@ -37,6 +37,7 @@ use App\Filament\Operator\Resources\VendorInvoices\VendorInvoiceResource;
 use App\Filament\Operator\Resources\Warehouses\WarehouseResource;
 use App\Filament\Operator\Resources\WorkOrders\WorkOrderResource;
 use App\Filament\Platform\Pages\Dashboard;
+use App\Filament\Shared\Pages\CustomizeSidebar;
 use App\Http\Middleware\EstablishPanelTenantContext;
 use App\Http\Middleware\TrackPanelSession;
 use Filament\Http\Middleware\Authenticate;
@@ -46,6 +47,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -69,6 +71,7 @@ final class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('branding/power-solutions-favicon.png?v=20261103'))
             ->navigationGroups(['Charging network', 'Maintenance', 'Procurement', 'Inventory', 'Finance', 'Support', 'Reports', 'Content studio', 'Platform governance', 'Identity and audit'])
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_END, fn () => view('filament.shared.sidebar-customization-link'))
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->colors([
                 'danger' => Color::hex('#D64555'),
@@ -115,6 +118,7 @@ final class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Platform/Pages'), for: 'App\Filament\Platform\Pages')
             ->pages([
                 Dashboard::class,
+                CustomizeSidebar::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Platform/Widgets'), for: 'App\Filament\Platform\Widgets')
             ->widgets([

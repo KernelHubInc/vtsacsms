@@ -6,7 +6,7 @@ This is a code and automated workflow audit, not an assertion that live staging 
 
 ## Onboard a client/operator
 
-1. Sign in to **Administration** with organization management, invitation management and role delegation permissions. Select **Onboard operator** directly below **Dashboard** in the sidebar, or open **Organizations → Onboard operator**.
+1. Sign in to **Administration** with organization management, invitation management and role delegation permissions. Select **Onboard operator** in the sidebar, directly below **Dashboard** in the default order, or open **Organizations → Onboard operator**.
 2. **Organization:** create the operating company with a unique code, or select an existing active operator. Codes are saved in uppercase. This wizard creates charge-point operators; customer Business/Fleet charging accounts remain a separate workflow.
 3. **Administrator:** enter the recipient's work email and choose an eligible operator role. Roles must include Operator panel access, must exclude Administration panel access, and cannot grant permissions the inviting admin does not hold.
 4. **Access:** choose all sites belonging to this operator, or one existing site for an existing operator. Organization access also covers sites assigned to that operator later. It does not grant tenant-wide finance, inventory or platform settings access.

@@ -12,6 +12,7 @@ use App\Filament\Platform\Pages\KycVerifications;
 use App\Filament\Platform\Pages\MasterData;
 use App\Filament\Platform\Resources\ChargingReceipts\ChargingReceiptResource;
 use App\Filament\Platform\Resources\Content\DriverNoticeResource;
+use App\Filament\Shared\Pages\CustomizeSidebar;
 use App\Foundation\Audit\Models\AuditEvent;
 use App\Modules\Assets\Domain\Models\ChargingCurrentType;
 use App\Modules\Assets\Domain\Models\ChargingStation;
@@ -116,7 +117,8 @@ final class AdminCrudFoundationTest extends TenantSecurityTestCase
         $this->assertContains(ChargingReceiptResource::class, $panel->getResources());
         $this->assertContains(DriverNoticeResource::class, $panel->getResources());
         $this->assertContains(SupportTicketResource::class, $panel->getResources());
-        $this->assertCount(10, $panel->getPages());
+        $this->assertCount(11, $panel->getPages());
+        $this->assertContains(CustomizeSidebar::class, $panel->getPages());
         $this->assertContains(KycSettings::class, $panel->getPages());
         $this->assertContains(KycVerifications::class, $panel->getPages());
         $this->assertContains(MasterData::class, $panel->getPages());

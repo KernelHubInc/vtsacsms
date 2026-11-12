@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Filament\Shared\Navigation\WorkspaceNavigationManager;
 use App\Foundation\Features\FeatureFlags;
 use App\Models\User;
 use App\Modules\Assets\Application\Contracts\AssetMaintenanceContract;
@@ -65,6 +66,7 @@ use App\Policies\TariffPolicy;
 use App\Policies\VendorInvoicePolicy;
 use App\Policies\WarehousePolicy;
 use App\Policies\WorkOrderPolicy;
+use Filament\Navigation\NavigationManager;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\Events\NotificationSent;
@@ -104,6 +106,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->app->scoped(NavigationManager::class, WorkspaceNavigationManager::class);
         Event::listen(
             NotificationSent::class,
             RecordWorkforceEnrollmentDelivery::class,
