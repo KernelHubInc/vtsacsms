@@ -19,6 +19,8 @@ final class SupportTicket extends Model
 {
     use BelongsToTenant, HasUlids;
 
+    public const ACCOUNT_DELETION = 'account_deletion';
+
     protected $guarded = [];
 
     protected function casts(): array

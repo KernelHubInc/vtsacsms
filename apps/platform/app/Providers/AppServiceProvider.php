@@ -163,6 +163,16 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(3)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perHour(20)->by((string) $request->ip()),
         ]);
+        RateLimiter::for('account-deletion.code', static function (Request $request): array {
+            $email = $request->input('email');
+            $recipient = is_string($email) ? Str::lower(trim($email)) : '';
+
+            return [
+                Limit::perHour(4)->by('recipient:'.hash('sha256', $recipient)),
+                Limit::perHour(20)->by('ip:'.$request->ip()),
+            ];
+        });
+        RateLimiter::for('account-deletion.confirm', static fn (Request $request): Limit => Limit::perMinute(10)->by((string) $request->ip()));
         RateLimiter::for('auth.verify', static fn (Request $request): array => [
             Limit::perMinute(3)->by(($request->user() instanceof User
                 ? (string) $request->user()->public_id

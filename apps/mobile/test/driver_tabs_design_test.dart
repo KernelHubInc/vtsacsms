@@ -71,6 +71,15 @@ void main() {
         expect(find.text('Profile'), findsOneWidget);
         await tester.pageBack();
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Request account deletion'),
+          180,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          find.widgetWithText(TextButton, 'Request account deletion'),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Sessions').last);
         await tester.pumpAndSettle();
         await preview(tester, 'activity-${width.toInt()}-$scale');
