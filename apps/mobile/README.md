@@ -68,6 +68,18 @@ flutter.bat build apk --debug --dart-define-from-file=dart_defines.example.json
 Launch the design-system catalog with `--dart-define=SHOW_DESIGN_CATALOG=true`.
 Integration journeys require an Android/iOS emulator or physical device. CI provisions an Android emulator for this step.
 
+## Google Play release bundle
+
+Set `APP_ENVIRONMENT=production`, the verified production HTTPS API origin, and the production tenant ID in a local Dart defines file. Keep the Android Firebase switch disabled until a production client configuration is available. Use OpenStreetMap unless the production Android Google Maps key is ready.
+
+Load `VTSA_ANDROID_UPLOAD_KEYSTORE`, `VTSA_ANDROID_UPLOAD_STORE_PASSWORD`, `VTSA_ANDROID_UPLOAD_KEY_ALIAS`, and `VTSA_ANDROID_UPLOAD_KEY_PASSWORD` into the build process from protected local storage. Production builds require these settings. Use the upload key registered for the existing Play Console app, or a dedicated upload key for its first release. Keep the keystore and password out of Git and release artifacts.
+
+```powershell
+flutter.bat build appbundle --release --dart-define-from-file=dart_defines.local.json
+```
+
+Verify the bundle signature and confirm its package, version code, and target API before uploading it to Play Console. Keep the upload key backed up in the organization's approved secret store. [Play App Signing](https://developer.android.com/studio/publish/app-signing)
+
 ## Contract dependencies
 
 The checked-in platform contract supports login, password reset, email verification, current identity, logout, and bounded public station search. These mobile ports are intentionally pending an approved server contract:

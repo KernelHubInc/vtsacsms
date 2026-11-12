@@ -26,13 +26,17 @@ final readonly class SupportTicketPolicy
     public function view(User $user, SupportTicket $ticket): bool
     {
         return $this->sameTenant($ticket)
-            && $this->authorization->holdsAnywhere($user, PermissionKey::SupportView);
+            && ($ticket->category === SupportTicket::ACCOUNT_DELETION
+                ? $this->authorization->allows($user, PermissionKey::SupportView)
+                : $this->authorization->holdsAnywhere($user, PermissionKey::SupportView));
     }
 
     public function update(User $user, SupportTicket $ticket): bool
     {
         return $this->sameTenant($ticket)
-            && $this->authorization->holdsAnywhere($user, PermissionKey::SupportManage);
+            && ($ticket->category === SupportTicket::ACCOUNT_DELETION
+                ? $this->authorization->allows($user, PermissionKey::SupportManage)
+                : $this->authorization->holdsAnywhere($user, PermissionKey::SupportManage));
     }
 
     private function sameTenant(SupportTicket $ticket): bool

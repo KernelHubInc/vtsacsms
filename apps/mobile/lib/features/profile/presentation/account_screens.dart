@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/core/platform/platform_services.dart';
 import 'package:vtsa_mobile/design_system/components/driver_components.dart';
@@ -152,7 +153,22 @@ class AccountScreen extends StatelessWidget {
             const SizedBox(height: VtsaSpacing.md),
             VtsaCard(
               title: 'Privacy choices',
-              child: _AnalyticsConsent(service: dependencies.analyticsConsent),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _AnalyticsConsent(service: dependencies.analyticsConsent),
+                  TextButton(
+                    onPressed: () =>
+                        _openAccountPage(context, '/privacy-policy'),
+                    child: const Text('Privacy policy'),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        _openAccountPage(context, '/account-deletion'),
+                    child: const Text('Request account deletion'),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: VtsaSpacing.md),
             if (dependencies.auth.status == AuthStatus.authenticated)
@@ -188,6 +204,21 @@ class AccountScreen extends StatelessWidget {
       );
     },
   );
+
+  Future<void> _openAccountPage(BuildContext context, String path) async {
+    try {
+      final opened = await launchUrl(
+        dependencies.environment.apiBaseUrl.resolve(path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {
+      // A browser failure uses the same recovery message as an unavailable browser.
+    }
+    if (context.mounted) {
+      showVtsaToast(context, message: 'Unable to open this page. Try again.');
+    }
+  }
 }
 
 class ProfileScreen extends StatelessWidget {

@@ -46,6 +46,12 @@ When Google is enabled on the approved native client, choose the account and com
 
 Choose the intended personal or shared charging account before adding funds. Confirm amount, currency, payer/destination and provider result. A pending QR/top-up is not a credited balance. Never edit ledger balances or fabricate callback evidence to resolve a payment. Real payment availability depends on production configuration and provider acceptance.
 
+### Account deletion requests
+
+Drivers can open **Account → Privacy choices → Request account deletion** or visit **/account-deletion** in a browser. Enter the account email and confirm the eight-digit code in the same browser within 15 minutes. The confirmation creates a support ticket. The account remains available during review.
+
+Staff with tenant-wide Support permissions open **Support → Support tickets** and filter by **Account deletion**. Verify the request, use the approved privacy process to review Identity, garage, and any retained operational or financial data, and communicate the outcome to the requester. Select **Mark deletion request resolved** after completing that process. This action records ticket resolution. Production SMTP and the default queue worker must be running to deliver verification codes.
+
 ## 6. Charging a vehicle
 
 Select the saved vehicle, find the correct published station and scan its connector QR or supported station identifier. Confirm plug compatibility, actual outlet, current tariff, fees, available wallet funds and reserved budget. Shared-account limits can reduce the reservation below the full balance.

@@ -11,6 +11,8 @@ The admin/operator `MonitoringDashboardQuery` is a Reporting-owned read composit
 
 Identity owns workforce sidebar preferences by tenant, subject and panel. Preferences record link placement and order and are deleted with the tenant or account. The portal applies them to Filament's currently authorized navigation. New links and links whose destination is no longer available fall back to their default section. Existing layouts retain their order. An application rollback can leave saved preferences in place.
 
+Identity verifies account-deletion requests with a short-lived, browser-bound email code. Organizations resolves the tenant from the account's memberships. Support owns the resulting ticket and its audit trail. Account, charging, and financial data changes remain part of the approved privacy process.
+
 ## 1. Ownership Rules
 
 1. The owning context defines the concept's invariants, schema, lifecycle, write API, and emitted facts.

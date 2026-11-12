@@ -48,6 +48,7 @@
 - **FR-IDN-004:** Administrators MUST be able to revoke sessions and machine credentials within their permitted scope.
 - **FR-IDN-005:** Authentication and recovery events MUST be auditable and security-notifiable without logging secrets.
 - **FR-IDN-006:** An approved initial administrator bootstrap MUST bind exact new recipients, tenant scope and permission templates to an audited, idempotent platform operation. Accounts MUST remain inactive until a private, expiring, single-use setup credential is exchanged for a personal password. Setup MUST preserve MFA requirements and reject revoked authority. Only the email-link method may verify email ownership.
+- **FR-IDN-007:** Drivers MUST be able to request deletion of their account and associated data from the app and a public web page. Verify ownership of the account email before creating an audited, tenant-scoped Support ticket. Fulfillment follows the approved privacy and retention process.
 
 ## 5. Tenancy
 

@@ -21,7 +21,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use UnitEnum;
 
 final class SupportTicketResource extends Resource
@@ -47,6 +49,9 @@ final class SupportTicketResource extends Resource
             TextColumn::make('escalation_level')->label('Escalation')->numeric(),
             TextColumn::make('updated_at')->dateTime()->sortable(),
         ])->filters([
+            SelectFilter::make('category')->options([
+                SupportTicket::ACCOUNT_DELETION => 'Account deletion',
+            ])->visible(fn (): bool => self::canViewAccountDeletion()),
             SelectFilter::make('status')->options([
                 'open' => 'Open',
                 'pending_customer' => 'Pending customer',
@@ -80,7 +85,7 @@ final class SupportTicketResource extends Resource
                     Textarea::make('body')->label('Response')->required()->maxLength(5000),
                     Checkbox::make('is_internal')->label('Internal note'),
                 ])
-                ->visible(fn (): bool => self::canManage())
+                ->visible(fn (SupportTicket $record): bool => Gate::allows('update', $record))
                 ->action(function (SupportTicket $record, array $data): void {
                     app(SupportTicketService::class)->respond(
                         self::actor(),
@@ -94,10 +99,20 @@ final class SupportTicketResource extends Resource
                 ->icon(Heroicon::OutlinedArrowTrendingUp)
                 ->color('warning')
                 ->requiresConfirmation()
-                ->visible(fn (SupportTicket $record): bool => self::canManage() && $record->status !== 'resolved')
+                ->visible(fn (SupportTicket $record): bool => Gate::allows('update', $record) && $record->status !== 'resolved')
                 ->action(function (SupportTicket $record): void {
                     app(SupportTicketService::class)->escalate(self::actor(), $record);
                     Notification::make()->title('Ticket escalated')->warning()->send();
+                }),
+            Action::make('resolveAccountDeletion')
+                ->label('Mark deletion request resolved')
+                ->requiresConfirmation()
+                ->modalDescription('Use this after the approved privacy process has addressed the request and communicated the outcome. This action only closes the support ticket.')
+                ->visible(fn (SupportTicket $record): bool => $record->category === SupportTicket::ACCOUNT_DELETION
+                    && ! in_array($record->status, ['resolved', 'closed'], true) && Gate::allows('update', $record))
+                ->action(function (SupportTicket $record): void {
+                    app(SupportTicketService::class)->resolveAccountDeletion(self::actor(), $record);
+                    Notification::make()->title('Deletion request resolved')->success()->send();
                 }),
         ])->defaultSort('updated_at', 'desc');
     }
@@ -120,6 +135,14 @@ final class SupportTicketResource extends Resource
         return false;
     }
 
+    /** @return Builder<SupportTicket> */
+    public static function getEloquentQuery(): Builder
+    {
+        $query = SupportTicket::query();
+
+        return self::canViewAccountDeletion() ? $query : $query->where('category', '<>', SupportTicket::ACCOUNT_DELETION);
+    }
+
     public static function canEdit(Model $record): bool
     {
         return false;
@@ -130,12 +153,12 @@ final class SupportTicketResource extends Resource
         return false;
     }
 
-    private static function canManage(): bool
+    private static function canViewAccountDeletion(): bool
     {
         $user = auth()->user();
 
         return $user instanceof User
-            && app(AuthorizationService::class)->holdsAnywhere($user, PermissionKey::SupportManage);
+            && app(AuthorizationService::class)->allows($user, PermissionKey::SupportView);
     }
 
     private static function actor(): User

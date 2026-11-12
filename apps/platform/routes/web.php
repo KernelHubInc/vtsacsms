@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Foundation\Features\Feature;
 use App\Http\Controllers\AcceptOperatorInvitationController;
+use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicArticleController;
@@ -29,6 +30,12 @@ Route::get('/reset-password/{token}', [PasswordController::class, 'show'])
     ->where('token', '[A-Za-z0-9]{32,128}')->name('password.reset');
 Route::post('/reset-password', [PasswordController::class, 'reset'])
     ->middleware('throttle:auth.recovery')->name('password.update');
+
+Route::get('/account-deletion', [AccountDeletionController::class, 'show'])->name('public.account-deletion');
+Route::post('/account-deletion/code', [AccountDeletionController::class, 'send'])
+    ->middleware('throttle:account-deletion.code')->block(10, 3)->name('public.account-deletion.send');
+Route::post('/account-deletion/confirm', [AccountDeletionController::class, 'confirm'])
+    ->middleware('throttle:account-deletion.confirm')->block(15, 3)->name('public.account-deletion.confirm');
 
 Route::get('/staging/kyc/{page}', StagingKycPolicyController::class)
     ->name('kyc.staging-policy');
