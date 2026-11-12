@@ -42,19 +42,39 @@ final class SidebarLayout
      */
     public function order(array $lists, array $preferred): array
     {
-        $result = [];
-        foreach ($lists as $container => $entries) {
-            $ordered = [];
-            foreach ($preferred[$container] ?? [] as $key) {
-                if (isset($entries[$key])) {
-                    $ordered[$key] = true;
+        $result = array_fill_keys(array_keys($lists), []);
+        $remaining = $this->entries($lists);
+        foreach ($preferred as $container => $keys) {
+            foreach ($keys as $key) {
+                $entry = $remaining[$key] ?? null;
+                if ($entry !== null && $this->canPlace($lists, $container, $key, $entry)) {
+                    $result[$container][] = $key;
+                    unset($remaining[$key]);
                 }
             }
+        }
 
-            $result[$container] = array_keys($ordered + $entries);
+        foreach ($lists as $container => $entries) {
+            array_push($result[$container], ...array_keys(array_intersect_key($entries, $remaining)));
         }
 
         return $result;
+    }
+
+    /**
+     * @param  array<string, array<string, NavigationGroup|NavigationItem>>  $lists
+     * @return array<string, NavigationGroup|NavigationItem>
+     */
+    public function entries(array $lists): array
+    {
+        return array_merge(...array_values($lists));
+    }
+
+    /** @param array<string, array<string, NavigationGroup|NavigationItem>> $lists */
+    public function canPlace(array $lists, string $container, string $key, NavigationGroup|NavigationItem $entry): bool
+    {
+        return isset($lists[$container][$key]) || ($entry instanceof NavigationItem
+            && ($container === self::ROOT || ($lists[self::ROOT][$container] ?? null) instanceof NavigationGroup));
     }
 
     /**
@@ -65,14 +85,19 @@ final class SidebarLayout
     public function apply(array $navigation, array $preferred): array
     {
         $lists = $this->lists($navigation);
+        $entries = $this->entries($lists);
         $order = $this->order($lists, $preferred);
         $groups = [];
         $standalone = [];
         foreach ($order[self::ROOT] as $key) {
-            $entry = $lists[self::ROOT][$key];
+            $entry = $entries[$key];
             if ($entry instanceof NavigationItem) {
-                $standalone[] = $this->withChildren($entry, $key, $lists, $order);
+                $standalone[] = $this->withChildren($entry, $key, $entries, $order);
 
+                continue;
+            }
+
+            if ($order[$key] === []) {
                 continue;
             }
 
@@ -81,7 +106,7 @@ final class SidebarLayout
                 $standalone = [];
             }
 
-            $groups[] = (clone $entry)->items($this->orderedItems($key, $lists, $order));
+            $groups[] = (clone $entry)->items($this->orderedItems($key, $entries, $order));
         }
         if ($standalone !== []) {
             $groups[] = NavigationGroup::make()->items($standalone);
@@ -111,17 +136,17 @@ final class SidebarLayout
     }
 
     /**
-     * @param  array<string, array<string, NavigationGroup|NavigationItem>>  $lists
+     * @param  array<string, NavigationGroup|NavigationItem>  $entries
      * @param  array<string, list<string>>  $order
      * @return list<NavigationItem>
      */
-    private function orderedItems(string $container, array $lists, array $order): array
+    private function orderedItems(string $container, array $entries, array $order): array
     {
         $items = [];
         foreach ($order[$container] ?? [] as $key) {
-            $item = $lists[$container][$key];
+            $item = $entries[$key];
             if ($item instanceof NavigationItem) {
-                $items[] = $this->withChildren($item, $key, $lists, $order);
+                $items[] = $this->withChildren($item, $key, $entries, $order);
             }
         }
 
@@ -129,11 +154,11 @@ final class SidebarLayout
     }
 
     /**
-     * @param  array<string, array<string, NavigationGroup|NavigationItem>>  $lists
+     * @param  array<string, NavigationGroup|NavigationItem>  $entries
      * @param  array<string, list<string>>  $order
      */
-    private function withChildren(NavigationItem $item, string $key, array $lists, array $order): NavigationItem
+    private function withChildren(NavigationItem $item, string $key, array $entries, array $order): NavigationItem
     {
-        return (clone $item)->childItems($this->orderedItems($key, $lists, $order));
+        return (clone $item)->childItems($this->orderedItems($key, $entries, $order));
     }
 }
