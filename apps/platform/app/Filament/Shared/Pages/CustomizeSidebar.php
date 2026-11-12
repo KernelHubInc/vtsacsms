@@ -10,6 +10,7 @@ use App\Modules\Identity\Application\SidebarPreferences;
 use Filament\Facades\Filament;
 use Filament\Navigation\NavigationGroup;
 use Filament\Navigation\NavigationItem;
+use Filament\Navigation\NavigationManager;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Livewire\Attributes\Locked;
@@ -38,7 +39,8 @@ final class CustomizeSidebar extends Page
 
     public function mount(): void
     {
-        $this->draft = app(SidebarLayout::class)->order($this->lists(), []);
+        [$user, $panel] = $this->workspace();
+        $this->draft = app(SidebarLayout::class)->order($this->lists(), app(SidebarPreferences::class)->load($user, $panel));
     }
 
     public function reorder(string $key, int $position, string $section): void
@@ -51,6 +53,25 @@ final class CustomizeSidebar extends Page
     {
         abort_unless(in_array($direction, [-1, 1], true), 422);
         $this->moveItem($key, $direction, relative: true);
+    }
+
+    public function moveTo(string $key, string $destination): void
+    {
+        $layout = app(SidebarLayout::class);
+        $lists = $this->lists();
+        $draft = $layout->order($lists, $this->draft);
+        $entry = $layout->entries($lists)[$key] ?? null;
+        $current = array_search($key, $draft[$this->section] ?? [], true);
+        abort_unless(
+            $entry instanceof NavigationItem && $current !== false
+            && $destination !== $this->section && $layout->canPlace($lists, $destination, $key, $entry),
+            422,
+        );
+
+        array_splice($draft[$this->section], $current, 1);
+        $draft[$destination][] = $key;
+        $this->draft = $draft;
+        $this->section = $destination;
     }
 
     public function save(): void
@@ -76,18 +97,31 @@ final class CustomizeSidebar extends Page
     protected function getViewData(): array
     {
         $lists = $this->lists();
-        $order = app(SidebarLayout::class)->order($lists, $this->draft);
-        $sections = [SidebarLayout::ROOT => 'Sections and standalone links'];
-        foreach ($order as $parent => $keys) {
+        $layout = app(SidebarLayout::class);
+        $order = $layout->order($lists, $this->draft);
+        $entries = $layout->entries($lists);
+        $sections = [SidebarLayout::ROOT => 'Top level (outside sections)'];
+        foreach ($order as $keys) {
             foreach ($keys as $key) {
-                if (! empty($lists[$key])) {
-                    $sections[$key] = (string) $lists[$parent][$key]->getLabel();
+                if (isset($lists[$key])) {
+                    $sections[$key] = (string) $entries[$key]->getLabel();
                 }
             }
         }
         $section = isset($sections[$this->section]) ? $this->section : SidebarLayout::ROOT;
+        $destinations = [];
+        foreach ($order[$section] as $key) {
+            $entry = $entries[$key];
+            if ($entry instanceof NavigationItem) {
+                $destinations[$key] = array_filter(
+                    $sections,
+                    fn (string $container): bool => $container !== $section && $layout->canPlace($lists, $container, $key, $entry),
+                    ARRAY_FILTER_USE_KEY,
+                );
+            }
+        }
 
-        return ['sections' => $sections, 'selected' => $section, 'entries' => $lists[$section], 'keys' => $order[$section]];
+        return ['sections' => $sections, 'selected' => $section, 'entries' => $entries, 'keys' => $order[$section], 'destinations' => $destinations];
     }
 
     private function moveItem(string $key, int $position, bool $relative = false): void
@@ -110,7 +144,7 @@ final class CustomizeSidebar extends Page
     {
         abort_unless(self::canAccess(), 403);
 
-        return app(SidebarLayout::class)->lists(Filament::getNavigation());
+        return app(SidebarLayout::class)->lists(app(NavigationManager::class)->defaults());
     }
 
     /** @return array{User, string} */

@@ -62,7 +62,7 @@ final class CustomizeSidebarTest extends TenantSecurityTestCase
         $other = $this->createUser();
         $tenant = $this->createTenant('sidebar-operator');
         $secondTenant = $this->createTenant('sidebar-other-tenant');
-        $this->enablePanel($tenant, $operator, 'operator', [PermissionKey::OperatorPanelAccess, PermissionKey::LocationView, PermissionKey::ReportingView]);
+        $this->enablePanel($tenant, $operator, 'operator', [PermissionKey::OperatorPanelAccess, PermissionKey::AssetView, PermissionKey::ReportingView]);
         $this->actingAs($operator)->get('/admin/customize-sidebar')->assertForbidden();
         $this->get('/operator/customize-sidebar')->assertOk()->assertSee('Customize sidebar');
 
@@ -70,10 +70,19 @@ final class CustomizeSidebarTest extends TenantSecurityTestCase
             $this->selectPanel('operator');
             $lists = app(SidebarLayout::class)->lists(Filament::getNavigation());
             $key = $this->keyFor($lists[SidebarLayout::ROOT], 'Charging network');
-            Livewire::test(CustomizeSidebar::class)->call('reorder', $key, 0, SidebarLayout::ROOT)->call('save');
+            $station = $this->keyFor($lists[$key], 'Charging Stations');
+            Livewire::test(CustomizeSidebar::class)
+                ->set('section', $key)
+                ->call('moveTo', $station, SidebarLayout::ROOT)
+                ->assertSet('section', SidebarLayout::ROOT)
+                ->call('reorder', $key, 0, SidebarLayout::ROOT)
+                ->call('save');
 
             $prefs = app(SidebarPreferences::class);
-            $this->assertSame($key, $prefs->load($operator, 'operator')[SidebarLayout::ROOT][0]);
+            $saved = $prefs->load($operator, 'operator');
+            $this->assertSame($key, $saved[SidebarLayout::ROOT][0]);
+            $this->assertContains($station, $saved[SidebarLayout::ROOT]);
+            $this->assertNotContains($station, $saved[$key]);
             $this->assertSame([], $prefs->load($operator, 'admin'));
         });
         $this->withinTenant($tenant, $other, function () use ($other, $operator): void {
@@ -83,23 +92,76 @@ final class CustomizeSidebarTest extends TenantSecurityTestCase
         $this->withinTenant($secondTenant, $operator, fn () => $this->assertSame([], app(SidebarPreferences::class)->load($operator, 'operator')));
     }
 
+    public function test_onboard_operator_can_move_between_sections_and_back_below_dashboard_after_reload(): void
+    {
+        $user = $this->createUser();
+        $tenant = $this->createTenant('sidebar-onboarding-placement');
+        $this->enablePanel($tenant, $user, 'admin', PermissionKey::cases());
+        $this->actingAs($user);
+        $this->withinTenant($tenant, $user, function (): void {
+            $this->selectPanel('admin');
+            $layout = app(SidebarLayout::class);
+            $lists = $layout->lists(Filament::getNavigation());
+            $onboard = $this->keyFor($lists[SidebarLayout::ROOT], 'Onboard operator');
+            $network = $this->keyFor($lists[SidebarLayout::ROOT], 'Charging network');
+            $people = $this->keyFor($lists[SidebarLayout::ROOT], 'People and access');
+
+            Livewire::test(CustomizeSidebar::class)
+                ->call('moveTo', $onboard, $network)
+                ->assertSet('section', $network)
+                ->call('moveTo', $onboard, $people)
+                ->assertSet('section', $people)
+                ->call('save');
+            $rendered = $layout->lists(Filament::getNavigation());
+            $this->keyFor($rendered[$people], 'Onboard operator');
+            $this->assertArrayNotHasKey($onboard, $rendered[SidebarLayout::ROOT]);
+
+            Livewire::test(CustomizeSidebar::class)
+                ->set('section', $people)
+                ->call('moveTo', $onboard, SidebarLayout::ROOT)
+                ->assertSet('section', SidebarLayout::ROOT)
+                ->call('reorder', $onboard, 1, SidebarLayout::ROOT)
+                ->call('save');
+
+            $rendered = $layout->lists(Filament::getNavigation());
+            $this->assertSame(['Dashboard', 'Onboard operator'], array_map(
+                fn ($entry): ?string => $entry->getLabel(),
+                array_slice(array_values($rendered[SidebarLayout::ROOT]), 0, 2),
+            ));
+            $this->assertNotContains('Onboard operator', array_map(fn ($entry): ?string => $entry->getLabel(), $rendered[$people]));
+
+            Livewire::test(CustomizeSidebar::class)->call('moveTo', $network, $people)->assertStatus(422);
+            Livewire::test(CustomizeSidebar::class)->call('moveTo', $onboard, 'unknown-section')->assertStatus(422);
+        });
+    }
+
     public function test_preferences_cannot_restore_revoked_items_or_reorder_hidden_links(): void
     {
         $user = $this->createUser();
         $tenant = $this->createTenant('sidebar-permissions');
-        $this->enablePanel($tenant, $user, 'operator', [PermissionKey::OperatorPanelAccess, PermissionKey::LocationView, PermissionKey::ReportingView]);
+        $this->enablePanel($tenant, $user, 'operator', [PermissionKey::OperatorPanelAccess, PermissionKey::AssetView, PermissionKey::ReportingView]);
         $this->actingAs($user);
         $this->withinTenant($tenant, $user, function () use ($tenant): void {
             $this->selectPanel('operator');
             $lists = app(SidebarLayout::class)->lists(Filament::getNavigation());
             $reports = $this->keyFor($lists[SidebarLayout::ROOT], 'Reports');
-            Livewire::test(CustomizeSidebar::class)->call('reorder', $reports, 0, SidebarLayout::ROOT)->call('save');
+            $export = $this->keyFor($lists[$reports], 'Queued exports');
+            $network = $this->keyFor($lists[SidebarLayout::ROOT], 'Charging network');
+            $station = $this->keyFor($lists[$network], 'Charging Stations');
+            Livewire::test(CustomizeSidebar::class)
+                ->set('section', $reports)
+                ->call('moveTo', $export, SidebarLayout::ROOT)
+                ->set('section', $network)
+                ->call('moveTo', $station, $reports)
+                ->call('save');
             DB::table('role_permissions')->where('tenant_id', $tenant->getKey())->where('permission_key', PermissionKey::ReportingView->value)->delete();
             $this->selectPanel('operator');
 
             $visible = app(SidebarLayout::class)->lists(Filament::getNavigation());
             $this->assertArrayNotHasKey($reports, $visible[SidebarLayout::ROOT]);
-            Livewire::test(CustomizeSidebar::class)->call('reorder', $reports, 0, SidebarLayout::ROOT)->assertStatus(422);
+            $this->assertNotContains('Queued exports', array_map(fn ($entry): ?string => $entry->getLabel(), $visible[SidebarLayout::ROOT]));
+            $this->assertArrayHasKey($station, $visible[$network]);
+            Livewire::test(CustomizeSidebar::class)->call('moveTo', $export, $network)->assertStatus(422);
         });
     }
 
