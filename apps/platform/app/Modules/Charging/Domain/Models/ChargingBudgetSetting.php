@@ -13,10 +13,11 @@ final class ChargingBudgetSetting extends Model
 {
     use BelongsToTenant, HasUlids;
 
-    protected $fillable = ['minimum_minor', 'default_minor', 'maximum_minor', 'presets', 'allow_custom_amount'];
+    protected $fillable = ['minimum_minor', 'default_minor', 'maximum_minor', 'presets', 'allow_custom_amount', 'pay_as_you_go_minimum_minor'];
 
     protected function casts(): array
     {
-        return ['minimum_minor' => 'integer', 'default_minor' => 'integer', 'maximum_minor' => 'integer', 'presets' => 'array', 'allow_custom_amount' => 'boolean'];
+        return ['minimum_minor' => 'integer', 'default_minor' => 'integer', 'maximum_minor' => 'integer',
+            'presets' => 'array', 'allow_custom_amount' => 'boolean', 'pay_as_you_go_minimum_minor' => 'integer'];
     }
 }

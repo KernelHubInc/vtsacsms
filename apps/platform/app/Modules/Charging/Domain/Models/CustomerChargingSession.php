@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $session_id
  * @property string $quote_id
  * @property int $budget_minor
+ * @property int|null $spending_ceiling_minor
  * @property string $payment_state
  * @property CarbonImmutable|null $settled_at
  * @property-read ChargingQuote $quote
@@ -39,6 +40,6 @@ final class CustomerChargingSession extends Model
 
     protected function casts(): array
     {
-        return ['budget_minor' => 'integer', 'settled_at' => 'immutable_datetime'];
+        return ['budget_minor' => 'integer', 'spending_ceiling_minor' => 'integer', 'settled_at' => 'immutable_datetime'];
     }
 }

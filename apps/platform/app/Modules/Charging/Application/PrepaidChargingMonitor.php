@@ -104,12 +104,14 @@ final readonly class PrepaidChargingMonitor
             $latest = MeterReading::query()->where('session_id', $sessionId)->where('measurand', 'Energy.Active.Import.Register')
                 ->where('unit', 'Wh')->whereNull('phase')->max('sampled_at');
             $lastAt = $latest === null ? $session->started_at : CarbonImmutable::parse($latest);
+            $hasMeterEvidence = $latest !== null && ! $lastAt->isFuture();
             $stale = $lastAt->addSeconds((int) config('mobile_charging.meter_timeout_seconds'))->isPast();
             $components = $session->tariff_snapshot['components'] ?? [];
             if (is_array($components) && in_array('time', array_column($components, 'dimension'), true)) {
                 $lastPower = MeterReading::query()->where('session_id', $sessionId)->where('measurand', 'Power.Active.Import')
                     ->where('unit', 'W')->whereNull('phase')->max('sampled_at');
                 $powerAt = $lastPower === null ? $session->started_at : CarbonImmutable::parse($lastPower);
+                $hasMeterEvidence = $hasMeterEvidence && $lastPower !== null && ! $powerAt->isFuture();
                 $stale = $stale || $powerAt->addSeconds((int) config('mobile_charging.meter_timeout_seconds'))->isPast();
                 $lastAt = $lastAt->min($powerAt);
             }
@@ -127,6 +129,18 @@ final readonly class PrepaidChargingMonitor
                 (int) $session->idle_seconds, $session->started_at, (int) $session->energy_flow_seconds + $bufferSeconds,
             ));
             $usagePriced = is_array($components) && array_intersect(['energy', 'time'], array_column($components, 'dimension')) !== [];
+            $spendingCeiling = $owner->spending_ceiling_minor;
+            if ($usagePriced && ! $stale && $session->failure_reason !== 'prepaid_start_unconfirmed'
+                && $hasMeterEvidence && $session->protocol_transaction_id !== null
+                && $spendingCeiling !== null && $owner->budget_minor < $spendingCeiling && $future->totalMinor >= $owner->budget_minor
+                && $this->hasCurrentConnection($session, $lastAt)) {
+                $target = min($spendingCeiling, max($future->totalMinor + 1, $owner->budget_minor + $owner->quote->budget_minor));
+                $held = $this->wallet->extendReservation($owner->subject_id, $sessionId, $target, $owner->payer_account_id, $owner->vehicle_id);
+                if ($held > $owner->budget_minor) {
+                    $owner->update(['budget_minor' => $held]);
+                }
+            }
+
             if (! $stale && $session->failure_reason !== 'prepaid_start_unconfirmed' && (! $usagePriced || $future->totalMinor < $owner->budget_minor)) {
                 return;
             }
@@ -151,6 +165,14 @@ final readonly class PrepaidChargingMonitor
                     'lookahead_seconds' => $bufferSeconds, 'reading_age_seconds' => $readingAge, 'queue_delay_seconds' => $queueSeconds,
                     'stale_meter' => $stale]);
         });
+    }
+
+    private function hasCurrentConnection(ChargingSession $session, CarbonImmutable $meteredAt): bool
+    {
+        $connection = app(StationConnectionQuery::class)->forStations([(string) $session->charging_station_id])[$session->charging_station_id] ?? null;
+
+        return $connection !== null && $connection['status'] === 'online'
+            && $meteredAt->gte(CarbonImmutable::parse($connection['connected_at']));
     }
 
     private function recordSummary(ChargingSession $session, CustomerChargingSession $owner, ChargeDetailRecord $cdr): void

@@ -1319,6 +1319,10 @@
                   "supports_idle_fee": {
                     "type": "boolean",
                     "description": "Declares support for displaying the post-charge idle price and grace period. Required when idle pricing applies."
+                  },
+                  "supports_pay_as_you_go": {
+                    "type": "boolean",
+                    "description": "Declares support for disclosing an initial hold and an automatically funded session ceiling when enabled on staging."
                   }
                 },
                 "required": [
@@ -8384,6 +8388,24 @@
                 },
                 "additionalProperties": false
               },
+              "pay_as_you_go": {
+                "type": "object",
+                "properties": {
+                  "minimum_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "spending_ceiling_minor": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "minimum_minor",
+                  "spending_ceiling_minor"
+                ],
+                "additionalProperties": false
+              },
               "idle_policy": {
                 "type": [
                   "object",
@@ -8643,6 +8665,11 @@
           "reserved_budget_minor": {
             "type": "integer",
             "minimum": 0
+          },
+          "spending_ceiling_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum approved spend in PHP centavos for a pay-as-you-go charging session."
           },
           "refundable": {
             "type": "boolean"

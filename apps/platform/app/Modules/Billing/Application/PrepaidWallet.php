@@ -88,6 +88,29 @@ final readonly class PrepaidWallet
         });
     }
 
+    /** Return the total held after extending a live session's existing reservation. */
+    public function extendReservation(string $subject, string $reference, int $target, ?string $accountId, ?string $vehicleId): int
+    {
+        return DB::transaction(function () use ($subject, $reference, $target, $accountId, $vehicleId): int {
+            $account = $this->account($subject, 'live', $accountId);
+            $account = PrepaidAccount::query()->whereKey($account->getKey())->lockForUpdate()->firstOrFail();
+            $hold = PrepaidReservation::query()->where('account_id', $account->getKey())->where('reference_id', $reference)
+                ->where('status', 'reserved')->firstOrFail();
+            $next = min($this->sessionCap($accountId, $subject, $vehicleId, $target),
+                $hold->amount_minor + $account->balance_minor - $account->reserved_minor);
+            if ($next <= $hold->amount_minor) {
+                return $hold->amount_minor;
+            }
+
+            $additional = $next - $hold->amount_minor;
+            $account->increment('reserved_minor', $additional);
+            $hold->update(['amount_minor' => $next]);
+            $this->entry($account, (string) Str::ulid(), 'reserved', $additional, $reference);
+
+            return $next;
+        });
+    }
+
     /** Finalize only against a final rated charge; zero releases a failed start. */
     public function settle(string $subject, string $book, string $reference, int $spent, ?string $accountId = null): void
     {
@@ -125,11 +148,12 @@ final readonly class PrepaidWallet
             $account->charging_account_id === null ? 'subject' : 'organization', $account->charging_account_id ?? $account->subject_id);
     }
 
-    private function entry(PrepaidAccount $account, string $reference, string $kind, int $amount): void
+    private function entry(PrepaidAccount $account, string $reference, string $kind, int $amount, ?string $reservationReference = null): void
     {
         $entry = PrepaidEntry::query()->create(['account_id' => $account->getKey(), 'reference_id' => $reference, 'kind' => $kind, 'amount_minor' => $amount, 'created_at' => now('UTC')]);
         $this->audit->record(new AuditEntry('billing.prepaid.'.$kind, 'prepaid_entry', (string) $entry->getKey(), AuditResult::Succeeded,
             metadata: ['wallet_id' => (string) $account->getKey(), 'reference_id' => $reference,
+                ...($reservationReference === null ? [] : ['reservation_reference_id' => $reservationReference]),
                 'charging_account_id' => $account->charging_account_id, 'book' => $account->book,
                 'currency' => $account->currency, 'amount_minor' => $amount,
                 'balance_minor' => $account->balance_minor, 'reserved_minor' => $account->reserved_minor]));

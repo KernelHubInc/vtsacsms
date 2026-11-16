@@ -30,6 +30,8 @@ final class ApiChargingRepository implements ChargingRepository {
           'budget_minor': ?budgetMinor,
           'pricing_version': 2,
           'supports_idle_fee': true,
+          if (const String.fromEnvironment('APP_ENVIRONMENT') == 'staging')
+            'supports_pay_as_you_go': true,
         },
         options: _options(),
       );

@@ -184,6 +184,7 @@ final class TariffQuote {
     this.taxRateBasisPoints = 0,
     required this.lines,
     this.budgetPolicy = const {},
+    this.spendingCeiling,
     this.platformFee = const {},
     this.idlePricing,
     required this.estimatedPreauthorization,
@@ -203,6 +204,13 @@ final class TariffQuote {
     budgetPolicy: Map<String, dynamic>.from(
       json['budget_policy'] as Map? ?? const {},
     ),
+    spendingCeiling: switch (json['pay_as_you_go']) {
+      {'spending_ceiling_minor': final int limit} => Money(
+        minorUnits: limit,
+        currency: (json['currency']! as String).toUpperCase(),
+      ),
+      _ => null,
+    },
     platformFee: Map<String, dynamic>.from(
       json['platform_fee'] as Map? ?? const {},
     ),
@@ -234,6 +242,7 @@ final class TariffQuote {
   final int taxRateBasisPoints;
   final List<TariffLine> lines;
   final Map<String, dynamic> budgetPolicy;
+  final Money? spendingCeiling;
   final Map<String, dynamic> platformFee;
   final IdlePricing? idlePricing;
   final Money estimatedPreauthorization;
@@ -340,6 +349,7 @@ final class ChargingSession {
     this.estimatedCost,
     this.finalCost,
     this.reservedBudget,
+    this.spendingCeiling,
     this.platformFee,
     this.chargingTotal,
     this.idleFee,
@@ -384,6 +394,7 @@ final class ChargingSession {
       estimatedCost: money('estimated_cost_minor'),
       finalCost: money('final_cost_minor'),
       reservedBudget: money('reserved_budget_minor'),
+      spendingCeiling: money('spending_ceiling_minor'),
       platformFee: money('platform_fee_minor'),
       chargingTotal: money('charging_total_minor'),
       idleFee: money('idle_fee_minor'),
@@ -441,6 +452,7 @@ final class ChargingSession {
   final Money? estimatedCost;
   final Money? finalCost;
   final Money? reservedBudget;
+  final Money? spendingCeiling;
   final Money? platformFee;
   final Money? chargingTotal;
   final Money? idleFee;

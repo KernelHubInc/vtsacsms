@@ -9,7 +9,8 @@ class ChargingBudgetProgress extends StatelessWidget {
   final ChargingSession session;
   @override
   Widget build(BuildContext context) {
-    final budget = session.reservedBudget!;
+    final ceiling = session.spendingCeiling;
+    final budget = ceiling ?? session.reservedBudget!;
     final cost = session.estimatedCost;
     final ratio =
         cost != null &&
@@ -30,12 +31,17 @@ class ChargingBudgetProgress extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'of ${formatMoney(budget)} budget',
+          ceiling == null
+              ? 'of ${formatMoney(budget)} budget'
+              : 'of ${formatMoney(budget)} session maximum',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 12),
         ),
         const SizedBox(height: 4),
-        const Text('Estimated budget usage', style: TextStyle(fontSize: 12)),
+        Text(
+          ceiling == null ? 'Estimated budget usage' : 'Estimated cost',
+          style: const TextStyle(fontSize: 12),
+        ),
       ],
     );
     return Padding(

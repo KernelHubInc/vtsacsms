@@ -17,3 +17,7 @@ Billing reserves and settles through its existing public wallet contract. Over-b
 Refund execution remains the existing reviewed financial workflow. Policy publication does not refund history or initiate a payout. Keep the fee disabled until accounting confirms tax, beneficiary and commercial refund terms. Existing tax-invoice legal-review gates remain in place.
 
 Migration is additive. Back up before deployment, migrate once, then update web and workers on the same release before enabling a fee. Production workers/scheduler remain on App01 only. Do not roll back to a fee-unaware tariff engine while fee-bearing sessions are active: preserve Stop/read/settlement services and roll forward. Keep policy tables and session columns on rollback.
+
+## Staging pay-as-you-go pilot
+
+Charging freezes the driver-facing initial hold and wallet-backed spending ceiling in each accepted pay-as-you-go quote. Legacy customers retain the fixed budget semantics. The customer session's current budget is the amount actually reserved by Billing. Billing owns atomic hold increases and immutable wallet entries. Charging updates its customer projection in the same transaction and continues to use the verified final CDR for settlement. A stop forecast that cannot be funded requests a stop through the existing command and recovery workflows. The staging gate limits new quotes and starts without changing recovery for already authorized sessions.

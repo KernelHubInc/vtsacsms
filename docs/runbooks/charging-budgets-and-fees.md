@@ -12,6 +12,16 @@ Proposed launch settings: minimum PHP 100, default PHP 500, maximum PHP 2,000; b
 
 Customers scan/select a connector, review **Charging budget**, select **Change budget**, choose an amount, and review the refreshed quote before Request start. This reserves funds; it does not add wallet credit or take an extra payment. Final usage is settled once and unused funds released. The remote stop monitor remains a request to the charger, not a guaranteed physical cutoff.
 
+## Pay-as-you-go staging pilot
+
+On staging, set `MOBILE_CHARGING_PAY_AS_YOU_GO=true` in the staging application environment after deploying the matching API, charging worker, event consumer and prepaid monitor with the additive migration. The flag is ignored outside `APP_ENV=staging`. The updated staging APK requests this mode. Existing clients continue to receive fixed-budget quotes.
+
+In **Admin → Platform governance → System settings → Pay-as-you-go charging**, enter the **Minimum starting hold (PHP)** and save. The default is ₱100. A higher upfront tariff charge increases the initial hold to cover it. The driver sees the initial hold and the maximum available to this session from the wallet and any driver/vehicle cap. Top-ups during a session do not increase the quoted maximum. A change in the admin minimum requires refreshing an unused quote.
+
+Billing locks the wallet to extend the same hold before the predicted cost reaches the held amount. Each increase is auditable and can use only funds that are still available. The meter forecast drives both extension and remote stop. It cannot extend on stale or disconnected evidence. When the wallet cannot fund the forecast, the monitor requests Stop. Final settlement uses verified transaction evidence. Costs exceeding the hold, including any unreserved idle cost, follow the existing operator review flow.
+
+Use a supervised staging device and an authorized wallet with a balance above the minimum. Confirm the initial hold, metered cost past it, one stop request at the final limit, physical end evidence, one wallet debit, release of any remainder, and the receipt. Record the connector, session, cost and stop response times. Repeat at a controlled low budget with delayed telemetry to verify the review behavior. To suspend new pay-as-you-go quotes, disable the staging flag and leave current workers on the compatible release until existing sessions settle.
+
 ## Platform fee
 
 Deployment default: **Disabled**, PHP 5 amount, waived below PHP 100 charging total. No customer fee is collected until an administrator explicitly enables a confirmed policy.

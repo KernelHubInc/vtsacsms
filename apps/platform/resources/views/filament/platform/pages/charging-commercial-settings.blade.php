@@ -1,5 +1,19 @@
+@if ($this->showsPayAsYouGo())
+    <form wire:submit="savePayAsYouGoMinimum" class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-gray-900">
+        <h2 class="font-semibold">Pay-as-you-go charging</h2>
+        <p class="mt-1 text-sm text-gray-500">The starting hold is the minimum available wallet balance required to start. The hold increases as charging continues, within the wallet and account spending limits.</p>
+        <div class="mt-5 flex flex-wrap items-end gap-3">
+            <label class="text-sm font-medium">Minimum starting hold (PHP)
+                <input wire:model="payAsYouGoMinimum" inputmode="decimal" @disabled(!$this->canManage()) class="mt-1 block w-full rounded-xl border-gray-300 dark:border-white/10 dark:bg-gray-950">
+                @error('payAsYouGoMinimum')<span role="alert" class="block text-sm text-danger-600">{{ $message }}</span>@enderror
+            </label>
+            @if ($this->canManage())<x-filament::button type="submit" wire:loading.attr="disabled">Save starting hold</x-filament::button>@endif
+        </div>
+    </form>
+@endif
+
 <form wire:submit="saveChargingBudgets" class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-gray-900">
-    <h2 class="font-semibold">Charging reservation settings</h2>
+    <h2 class="font-semibold">{{ $this->showsPayAsYouGo() ? 'Fixed charging budgets' : 'Charging reservation settings' }}</h2>
     <p class="mt-1 text-sm text-gray-500">The charging budget is a temporary wallet hold, including any platform fee. Available funds and Business/Fleet limits always apply. Changes affect new quotes only.</p>
     <div class="mt-5 grid gap-4 sm:grid-cols-3">
         @foreach (['minimum' => 'Minimum budget (PHP)', 'default' => 'Default budget (PHP)', 'maximum' => 'Maximum budget (PHP)'] as $field => $label)
