@@ -18,11 +18,13 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use UnitEnum;
 
 final class MembershipResource extends Resource
@@ -34,6 +36,16 @@ final class MembershipResource extends Resource
     protected static string|UnitEnum|null $navigationGroup = 'People and access';
 
     protected static ?string $navigationLabel = 'Operator users';
+
+    public static function getNavigationLabel(): string
+    {
+        return app()->environment('staging') ? 'Users & access' : parent::getNavigationLabel();
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return app()->environment('staging') ? 'Users & access' : parent::getPluralModelLabel();
+    }
 
     /** @return Builder<Membership> */
     public static function getEloquentQuery(): Builder
@@ -48,9 +60,31 @@ final class MembershipResource extends Resource
             TextColumn::make('user.email')->label('Email')->searchable()->copyable(),
             TextColumn::make('organization.name')->label('Organization')->placeholder('Tenant-wide'),
             TextColumn::make('status')->badge()->sortable(),
-            TextColumn::make('assignments_count')->counts('assignments')->label('Role grants'),
+            TextColumn::make('assignments_count')->counts('assignments')->label('Roles'),
             TextColumn::make('expires_at')->dateTime()->placeholder('No expiry'),
         ])->recordActions([
+            Action::make('manageAccess')->label('Manage access')
+                ->visible(fn (): bool => app()->environment('staging')
+                    && app(AuthorizationService::class)->holdsAnywhere(self::actor(), PermissionKey::RoleAssign))
+                ->modalHeading(fn (Membership $record): string => 'Manage access for '.$record->user->name)
+                ->modalSubmitActionLabel('Add access')
+                ->schema(fn (Membership $record): array => app(WorkforceAccessForm::class)->fields(self::actor(), PermissionKey::RoleAssign, $record))
+                ->action(function (Membership $record, array $data): void {
+                    abort_unless(app()->environment('staging'), 403);
+                    $actor = self::actor();
+                    [$scope, $role] = app(WorkforceAccessForm::class)->selection($actor, $data, PermissionKey::RoleAssign, $record);
+                    $added = DB::transaction(function () use ($actor, $record, $role, $scope): bool {
+                        $member = self::getEloquentQuery()->whereKey($record->getKey())->lockForUpdate()->firstOrFail();
+                        if ($member->assignments()->where('role_id', $role->getKey())->where('scope_type', $scope->type->value)
+                            ->where('scope_id', $scope->id)->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now('UTC')))->exists()) {
+                            return false;
+                        }
+                        app(RoleAssignmentService::class)->assign($actor, $member, $role, $scope, reason: 'portal.manage_access');
+
+                        return true;
+                    });
+                    Notification::make()->title($added ? 'Access added' : 'This access is already active')->success()->send();
+                }),
             RecordViewAction::make([
                 'user.name' => 'User',
                 'user.email' => 'Email',
@@ -62,9 +96,11 @@ final class MembershipResource extends Resource
             ]),
             Action::make('revokeRole')
                 ->label('Remove role access')->color('danger')->requiresConfirmation()
-                ->visible(fn (): bool => app(AuthorizationService::class)->allows(self::actor(), PermissionKey::RoleAssign))
+                ->visible(fn (): bool => app()->environment('staging')
+                    ? app(AuthorizationService::class)->holdsAnywhere(self::actor(), PermissionKey::RoleAssign)
+                    : app(AuthorizationService::class)->allows(self::actor(), PermissionKey::RoleAssign))
                 ->schema(fn (Membership $record): array => [
-                    Select::make('assignment_id')->label('Role grant')->required()->options($record->assignments()->with('role')->get()->mapWithKeys(fn ($assignment): array => [(string) $assignment->getKey() => $assignment->role->name.'  /  '.$assignment->scope_type->value.'  /  '.($assignment->scope_id ?? 'All')])->all()),
+                    Select::make('assignment_id')->label('Assigned role')->required()->options(fn (): array => app(WorkforceAccessForm::class)->removableRoles(self::actor(), $record)),
                     Textarea::make('reason')->required()->maxLength(500),
                 ])
                 ->action(function (Membership $record, array $data): void {

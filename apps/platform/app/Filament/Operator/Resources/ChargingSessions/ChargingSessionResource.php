@@ -48,7 +48,9 @@ final class ChargingSessionResource extends Resource
                 TextColumn::make('charge_point_identity')->label('Charger')->searchable(),
                 TextColumn::make('protocol_transaction_id')->label('Transaction')->placeholder('Awaiting evidence'),
                 TextColumn::make('energy_wh')->label('Energy (Wh)')->numeric()->sortable(),
-                TextColumn::make('estimated_cost_minor')->label('Estimated minor')->numeric()->placeholder('—'),
+                TextColumn::make('estimated_cost_minor')->label('Estimated minor')->numeric()->placeholder('—')
+                    ->visible(fn (): bool => ! app()->environment('staging') || self::canSeeFinanceAnywhere())
+                    ->state(fn (ChargingSession $record): ?int => self::canSeeFinance($record) ? $record->estimated_cost_minor : null),
                 TextColumn::make('currency')->placeholder('Unrated'),
                 TextColumn::make('anomaly_flags')->label('Anomalies')->formatStateUsing(
                     fn (mixed $state): string => is_array($state) && $state !== [] ? implode(', ', $state) : 'None',
@@ -77,7 +79,8 @@ final class ChargingSessionResource extends Resource
                     'requested_at' => 'Requested at (UTC)',
                     'started_at' => 'Started at (UTC)',
                     'ended_at' => 'Ended at (UTC)',
-                ]),
+                ], static fn (string $field, Model $record): bool => ! in_array($field, ['estimated_cost_minor', 'final_cost_minor'], true)
+                    || ($record instanceof ChargingSession && self::canSeeFinance($record))),
                 Action::make('remoteStop')
                     ->label('Remote stop')
                     ->color('danger')
@@ -142,5 +145,24 @@ final class ChargingSessionResource extends Resource
                 PermissionKey::ChargingRemoteCommand,
                 new ResourceScope(ScopeType::Site, $session->site_id),
             );
+    }
+
+    private static function canSeeFinanceAnywhere(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && app(AuthorizationService::class)->holdsAnywhere($user, PermissionKey::PaymentView);
+    }
+
+    private static function canSeeFinance(ChargingSession $session): bool
+    {
+        if (! app()->environment('staging')) {
+            return true;
+        }
+        $user = auth()->user();
+
+        return $user instanceof User && app(AuthorizationService::class)->allows(
+            $user, PermissionKey::PaymentView, new ResourceScope(ScopeType::Site, $session->site_id),
+        );
     }
 }

@@ -40,6 +40,7 @@ final readonly class RoleAssignmentService
     ): RoleAssignment {
         $tenantId = $this->currentTenant->get()->tenantId;
         $this->assertSameTenant($tenantId, $membership, $role);
+        app(WorkforceRolePresets::class)->assertScope($role, $scope);
 
         if (! $this->authorization->allows($actor, PermissionKey::RoleAssign, $scope)) {
             throw new AuthorizationException('Role assignment is not permitted.');

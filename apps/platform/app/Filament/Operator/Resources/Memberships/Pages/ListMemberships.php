@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Operator\Resources\Memberships\Pages;
 
 use App\Filament\Operator\Resources\Memberships\MembershipResource;
+use App\Filament\Operator\Resources\Memberships\WorkforceAccessForm;
 use App\Models\User;
 use App\Modules\Identity\Application\InvitationService;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
@@ -35,26 +36,34 @@ final class ListMemberships extends ListRecords
                     $this->actor(),
                     PermissionKey::InvitationManage,
                 ))
-                ->schema($this->accessSchema(includeEmail: true, includeMembership: false))
+                ->schema(app()->environment('staging') ? [
+                    TextInput::make('email')->email()->required()->maxLength(254),
+                    ...app(WorkforceAccessForm::class)->fields($this->actor(), PermissionKey::InvitationManage),
+                ] : $this->accessSchema(includeEmail: true, includeMembership: false))
                 ->action(function (array $data): void {
                     $actor = $this->actor();
-                    $role = Role::query()->findOrFail($this->stringValue($data, 'role_id'));
-                    $organizationId = $data['organization_id'] ?? null;
-                    $organization = is_string($organizationId) && $organizationId !== ''
-                        ? Organization::query()->findOrFail($organizationId)
-                        : null;
+                    if (app()->environment('staging')) {
+                        $access = app(WorkforceAccessForm::class);
+                        [$scope, $role] = $access->selection($actor, $data, PermissionKey::InvitationManage);
+                        $organization = $access->organization($scope);
+                    } else {
+                        $role = Role::query()->findOrFail($this->stringValue($data, 'role_id'));
+                        $scope = $this->scope($data);
+                        $organizationId = $data['organization_id'] ?? null;
+                        $organization = is_string($organizationId) && $organizationId !== '' ? Organization::query()->findOrFail($organizationId) : null;
+                    }
                     app(InvitationService::class)->invite(
                         $actor,
                         $this->stringValue($data, 'email'),
                         $organization,
                         $role,
-                        $this->scope($data),
+                        $scope,
                     );
                     Notification::make()->title('Invitation sent')->success()->send();
                 }),
             Action::make('assignRole')
                 ->label('Assign role')
-                ->visible(fn (): bool => app(AuthorizationService::class)->holdsAnywhere(
+                ->visible(fn (): bool => ! app()->environment('staging') && app(AuthorizationService::class)->holdsAnywhere(
                     $this->actor(),
                     PermissionKey::RoleAssign,
                 ))
