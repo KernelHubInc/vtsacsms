@@ -20,7 +20,14 @@ final class NormalizeVehicleNames extends Command
 
     public function handle(CurrentTenant $context, Normalizer $normalizer): int
     {
-        $tenant = Tenant::query()->findOrFail((string) $this->argument('tenant'));
+        $id = $this->argument('tenant');
+        if (! is_string($id)) {
+            $this->error('A tenant ULID is required.');
+
+            return self::FAILURE;
+        }
+
+        $tenant = Tenant::query()->findOrFail($id);
         $apply = (bool) $this->option('apply');
         $count = $context->run(new TenantContext((string) $tenant->getKey(), ActorType::Service, null, (string) Str::ulid()),
             fn (): int => $normalizer->run($apply));

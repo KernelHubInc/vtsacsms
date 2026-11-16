@@ -20,13 +20,15 @@ final class SimulateWalletTopup extends Command
 
     public function handle(CurrentTenant $tenant, QrTopups $topups): int
     {
-        $id = (string) $this->argument('tenant');
-        if (! Str::isUlid($id) || ! Str::isUlid((string) $this->argument('topup')) || ! DB::table('tenants')->where('id', $id)->where('status', 'active')->exists()) {
+        $id = $this->argument('tenant');
+        $reference = $this->argument('topup');
+        if (! is_string($id) || ! is_string($reference) || ! Str::isUlid($id) || ! Str::isUlid($reference)
+            || ! DB::table('tenants')->where('id', $id)->where('status', 'active')->exists()) {
             $this->error('Invalid tenant or top-up reference.');
 
             return self::FAILURE;
         }
-        $tenant->run(new TenantContext($id, ActorType::Service, null, (string) Str::ulid()), fn () => $topups->simulate((string) $this->argument('topup')));
+        $tenant->run(new TenantContext($id, ActorType::Service, null, (string) Str::ulid()), fn () => $topups->simulate($reference));
         $this->info('Simulated funds confirmed. No money moved.');
 
         return self::SUCCESS;
