@@ -39,6 +39,7 @@ class _ChargeReviewState extends State<ChargeReview> {
     final preparation = charging.preparation!;
     final target = preparation.target;
     final quote = preparation.quote;
+    final spendingCeiling = quote.spendingCeiling;
     final vehicles = widget.dependencies.vehicles.vehicles;
     final vehicleId =
         (preparation.attribution['vehicle'] as Map?)?['id'] as String? ??
@@ -63,8 +64,12 @@ class _ChargeReviewState extends State<ChargeReview> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Swiping reserves ${formatMoney(quote.estimatedPreauthorization)} from ${charging.selectedPaymentMethod?.label ?? 'the selected wallet'}. '
-          'Final cost uses confirmed readings; unused funds are released.',
+          spendingCeiling == null
+              ? 'Swiping reserves ${formatMoney(quote.estimatedPreauthorization)} from ${charging.selectedPaymentMethod?.label ?? 'the selected wallet'}. '
+                    'Final cost uses confirmed readings; unused funds are released.'
+              : 'The wallet holds ${formatMoney(quote.estimatedPreauthorization)} to start. '
+                    'The hold grows as needed up to ${formatMoney(spendingCeiling)}. '
+                    'You pay for verified usage and any disclosed fees.',
           style: const TextStyle(fontSize: 12, height: 16 / 12),
         ),
         const SizedBox(height: 12),
@@ -180,11 +185,14 @@ class _ChargeReviewState extends State<ChargeReview> {
                   children: [
                     Expanded(
                       child: _row(
-                        'Budget limit',
+                        spendingCeiling == null
+                            ? 'Budget limit'
+                            : 'Initial wallet hold',
                         formatMoney(quote.estimatedPreauthorization),
                       ),
                     ),
-                    if (quote.budgetPolicy.isNotEmpty)
+                    if (spendingCeiling == null &&
+                        quote.budgetPolicy.isNotEmpty)
                       IconButton(
                         tooltip: 'Change budget',
                         onPressed: charging.mutationInFlight
@@ -194,6 +202,11 @@ class _ChargeReviewState extends State<ChargeReview> {
                       ),
                   ],
                 ),
+                if (spendingCeiling != null)
+                  _row(
+                    'Maximum for this session',
+                    formatMoney(spendingCeiling),
+                  ),
                 if (preparation.paymentMethods.length <= 1)
                   _row(
                     'Pay with',

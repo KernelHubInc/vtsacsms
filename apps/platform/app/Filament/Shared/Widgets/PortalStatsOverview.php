@@ -30,6 +30,7 @@ abstract class PortalStatsOverview extends StatsOverviewWidget
         /** @var User $user */
         $user = auth()->user();
         $metrics = app(PortalDashboardQuery::class)->summary($user);
+        $financeVisible = ! app()->environment('staging') || app(AuthorizationService::class)->holdsAnywhere($user, PermissionKey::PaymentView);
 
         return [
             Stat::make('Network availability', $metrics['network_availability_percent'].'%')
@@ -43,10 +44,12 @@ abstract class PortalStatsOverview extends StatsOverviewWidget
                 ->color('info'),
             Stat::make('Energy delivered · 30 days', number_format($metrics['energy_wh'] / 1000, 1).' kWh')
                 ->description('Source value retained in watt-hours'),
-            Stat::make('Gross revenue · 30 days', $metrics['currency'].' '.number_format($metrics['gross_revenue_minor'] / 100, 2))
-                ->description('Finalized session cost; integer minor units'),
-            Stat::make('Payment success', $metrics['payment_success_percent'].'%')
-                ->description('Terminal payment outcomes · 30 days'),
+            ...($financeVisible ? [
+                Stat::make('Gross revenue · 30 days', $metrics['currency'].' '.number_format($metrics['gross_revenue_minor'] / 100, 2))
+                    ->description('Finalized session cost; integer minor units'),
+                Stat::make('Payment success', $metrics['payment_success_percent'].'%')
+                    ->description('Terminal payment outcomes · 30 days'),
+            ] : []),
             Stat::make('Connector utilization', $metrics['utilization_percent'].'%')
                 ->description('Charging seconds / connector capacity · 30 days'),
             Stat::make('Open faults', (string) $metrics['fault_count'])

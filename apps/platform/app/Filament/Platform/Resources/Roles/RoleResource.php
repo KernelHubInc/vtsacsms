@@ -12,18 +12,22 @@ use App\Models\User;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\Models\Role;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Organizations\Domain\WorkforceRolePreset;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use BackedEnum;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
 use UnitEnum;
 
@@ -41,6 +45,25 @@ final class RoleResource extends Resource
             Section::make('Role details')
                 ->description('Custom roles apply to everyone assigned to them. Other assigned roles can also grant access.')
                 ->schema([
+                    Select::make('preset_source')
+                        ->label('Start from a predefined role')
+                        ->visible(fn (string $operation): bool => app()->environment('staging') && $operation === 'create')
+                        ->options(fn (): array => collect(WorkforceRolePreset::cases())->mapWithKeys(fn (WorkforceRolePreset $preset): array => [$preset->value => $preset->label()])->all())
+                        ->helperText('Starts an editable custom role with the permissions you are allowed to grant.')
+                        ->dehydrated(false)->live()->columnSpanFull()
+                        ->afterStateUpdated(function (?string $state, Set $set): void {
+                            $preset = $state === null ? null : WorkforceRolePreset::tryFrom($state);
+                            $user = auth()->user();
+                            if ($preset === null || ! $user instanceof User || ! app()->environment('staging')) {
+                                return;
+                            }
+                            $held = app(AuthorizationService::class)->effectivePermissions($user);
+                            $keys = array_map(static fn (PermissionKey $permission): string => $permission->value, $preset->permissions());
+                            $name = $preset->label().' (Custom)';
+                            $set('name', $name);
+                            $set('key', Str::slug($name));
+                            $set('module_permissions', RolePermissionFields::group(array_intersect($keys, $held)));
+                        }),
                     TextInput::make('name')->required()->maxLength(120),
                     TextInput::make('key')->required()->maxLength(80)
                         ->unique(ignoreRecord: true, modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('tenant_id', app(CurrentTenant::class)->get()->tenantId)),

@@ -2429,6 +2429,10 @@ export interface components {
                     presets?: number[];
                     allow_custom_amount?: boolean;
                 };
+                pay_as_you_go?: {
+                    minimum_minor: number;
+                    spending_ceiling_minor: number;
+                };
                 idle_policy?: {
                     grace_seconds: number;
                     price_per_minute_minor: number;
@@ -2491,6 +2495,8 @@ export interface components {
             /** @enum {string} */
             payment_state: "authorized" | "captured" | "not_required" | "requires_action";
             reserved_budget_minor: number;
+            /** @description Maximum approved spend in PHP centavos for a pay-as-you-go charging session. */
+            spending_ceiling_minor?: number;
             refundable: boolean;
             receipt: null;
             invoice: null;
@@ -3643,6 +3649,8 @@ export interface operations {
                     pricing_version?: 2;
                     /** @description Declares support for displaying the post-charge idle price and grace period. Required when idle pricing applies. */
                     supports_idle_fee?: boolean;
+                    /** @description Declares support for disclosing an initial hold and an automatically funded session ceiling when enabled on staging. */
+                    supports_pay_as_you_go?: boolean;
                 };
             };
         };

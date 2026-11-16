@@ -54,8 +54,13 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
         $quote = $owner?->quote()->first();
         if ($session === null || $owner === null || $quote === null || ! $command->targetsTransaction($session)
             || $command->actor_id !== $owner->subject_id || $quote->subject_id !== $owner->subject_id
-            || $quote->connector_id !== $session->connector_id || $owner->budget_minor <= 0
-            || $quote->budget_minor !== $owner->budget_minor) {
+            || $quote->connector_id !== $session->connector_id || $quote->budget_minor <= 0) {
+            return false;
+        }
+        $consentedCeiling = $quote->disclosure['pay_as_you_go']['spending_ceiling_minor'] ?? null;
+        if ($consentedCeiling !== $owner->spending_ceiling_minor
+            || $owner->budget_minor < $quote->budget_minor
+            || $owner->budget_minor > ($owner->spending_ceiling_minor ?? $quote->budget_minor)) {
             return false;
         }
 

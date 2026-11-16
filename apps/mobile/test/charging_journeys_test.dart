@@ -15,6 +15,52 @@ import 'support/test_fonts.dart';
 void main() {
   setUpAll(loadTestFonts);
 
+  testWidgets(
+    'pay-as-you-go review shows initial hold without a budget picker',
+    (tester) async {
+      final sample = sampleChargePreparation;
+      final quote = TariffQuote.fromJson({
+        'id': sample.quote.id,
+        'tariff_version_id': sample.quote.tariffVersionId,
+        'name': 'Standard charging',
+        'currency': 'PHP',
+        'tax_inclusive': true,
+        'lines': <Object?>[],
+        'estimated_preauthorization': {
+          'amount_minor': 10000,
+          'currency': 'PHP',
+        },
+        'pay_as_you_go': {
+          'minimum_minor': 10000,
+          'spending_ceiling_minor': 200000,
+        },
+        'expires_at': DateTime.utc(2030).toIso8601String(),
+      });
+      final repository = FakeChargingRepository()
+        ..preparation = ChargePreparation(
+          target: sample.target,
+          quote: quote,
+          paymentMethods: sample.paymentMethods,
+        );
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      await tester.pumpWidget(VtsaApp(dependencies: fixture.dependencies));
+      await tester.pumpAndSettle();
+      GoRouter.of(
+        tester.element(find.text('Where would you like to charge?')),
+      ).go('/charge?code=lumina-test');
+      await tester.pumpAndSettle();
+
+      expect(quote.spendingCeiling?.minorUnits, 200000);
+      expect(find.text('Initial wallet hold'), findsOneWidget);
+      expect(find.text('Maximum for this session'), findsOneWidget);
+      expect(find.text('Budget limit'), findsNothing);
+      expect(find.byTooltip('Change budget'), findsNothing);
+    },
+  );
+
   testWidgets('a rejected start opens a popup and can be retried', (
     tester,
   ) async {

@@ -13,6 +13,7 @@ use App\Modules\Identity\Domain\Models\UserInvitation;
 use App\Modules\Identity\Notifications\UserInvitationNotification;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Organizations\Application\AuthorizationService;
+use App\Modules\Organizations\Application\WorkforceRolePresets;
 use App\Modules\Organizations\Domain\MembershipStatus;
 use App\Modules\Organizations\Domain\Models\Membership;
 use App\Modules\Organizations\Domain\Models\Organization;
@@ -275,6 +276,7 @@ final readonly class InvitationService
     public function assertGrantable(User $actor, Role $role, ResourceScope $scope): void
     {
         abort_unless($role->tenant_id === $this->currentTenant->get()->tenantId, 404);
+        app(WorkforceRolePresets::class)->assertScope($role, $scope);
         if (! $this->authorization->allows($actor, PermissionKey::InvitationManage, $scope)) {
             throw new AuthorizationException('Invitation management is not permitted.');
         }

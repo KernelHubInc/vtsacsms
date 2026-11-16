@@ -10,6 +10,7 @@ use App\Foundation\Audit\AuditResult;
 use App\Models\User;
 use App\Modules\Organizations\Domain\Models\Role;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Organizations\Domain\WorkforceRolePreset;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -34,7 +35,8 @@ final readonly class RoleManager
         }
 
         $validated = Validator::make($data, [
-            'key' => ['required', 'string', 'max:80', Rule::unique('roles', 'key')->where('tenant_id', $tenantId)->ignore($role?->getKey())],
+            'key' => ['required', 'string', 'max:80', Rule::notIn(array_column(WorkforceRolePreset::cases(), 'value')),
+                Rule::unique('roles', 'key')->where('tenant_id', $tenantId)->ignore($role?->getKey())],
             'name' => ['required', 'string', 'max:120'],
             'permissions' => ['present', 'array'],
             'permissions.*' => ['required', 'string', 'distinct', Rule::enum(PermissionKey::class)],

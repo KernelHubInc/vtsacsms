@@ -11,6 +11,7 @@ use App\Modules\Charging\Domain\ChargingSessionState;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Inventory\Application\InventoryReportService;
 use App\Modules\Locations\Application\AccessibleSitesQuery;
+use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Payments\Domain\Models\PaymentIntent;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use Carbon\CarbonImmutable;
@@ -38,13 +39,17 @@ final readonly class PortalDashboardQuery
     public function summary(User $user): array
     {
         $siteIds = $this->siteIds($user);
-        $key = $this->cacheKey('summary', $user, $siteIds);
+        $financeSiteIds = app()->environment('staging')
+            ? $this->sites->for($user, PermissionKey::PaymentView, includeHostedSites: false)->whereIn('id', $siteIds)->orderBy('id')->pluck('id')->all()
+            : null;
+        $key = $this->cacheKey('summary'.($financeSiteIds === null ? '' : ':'.hash('sha256', implode(',', $financeSiteIds))), $user, $siteIds);
 
         /** @var array<string, int|float|string|null> $summary */
-        $summary = Cache::remember($key, now()->addSeconds(5), function () use ($user, $siteIds): array {
+        $summary = Cache::remember($key, now()->addSeconds(5), function () use ($user, $siteIds, $financeSiteIds): array {
             $periodStart = CarbonImmutable::now('UTC')->subDays(30);
             $sessions = $this->sessions->for($user);
-            $sessionIds = (clone $sessions)->where('requested_at', '>=', $periodStart)->pluck('id');
+            $financeSessions = (clone $sessions)->when($financeSiteIds !== null, fn ($query) => $query->whereIn('site_id', $financeSiteIds ?? []));
+            $sessionIds = (clone $financeSessions)->where('requested_at', '>=', $periodStart)->pluck('id');
             $activeStates = array_map(
                 static fn (ChargingSessionState $state): string => $state->value,
                 [
@@ -88,7 +93,7 @@ final readonly class PortalDashboardQuery
             $offlineChargers = $chargerCount - $onlineChargers;
             $activeSessions = (clone $sessions)->whereIn('state', $activeStates)->count();
             $energyWh = (int) (clone $sessions)->where('requested_at', '>=', $periodStart)->sum('energy_wh');
-            $grossRevenue = (int) (clone $sessions)
+            $grossRevenue = (int) (clone $financeSessions)
                 ->where('requested_at', '>=', $periodStart)
                 ->whereNotNull('final_cost_minor')
                 ->sum('final_cost_minor');
@@ -102,7 +107,7 @@ final readonly class PortalDashboardQuery
             $paymentSuccessful = (clone $payments)->whereIn('state', [
                 'captured', 'partially_captured', 'partially_refunded', 'refunded',
             ])->count();
-            $currency = (string) ((clone $sessions)->whereNotNull('currency')->latest('requested_at')->value('currency') ?? 'PHP');
+            $currency = (string) ((clone $financeSessions)->whereNotNull('currency')->latest('requested_at')->value('currency') ?? 'PHP');
             $capacitySeconds = max(1, $connectorCount * 30 * 86400);
 
             return [

@@ -21,8 +21,8 @@ final class ReconcileWalletTopups extends Command
 
     public function handle(CurrentTenant $tenant, QrTopups $topups): int
     {
-        $id = (string) $this->argument('tenant');
-        if (! config('wallet.aub.approved') || $id !== config('wallet.aub.tenant_id')
+        $id = $this->argument('tenant');
+        if (! is_string($id) || ! config('wallet.aub.approved') || $id !== config('wallet.aub.tenant_id')
             || ! DB::table('tenants')->where('id', $id)->where('status', 'active')->exists()) {
             $this->error('AUB review approval and the configured merchant tenant are required.');
 

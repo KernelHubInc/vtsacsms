@@ -9,6 +9,7 @@ use App\Modules\Identity\Notifications\VerifyEmailNotification;
 use App\Modules\Notifications\Mail\ChargingSummaryMail;
 use App\Modules\Notifications\Mail\PromotionalMail;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
@@ -51,6 +52,7 @@ final class EmailDesignTest extends TestCase
         $user = new User(['email' => 'driver@example.test']);
         $user->public_id = '01M5YGQ66J4A463WRK1C0XVJK6';
         $message = (new VerifyEmailNotification)->toMail($user);
+        self::assertInstanceOf(MailMessage::class, $message);
         $url = $message->actionUrl;
         self::assertTrue(URL::hasValidSignature(Request::create($url)));
         $html = view('mail.welcome', $message->viewData)->render();

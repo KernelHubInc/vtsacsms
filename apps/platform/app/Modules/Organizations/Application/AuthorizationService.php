@@ -105,11 +105,18 @@ final readonly class AuthorizationService
      */
     public function effectivePermissions(User $user, ?ResourceScope $resourceScope = null): array
     {
+        $query = $this->permissionQuery($user, null);
+        if ($query === null) {
+            return [];
+        }
+        $this->applyResourceScope($query, $resourceScope);
+        $held = $query->distinct()->pluck('role_permissions.permission_key')->flip();
+
         return array_values(array_map(
             fn (PermissionKey $permission): string => $permission->value,
             array_filter(
                 PermissionKey::cases(),
-                fn (PermissionKey $permission): bool => $this->allows($user, $permission, $resourceScope),
+                fn (PermissionKey $permission): bool => $held->has($permission->value),
             ),
         ));
     }

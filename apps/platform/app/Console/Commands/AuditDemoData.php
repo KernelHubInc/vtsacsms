@@ -16,8 +16,15 @@ final class AuditDemoData extends Command
 
     public function handle(DemoDataAudit $audit): int
     {
+        $tenant = $this->argument('tenant');
+        if (! is_string($tenant)) {
+            $this->error('An exact tenant ULID is required.');
+
+            return self::FAILURE;
+        }
+
         try {
-            $report = $audit->inspect((string) $this->argument('tenant'), (int) $this->option('sample-limit'));
+            $report = $audit->inspect($tenant, (int) $this->option('sample-limit'));
         } catch (InvalidArgumentException $exception) {
             $this->error($exception->getMessage());
 

@@ -14,6 +14,29 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class ChargingCommercialSettingsTest extends TenantSecurityTestCase
 {
+    public function test_staging_admin_can_set_the_pay_as_you_go_minimum_for_its_tenant(): void
+    {
+        $this->app->instance('env', 'staging');
+        config(['mobile_charging.pay_as_you_go' => true]);
+        $tenant = $this->createTenant('pay-as-you-go-settings');
+        $other = $this->createTenant('another-pay-as-you-go-tenant');
+        $user = $this->createUser();
+        $this->actingAs($user);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
+            $membership = $this->createMembership($tenant, $user);
+            $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'settings', [PermissionKey::TenantSettingsView, PermissionKey::TenantSettingsManage]));
+            Livewire::test(SystemSettings::class)->assertSet('payAsYouGoMinimum', '100.00')
+                ->set('payAsYouGoMinimum', '0')->call('savePayAsYouGoMinimum')->assertHasErrors(['payAsYouGoMinimum'])
+                ->set('payAsYouGoMinimum', '125.50')->call('savePayAsYouGoMinimum')->assertHasNoErrors();
+            self::assertSame(12550, app(ChargingBudgets::class)->payAsYouGoMinimum());
+            self::assertSame(1, app(ChargingBudgets::class)->current()['minimum_minor']);
+            $this->assertDatabaseHas('audit_events', ['tenant_id' => $tenant->id, 'action' => 'charging.pay_as_you_go.updated']);
+        });
+        $this->withinTenant($other, $user, fn () => self::assertSame(10000, app(ChargingBudgets::class)->payAsYouGoMinimum()));
+    }
+
     public function test_settings_are_authorized_tenant_scoped_validated_and_audited(): void
     {
         $this->freezeTime();
@@ -74,7 +97,7 @@ final class ChargingCommercialSettingsTest extends TenantSecurityTestCase
         $this->withinTenant($tenant, $user, function () use ($tenant, $user): void {
             $membership = $this->createMembership($tenant, $user);
             $this->assignDirectly($tenant, $membership, $this->createRole($tenant, 'viewer', [PermissionKey::TenantSettingsView]));
-            foreach ([['addBudgetPreset'], ['removeBudgetPreset', 0], ['saveChargingBudgets'], ['publishPlatformFee']] as $action) {
+            foreach ([['addBudgetPreset'], ['removeBudgetPreset', 0], ['saveChargingBudgets'], ['savePayAsYouGoMinimum'], ['publishPlatformFee']] as $action) {
                 Livewire::test(SystemSettings::class)->call(...$action)->assertForbidden();
             }
             $this->assertDatabaseCount('charging_budget_settings', 0);

@@ -35,7 +35,7 @@ final readonly class CustomerCharging
     public function __construct(private CurrentTenant $tenant, private ConnectorSnapshotQuery $connectors, private PrepaidWallet $wallet) {}
 
     /** @return array<string, mixed> */
-    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null, ?int $requestedBudget = null, int $pricingVersion = 1, bool $supportsIdleFee = false): array
+    public function prepare(string $subject, string $code, ?string $accountId = null, ?string $vehicleId = null, ?int $requestedBudget = null, int $pricingVersion = 1, bool $supportsIdleFee = false, bool $supportsPayAsYouGo = false): array
     {
         $user = User::query()->where('public_id', $subject)->firstOrFail();
         $accounts = app(ChargingAccounts::class);
@@ -74,12 +74,20 @@ final readonly class CustomerCharging
         $snapshot['platform_fee'] = $fee;
         $balance = $this->wallet->summary($subject, 'live', $payer);
         $available = $this->wallet->sessionCap($payer, $subject, $vehicleId, (int) $balance['available_minor']);
-        $policy = app(ChargingBudgets::class)->current();
-        $budget = app(ChargingBudgets::class)->select($available, $requestedBudget);
-        if ($budget <= 0) {
-            throw new DomainException('The selected wallet has no available charging budget. Ask its owner to fund it or review your spending limit.');
-        }
+        $budgets = app(ChargingBudgets::class);
+        $policy = $budgets->current();
         $minimum = app(TariffEngine::class)->rate($snapshot, new RatingInput($line->dimension->value === 'session' ? 1 : 0, 0, 0, 0, $at));
+        $payAsYouGo = null;
+        if ($supportsPayAsYouGo && $budgets->payAsYouGoAvailable() && $requestedBudget === null) {
+            $startingMinimum = $budgets->payAsYouGoMinimum();
+            $budget = max($startingMinimum, $minimum->totalMinor);
+            if ($available < $budget) {
+                throw new DomainException('The available wallet balance or account spending limit is below the starting hold. Add funds or ask the account owner to check your limit.');
+            }
+            $payAsYouGo = ['minimum_minor' => $startingMinimum, 'spending_ceiling_minor' => $available];
+        } else {
+            $budget = $budgets->select($available, $requestedBudget);
+        }
         if ($minimum->totalMinor > $budget) {
             throw new DomainException('Your available charging budget is below the session fee.');
         }
@@ -87,7 +95,7 @@ final readonly class CustomerCharging
             'subject_id' => $subject, 'connector_id' => $connector->connectorId,
             'charging_account_id' => $accountId, 'vehicle_id' => $vehicleId, 'payer_account_id' => $payer, 'prepaid_account_id' => $balance['id'],
             'tariff_version_id' => $version->getKey(), 'budget_minor' => $budget,
-            'disclosure' => ['target' => $target, 'tariff' => $snapshot, 'budget_policy' => $policy, 'attribution' => [
+            'disclosure' => ['target' => $target, 'tariff' => $snapshot, 'budget_policy' => $policy, 'pay_as_you_go' => $payAsYouGo, 'attribution' => [
                 'driver_id' => $subject, 'driver_name' => $user->name, 'account_id' => $accountId, 'account_name' => $account->name,
                 'vehicle' => $vehicle, 'payer' => $payer === null ? 'Personal prepaid wallet' : $account->name.' prepaid wallet',
                 'wallet_id' => $balance['id'], 'limit_period' => 'per_session']],
@@ -109,7 +117,9 @@ final readonly class CustomerCharging
                 },
             ])->all(),
             'estimated_preauthorization' => ['amount_minor' => $budget, 'currency' => 'PHP'],
-            'budget_policy' => [...$policy, 'available_minor' => min($available, $policy['maximum_minor'])],
+            ...($payAsYouGo === null
+                ? ['budget_policy' => [...$policy, 'available_minor' => min($available, $policy['maximum_minor'])]]
+                : ['pay_as_you_go' => $payAsYouGo]),
             'platform_fee' => $fee,
             'idle_policy' => $idle === null ? null : ['grace_seconds' => $version->idle_grace_seconds, 'price_per_minute_minor' => (int) $idle->price_minor],
             'expires_at' => $quote->expires_at->toISOString(),
@@ -164,8 +174,13 @@ final readonly class CustomerCharging
             }
             $fee = app(PlatformFees::class)->current();
             $quotedFee = $quote->disclosure['tariff']['platform_fee'] ?? ['id' => null, 'enabled' => false];
+            $budgets = app(ChargingBudgets::class);
+            $payAsYouGo = $quote->disclosure['pay_as_you_go'] ?? null;
+            $budgetChanged = $payAsYouGo === null
+                ? (isset($quote->disclosure['budget_policy']) && $quote->disclosure['budget_policy'] != $budgets->current())
+                : (! $budgets->payAsYouGoAvailable() || $payAsYouGo['minimum_minor'] !== $budgets->payAsYouGoMinimum());
             if (($fee['id'] !== ($quotedFee['id'] ?? null) && ($fee['enabled'] || ($quotedFee['enabled'] ?? false)))
-                || (isset($quote->disclosure['budget_policy']) && $quote->disclosure['budget_policy'] != app(ChargingBudgets::class)->current())) {
+                || $budgetChanged) {
                 throw new DomainException('Charging settings changed. Review a fresh quote before starting.');
             }
             $plugBeforeStart = in_array($connector->chargePointIdentity, config('mobile_charging.plug_before_start_stations'), true);
@@ -183,6 +198,7 @@ final readonly class CustomerCharging
             CustomerChargingSession::query()->create([
                 'subject_id' => $subject, 'session_id' => $result->session->getKey(), 'quote_id' => $quoteId,
                 'idempotency_hash' => $hash, 'budget_minor' => $quote->budget_minor,
+                'spending_ceiling_minor' => $payAsYouGo['spending_ceiling_minor'] ?? null,
                 'charging_account_id' => $quote->charging_account_id, 'vehicle_id' => $quote->vehicle_id,
                 'payer_account_id' => $quote->payer_account_id, 'prepaid_account_id' => $quote->prepaid_account_id,
             ]);
@@ -298,6 +314,7 @@ final readonly class CustomerCharging
             'failure_reason' => $session->failure_reason, 'anomaly_flags' => $session->anomaly_flags,
             'cancellation_requested' => $session->cancellation_reason === 'customer_cancel_requested',
             'payment_state' => $owner->payment_state, 'reserved_budget_minor' => (int) $owner->budget_minor,
+            ...($owner->spending_ceiling_minor === null ? [] : ['spending_ceiling_minor' => $owner->spending_ceiling_minor]),
             'attribution' => $quote->disclosure['attribution'] ?? ['driver_id' => $owner->subject_id, 'payer' => 'Personal prepaid wallet'],
             'refundable' => false, 'receipt' => null, 'invoice' => null,
         ];

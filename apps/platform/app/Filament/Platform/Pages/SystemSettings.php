@@ -48,6 +48,8 @@ final class SystemSettings extends Page
     /** @var array<string, mixed> */
     public array $budgetSettings = [];
 
+    public string $payAsYouGoMinimum = '';
+
     /** @var array<string, mixed> */
     public array $feeSettings = [];
 
@@ -63,6 +65,9 @@ final class SystemSettings extends Page
             'maximum' => $this->money($budget['maximum_minor']), 'presets' => array_map($this->money(...), $budget['presets']),
             'allow_custom_amount' => $budget['allow_custom_amount'],
         ];
+        if ($this->showsPayAsYouGo()) {
+            $this->payAsYouGoMinimum = $this->money(app(ChargingBudgets::class)->payAsYouGoMinimum());
+        }
         $fee = app(PlatformFees::class)->current();
         $this->feeSettings = ['enabled' => $fee['enabled'], 'amount' => $this->money($fee['amount_minor']),
             'waiver_threshold' => $this->money($fee['waiver_threshold_minor']),
@@ -211,6 +216,22 @@ final class SystemSettings extends Page
             'allow_custom_amount' => $this->budgetSettings['allow_custom_amount'],
         ]);
         Notification::make()->title('Charging budgets saved')->body('New quotes use these settings. Existing sessions keep their reserved budget.')->success()->send();
+    }
+
+    public function showsPayAsYouGo(): bool
+    {
+        return app(ChargingBudgets::class)->payAsYouGoAvailable();
+    }
+
+    public function savePayAsYouGoMinimum(ChargingBudgets $budgets, CurrentTenant $tenant): void
+    {
+        abort_unless($this->canManage() && $this->showsPayAsYouGo(), 403);
+        abort_unless($this->tenantId === $tenant->get()->tenantId, 409);
+        $this->validate(['payAsYouGoMinimum' => ['required', 'string', 'regex:/^\d{1,7}(?:\.\d{1,2})?$/']]);
+        /** @var User $user */
+        $user = auth()->user();
+        $budgets->updatePayAsYouGoMinimum($user, $this->minor($this->payAsYouGoMinimum));
+        Notification::make()->title('Pay-as-you-go minimum saved')->body('The new starting hold applies to new quotes.')->success()->send();
     }
 
     public function addBudgetPreset(): void

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Identity\Notifications\VerifyEmailNotification;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Domain\Models\Tenant;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -87,7 +88,9 @@ final class EmailVerificationTest extends TenantSecurityTestCase
     public function test_email_link_verifies_without_an_app_token_and_retries_are_idempotent(): void
     {
         [$user, $tenant] = $this->subject();
-        $url = (new VerifyEmailNotification)->toMail($user)->actionUrl;
+        $message = (new VerifyEmailNotification)->toMail($user);
+        self::assertInstanceOf(MailMessage::class, $message);
+        $url = $message->actionUrl;
 
         $this->get($url, ['Accept' => 'text/html'])->assertOk()->assertSee('Email verified');
         $verifiedAt = $user->fresh()?->email_verified_at;

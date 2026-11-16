@@ -16,6 +16,7 @@ use App\Modules\Charging\Application\CustomerCharging;
 use App\Modules\Charging\Application\Gateway\GatewayCommandClient;
 use App\Modules\Charging\Application\Gateway\GatewayCommandResult;
 use App\Modules\Charging\Application\OcppEventConsumer;
+use App\Modules\Charging\Application\PrepaidChargingMonitor;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingSession;
 use App\Modules\Charging\Domain\Models\ChargingStateTransition;
@@ -35,6 +36,7 @@ use App\Modules\Tenancy\Domain\Models\Tenant;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\TenantSecurityTestCase;
 
@@ -94,6 +96,96 @@ final class AutomaticPrepaidStopTest extends TenantSecurityTestCase
             $evidence = ChargingStateTransition::query()->where('reason', 'prepaid_stop_forecast')->sole()->evidence;
             self::assertSame(20, $evidence['queue_delay_seconds']);
             self::assertSame(110, $evidence['lookahead_seconds']);
+        });
+    }
+
+    public function test_pay_as_you_go_extends_the_hold_and_stops_at_the_wallet_ceiling(): void
+    {
+        $this->app->instance('env', 'staging');
+        config(['mobile_charging.pay_as_you_go' => true]);
+        [$tenant, $actor, $session] = $this->start(10000, 20000, true);
+        $wallet = app(PrepaidWallet::class);
+        $this->withinTenant($tenant, $actor, function () use ($session, $actor, $wallet): void {
+            self::assertSame(10000, $wallet->summary($actor->public_id, 'live')['available_minor']);
+            StationConnection::query()->create([
+                'charging_station_id' => $session->charging_station_id, 'connection_id' => (string) Str::ulid(), 'connected' => true,
+                'connected_at' => now('UTC')->subSecond(), 'last_event_at' => now('UTC'), 'last_seen_at' => now('UTC'),
+            ]);
+            $session->update(['energy_wh' => 99900]);
+            $this->reading($session, 100900, 'Energy.Active.Import.Register', 'Wh');
+        });
+        Artisan::call('charging:monitor-prepaid');
+        Artisan::call('charging:monitor-prepaid');
+        $this->withinTenant($tenant, $actor, function () use ($tenant, $session, $actor, $wallet): void {
+            $owner = CustomerChargingSession::query()->where('session_id', $session->id)->firstOrFail();
+            self::assertSame(20000, $owner->budget_minor);
+            self::assertSame(20000, $owner->spending_ceiling_minor);
+            self::assertSame(20000, $wallet->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(0, $wallet->summary($actor->public_id, 'live')['available_minor']);
+            self::assertSame(0, $session->commands()->where('type', 'remote_stop')->count());
+            $this->assertDatabaseCount('prepaid_entries', 3);
+            $this->assertDatabaseHas('audit_events', ['tenant_id' => $tenant->id, 'action' => 'billing.prepaid.reserved']);
+            try {
+                $wallet->reserve($actor->public_id, 'live', (string) Str::ulid(), 1);
+                self::fail('The same funds were reserved a second time.');
+            } catch (ValidationException) {
+                self::assertSame(0, $wallet->summary($actor->public_id, 'live')['available_minor']);
+            }
+            $session->update(['energy_wh' => 199900]);
+            $this->reading($session, 200900, 'Energy.Active.Import.Register', 'Wh');
+        });
+        Artisan::call('charging:monitor-prepaid');
+        Artisan::call('charging:monitor-prepaid');
+        $command = $this->stopCommand($tenant, $actor, $session);
+        $gateway = $this->createMock(GatewayCommandClient::class);
+        $gateway->expects(self::once())->method('dispatch')->willReturn(new GatewayCommandResult('completed', ['status' => 'Accepted'], null));
+        $this->runJob($command, $gateway);
+        $this->travel(10)->seconds();
+        $this->withinTenant($tenant, $actor, function () use ($tenant, $actor, $session, $wallet): void {
+            $result = app(OcppEventConsumer::class)->consume([
+                'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.stop_transaction.received.v1', 'schema_version' => 1,
+                'tenant_id' => $tenant->id, 'occurred_at' => now('UTC')->toISOString(), 'aggregate_type' => 'charging_station',
+                'aggregate_id' => $session->charging_station_id, 'correlation_id' => (string) Str::ulid(), 'causation_id' => (string) Str::ulid(),
+                'data' => ['charge_point_identity' => ChargingStation::query()->findOrFail($session->charging_station_id)->charge_point_identity,
+                    'protocol' => 'ocpp1.6', 'protocol_timestamp' => now('UTC')->toISOString(), 'clock_skew_detected' => false,
+                    'protocol_transaction_id' => 92, 'meter_stop_wh' => 201000, 'reason' => 'Remote', 'samples' => []],
+            ]);
+            self::assertSame('processed', $result->outcome);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->id);
+            self::assertSame('captured', CustomerChargingSession::query()->where('session_id', $session->id)->value('payment_state'));
+            self::assertSame(0, $wallet->summary($actor->public_id, 'live')['balance_minor']);
+            self::assertSame(0, $wallet->summary($actor->public_id, 'live')['reserved_minor']);
+            $this->assertDatabaseCount('prepaid_entries', 4);
+        });
+    }
+
+    public function test_disconnected_charger_cannot_extend_the_hold(): void
+    {
+        $this->app->instance('env', 'staging');
+        config(['mobile_charging.pay_as_you_go' => true]);
+        [$tenant, $actor, $session] = $this->start(10000, 20000, true);
+        $this->withinTenant($tenant, $actor, function () use ($session): void {
+            $session->update(['energy_wh' => 99900]);
+            $this->reading($session, 100900, 'Energy.Active.Import.Register', 'Wh');
+        });
+        Artisan::call('charging:monitor-prepaid');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $session): void {
+            self::assertSame(10000, app(PrepaidWallet::class)->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame('stopping', $session->refresh()->state->value);
+        });
+    }
+
+    public function test_pay_as_you_go_is_staging_only_and_requires_enough_funds(): void
+    {
+        config(['mobile_charging.pay_as_you_go' => true]);
+        [$tenant, $actor, $session] = $this->start(100, 9999, true);
+        $this->withinTenant($tenant, $actor, function () use ($actor, $session): void {
+            self::assertNull(CustomerChargingSession::query()->where('session_id', $session->id)->value('spending_ceiling_minor'));
+            $this->app->instance('env', 'staging');
+            $this->expectException(\DomainException::class);
+            $this->expectExceptionMessage('below the starting hold');
+            app(CustomerCharging::class)->prepare($actor->public_id, (string) $session->connector_id, supportsPayAsYouGo: true);
         });
     }
 
@@ -280,12 +372,12 @@ final class AutomaticPrepaidStopTest extends TenantSecurityTestCase
     }
 
     /** @return array{Tenant, User, ChargingSession} */
-    private function start(int $budget = 100): array
+    private function start(int $budget = 100, ?int $walletFunds = null, bool $supportsPayAsYouGo = false): array
     {
         config(['mobile_charging.maximum_reservation_minor' => $budget]);
         $tenant = $this->createTenant('automatic-'.Str::lower((string) Str::ulid()));
         $actor = $this->createUser();
-        $session = $this->withinTenant($tenant, $actor, function () use ($tenant, $actor, $budget): ChargingSession {
+        $session = $this->withinTenant($tenant, $actor, function () use ($tenant, $actor, $budget, $walletFunds, $supportsPayAsYouGo): ChargingSession {
             $this->createMembership($tenant, $actor);
             $site = Site::factory()->activePublic()->create();
             $ocpp = OcppVersion::query()->firstOrCreate(['code' => '1.6J'], ['name' => 'OCPP 1.6J']);
@@ -295,9 +387,9 @@ final class AutomaticPrepaidStopTest extends TenantSecurityTestCase
             ConnectorStatus::query()->create(['connector_id' => $connector->id, 'status' => 'occupied', 'reported_status' => 'preparing', 'observed_at' => now(), 'stale_after_seconds' => 300]);
             $tariff = app(TariffManagementService::class)->create(['name' => 'PHP 1/kWh', 'currency' => 'PHP']);
             app(PortalPricing::class)->publish($tariff, ['mode' => 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => $connector->id]);
-            app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), $budget);
+            app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), $walletFunds ?? $budget);
             $service = app(CustomerCharging::class);
-            $quote = $service->prepare($actor->public_id, (string) $connector->id);
+            $quote = $service->prepare($actor->public_id, (string) $connector->id, supportsPayAsYouGo: $supportsPayAsYouGo);
             $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->id, 'automatic-start');
             $result = app(OcppEventConsumer::class)->consume([
                 'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.start_transaction.received.v1', 'schema_version' => 1,

@@ -76,4 +76,29 @@ final readonly class ChargingBudgets
 
         return $budget;
     }
+
+    public function payAsYouGoAvailable(): bool
+    {
+        return app()->environment('staging') && (bool) config('mobile_charging.pay_as_you_go');
+    }
+
+    public function payAsYouGoMinimum(): int
+    {
+        return (int) (ChargingBudgetSetting::query()->value('pay_as_you_go_minimum_minor') ?? 10000);
+    }
+
+    public function updatePayAsYouGoMinimum(User $actor, int $amount): void
+    {
+        abort_unless($this->payAsYouGoAvailable() && app(AuthorizationService::class)->allows($actor, PermissionKey::TenantSettingsManage), 403);
+        Validator::make(['payAsYouGoMinimum' => $amount], ['payAsYouGoMinimum' => ['integer', 'between:1,100000000']])->validate();
+
+        DB::transaction(function () use ($amount): void {
+            $setting = ChargingBudgetSetting::query()->firstOrCreate([], $this->current());
+            $setting = ChargingBudgetSetting::query()->whereKey($setting->getKey())->lockForUpdate()->firstOrFail();
+            $before = (int) $setting->getAttribute('pay_as_you_go_minimum_minor');
+            $setting->update(['pay_as_you_go_minimum_minor' => $amount]);
+            app(AuditRecorder::class)->record(new AuditEntry('charging.pay_as_you_go.updated', 'charging_budget_setting', (string) $setting->getKey(),
+                AuditResult::Succeeded, before: ['minimum_minor' => $before], after: ['minimum_minor' => $amount]));
+        });
+    }
 }
