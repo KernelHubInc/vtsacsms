@@ -13,7 +13,7 @@ Follow the current [Flutter iOS setup](https://docs.flutter.dev/platform-integra
 
 ## Configuration prepared in this repository
 
-The native target is iOS 14.0, matching the installed Google Maps Flutter plugin's declared minimum. CocoaPods integration uses Flutter's standard Podfile. Secure storage has the Keychain entitlements required by the installed plugin. Camera, photo library, location and Face ID descriptions already exist in Info.plist.
+The minimum supported version is iOS 15.0 in the Xcode project and Podfile, matching the Firebase plugins' minimum deployment target. Secure storage has the Keychain entitlements required by the installed plugin. Camera, photo library, location and Face ID descriptions already exist in Info.plist.
 
 The default build uses `dart_defines.staging-demo.json` and the staging API. This configuration is embedded in the binary: it must contain only public application configuration, never merchant signing keys or backend credentials. OpenStreetMap is the current map provider and needs no Google Maps key.
 
