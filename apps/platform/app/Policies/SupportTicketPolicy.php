@@ -7,6 +7,7 @@ namespace App\Policies;
 use App\Models\User;
 use App\Modules\Organizations\Application\AuthorizationService;
 use App\Modules\Organizations\Domain\PermissionKey;
+use App\Modules\Support\Application\AccessibleSupportTickets;
 use App\Modules\Support\Domain\Models\SupportTicket;
 use App\Modules\Tenancy\Application\CurrentTenant;
 
@@ -25,18 +26,12 @@ final readonly class SupportTicketPolicy
 
     public function view(User $user, SupportTicket $ticket): bool
     {
-        return $this->sameTenant($ticket)
-            && ($ticket->category === SupportTicket::ACCOUNT_DELETION
-                ? $this->authorization->allows($user, PermissionKey::SupportView)
-                : $this->authorization->holdsAnywhere($user, PermissionKey::SupportView));
+        return $this->sameTenant($ticket) && app(AccessibleSupportTickets::class)->for($user)->whereKey($ticket->getKey())->exists();
     }
 
     public function update(User $user, SupportTicket $ticket): bool
     {
-        return $this->sameTenant($ticket)
-            && ($ticket->category === SupportTicket::ACCOUNT_DELETION
-                ? $this->authorization->allows($user, PermissionKey::SupportManage)
-                : $this->authorization->holdsAnywhere($user, PermissionKey::SupportManage));
+        return $this->sameTenant($ticket) && app(AccessibleSupportTickets::class)->for($user, PermissionKey::SupportManage)->whereKey($ticket->getKey())->exists();
     }
 
     private function sameTenant(SupportTicket $ticket): bool

@@ -288,3 +288,13 @@ This original credential-based requirement is superseded for URL-only deployment
 ### FR-OCPP-ENROLL-02 - URL-only registered chargers
 
 An active station with an active tenant and matching OCPP version can connect to `/ocpp/{charge-point-id}` without a device password or client certificate in explicitly activated URL-only mode. Admin creation and editing require no OCPP password; existing stations need no re-save or credential record. Unknown/inactive IDs fail closed. Gateway-to-core service authentication remains required. This operator-approved mode provides registration checks, not proof of physical device identity (ADR 0024); it does not authorize charging or guarantee online status until communication occurs.
+
+
+### SUP-001–SUP-004: Staged customer support intake
+
+- **SUP-001:** A verified driver submits the existing session issue payload and an idempotency key. The system verifies accessible session ownership, links the case to its site, returns a public ticket reference and atomically queues an acknowledgement. Existing mobile builds remain compatible.
+- **SUP-002:** A website visitor can submit without an app account after browser-bound email verification. Codes expire after 15 minutes/five incorrect attempts. Rate limits, a honeypot and server form timing limit abuse; only the configured active public tenant owns the case. Public inputs cannot claim private charging history.
+- **SUP-003:** Staff lists, details, conversations, responses, status changes and contact reveal enforce tenant plus current site/operator scope. General and account-deletion requests remain tenant-wide. Internal notes never reach customers; contact reveal is separately authorized and audited.
+- **SUP-004:** Acknowledgements and public replies use durable Notifications delivery records, safe retry categories, bounded attempts and provider acceptance evidence. SMTP acceptance is distinct from inbox delivery. Guest contact is encrypted and expires under the documented staging retention default. Email-to-ticket ingestion, attachments and new mobile support navigation are separate increments.
+
+This increment is enabled on staging only. See [ADR 0035](../architecture/decisions/0035-verified-support-intake-and-durable-correspondence.md) and the [support runbook](../runbooks/support-tickets.md).

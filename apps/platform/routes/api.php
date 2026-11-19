@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\V1\StationDataTransferController;
 use App\Http\Controllers\Api\V1\StockCountController;
 use App\Http\Controllers\Api\V1\StockReservationController;
 use App\Http\Controllers\Api\V1\StockTransferController;
+use App\Http\Controllers\Api\V1\SupportIssueController;
 use App\Http\Controllers\Api\V1\TariffController;
 use App\Http\Controllers\Api\V1\TariffVersionController;
 use App\Http\Controllers\Api\V1\VendorInvoiceController;
@@ -57,6 +58,7 @@ use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\RequireEnabledFeature;
 use App\Http\Middleware\RequirePermission;
 use App\Http\Middleware\RequireSanctumPermission;
+use App\Http\Middleware\RequireSupportIntake;
 use App\Modules\Organizations\Domain\PermissionKey;
 use Illuminate\Support\Facades\Route;
 
@@ -128,6 +130,8 @@ Route::prefix('v1')->middleware([
         ->middleware('throttle:auth.verify')->name('api.v1.auth.email.send');
 
     Route::middleware(EnsureVerifiedIdentity::class)->group(function (): void {
+        Route::post('/mobile/support/issues', SupportIssueController::class)
+            ->middleware([RequireSupportIntake::class, 'throttle:10,1'])->name('api.v1.mobile.support.issues.store');
         Route::get('/mobile/notices', DriverNoticeController::class)
             ->middleware('throttle:60,1')->name('api.v1.mobile.notices.index');
         Route::put('/mobile/notification-device', [NotificationDeviceController::class, 'store'])

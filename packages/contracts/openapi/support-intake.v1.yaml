@@ -1,0 +1,69 @@
+paths:
+  /api/v1/mobile/support/issues:
+    post:
+      operationId: submitMobileSupportIssue
+      summary: Report an accessible charging-session issue
+      description: >-
+        Accepts the existing mobile Report an issue payload. Reusing an intent
+        key returns its ticket; changing the intent for that key is rejected.
+        Submission requires an enabled, verified identity and is feature-gated
+        for staging. It never changes a session, wallet, payment or refund.
+      tags: [Support]
+      security: [{sanctumBearer: []}]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Stable intent scoped to the authenticated reporter and tenant.
+          schema: {type: string, minLength: 8, maxLength: 160, pattern: '^[A-Za-z0-9._:-]+$'}
+        - $ref: './platform.v1.yaml#/components/parameters/TenantSelector'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, category, description]
+              properties:
+                session_id: {type: string, pattern: '^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$'}
+                category: {type: string, enum: [charger, session, payment, receipt, general, other]}
+                description: {type: string, minLength: 10, maxLength: 5000}
+      responses:
+        '201':
+          description: Ticket accepted and acknowledgement queued; existing clients can ignore the response body.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [id, ticket_number, status]
+                    properties:
+                      id: {type: string, pattern: '^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$'}
+                      ticket_number: {type: string, pattern: '^SUP-[0-9A-HJKMNP-TV-Z]{26}$'}
+                      status: {type: string, enum: [open, pending_customer, in_progress, escalated, resolved, closed]}
+        '401': {description: Authentication required.}
+        '403': {description: Enabled and verified identity required.}
+        '404': {description: Feature disabled or session inaccessible.}
+        '422': {description: Invalid request or conflicting intent key.}
+        '429': {description: Submission limit exceeded; honor Retry-After.}
+        default:
+          description: Safe support error envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [code, message, correlation_id, fields]
+                    properties:
+                      code: {type: string}
+                      message: {type: string}
+                      correlation_id: {type: string}
+                      fields:
+                        type: object
+                        additionalProperties: {type: array, items: {type: string}}

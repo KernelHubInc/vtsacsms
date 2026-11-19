@@ -18,3 +18,6 @@ Schedule::command('integrations:publish-outbox --limit=250')->everySecond()->wit
 Schedule::command('maintenance:run-automation')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('kyc:reconcile')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('security:expire-workforce-enrollments')->daily()->withoutOverlapping();
+
+Schedule::command('notifications:send-support-emails')->everyMinute()->withoutOverlapping();
+Schedule::command('support:purge-expired-contact')->daily()->withoutOverlapping();

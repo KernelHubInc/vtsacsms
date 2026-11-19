@@ -36,9 +36,13 @@ tags:
     description: Signature-verified provider callbacks with tenant-bound destination identifiers and replay protection.
   - name: Wallet
     description: Verified driver prepaid balances and idempotent QR Ph top-ups.
+  - name: Support
+    description: Verified customer issue submission and scoped support correspondence.
   - name: Charging Accounts
     description: Personal, business and fleet charging accounts with explicit organization-scoped roles.
 paths:
+  /api/v1/mobile/support/issues:
+    $ref: './support-intake.v1.yaml#/paths/~1api~1v1~1mobile~1support~1issues'
   /api/v1/charging-accounts:
     $ref: './charging-accounts.v1.json#/paths/~1api~1v1~1charging-accounts'
   /api/v1/charging-accounts/{account}:

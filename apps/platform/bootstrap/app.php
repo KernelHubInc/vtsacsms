@@ -25,7 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['ocpp_password', 'id_token', 'enrollment_token', 'account_deletion_code']);
+        $exceptions->dontFlash(['ocpp_password', 'id_token', 'enrollment_token', 'account_deletion_code', 'support_code', 'description']);
         $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $_exception): bool => $request->is('api/*') || $request->expectsJson());
         $exceptions->render(function (InvalidSignatureException $exception, Request $request) {
             if (! $request->routeIs('api.v1.auth.email.verify')) {
@@ -95,6 +95,22 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => $status === 500 ? 'The account service is unavailable.' : ($original['message'] ?? 'The account request could not be completed.'),
                     'correlation_id' => $request->attributes->get('correlation_id'),
                     'fields' => $status === 422 ? ($original['errors'] ?? []) : [],
+                ]], $status)->header('Cache-Control', 'no-store');
+                if ($retryAfter !== null) {
+                    $response->headers->set('Retry-After', $retryAfter);
+                }
+            }
+            if ($request->is('api/v1/mobile/support/*') && $response->getStatusCode() >= 400) {
+                $status = $response->getStatusCode();
+                $original = json_decode((string) $response->getContent(), true);
+                $retryAfter = $response->headers->get('Retry-After');
+                $response = response()->json(['error' => [
+                    'code' => match ($status) {
+                        401 => 'unauthenticated', 403 => 'forbidden', 404 => 'support_not_found',
+                        409 => 'support_conflict', 422 => 'invalid_request', 429 => 'rate_limited', default => 'support_unavailable'
+                    },
+                    'message' => $status === 422 ? 'Please check your support request.' : 'The support request could not be completed.',
+                    'correlation_id' => $request->attributes->get('correlation_id'), 'fields' => $status === 422 ? ($original['errors'] ?? (object) []) : (object) [],
                 ]], $status)->header('Cache-Control', 'no-store');
                 if ($retryAfter !== null) {
                     $response->headers->set('Retry-After', $retryAfter);
