@@ -22,6 +22,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
@@ -96,7 +97,7 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
             if ($command->type->isStationControl()) {
                 try {
                     app(StationRecovery::class)->validateDispatch($command);
-                } catch (AuthorizationException|ModelNotFoundException|\Illuminate\Validation\ValidationException|HttpExceptionInterface $exception) {
+                } catch (AuthorizationException|ModelNotFoundException|ValidationException|HttpExceptionInterface $exception) {
                     $states->transition($command, ChargerCommandState::Rejected, 'station_recovery_precondition_changed');
 
                     return null;
