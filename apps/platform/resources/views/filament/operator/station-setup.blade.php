@@ -1,4 +1,19 @@
 <x-filament-panels::page>
+    @if ($recoveryCommands->isNotEmpty())
+        <x-filament::section heading="Recovery commands" description="Check the command result and physical charger status. Restart completion requires a new heartbeat and connector reports.">
+            <div wire:poll.5s class="space-y-3" aria-live="polite">
+                @foreach ($recoveryCommands as $command)
+                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700">
+                        <div>
+                            <p class="font-medium">{{ $command->type === \App\Modules\Charging\Domain\ChargerCommandType::UnlockConnector ? 'Unlock connector' : 'Restart charger' }}</p>
+                            <p class="text-xs text-gray-500">{{ $command->getKey() }} · {{ $command->created_at->utc()->format('Y-m-d H:i:s') }} UTC</p>
+                        </div>
+                        <p>{{ $command->state === \App\Modules\Charging\Domain\ChargerCommandState::Acknowledged ? ($command->type === \App\Modules\Charging\Domain\ChargerCommandType::UnlockConnector ? 'Charger reported Unlocked' : 'Accepted — verify the new connection') : str($command->state->value)->replace('_', ' ')->headline() }}</p>
+                    </div>
+                @endforeach
+            </div>
+        </x-filament::section>
+    @endif
     @php
         $wizardSteps = [
             ['title' => 'Prepare the site', 'copy' => 'Confirm the operator, address, map pin and location timezone. Publish the site only after its public details are checked.', 'link' => $links['1. Location & publication'] ?? null, 'action' => 'Open site settings'],

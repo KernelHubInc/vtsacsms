@@ -16,6 +16,7 @@ from websockets.exceptions import InvalidStatus
 from websockets.typing import Subprotocol
 
 from vtsa_ocpp_gateway.adapters.v16 import Ocpp16ChargePoint
+from vtsa_ocpp_gateway.adapters.v201 import Ocpp201ChargePoint
 from vtsa_ocpp_gateway.app import create_app
 from vtsa_ocpp_gateway.config import Settings
 from vtsa_ocpp_gateway.models import AuthorizationDecision, ChargerIdentity, JsonObject
@@ -514,9 +515,33 @@ async def test_registered_charger_is_bound_to_its_enrolled_tenant() -> None:
 
 
 @pytest.mark.asyncio
-async def test_internal_command_uses_command_id_to_correlate_wire_response() -> None:
+@pytest.mark.parametrize(
+    ("protocol", "action", "payload", "status", "wire_payload"),
+    [
+        (
+            "ocpp1.6",
+            "TriggerMessage",
+            {"requested_message": "Heartbeat"},
+            "Accepted",
+            {"requestedMessage": "Heartbeat"},
+        ),
+        ("ocpp1.6", "UnlockConnector", {"connector_id": 1}, "Unlocked", {"connectorId": 1}),
+        (
+            "ocpp2.0.1",
+            "UnlockConnector",
+            {"evse_id": 2, "connector_id": 1},
+            "Unlocked",
+            {"evseId": 2, "connectorId": 1},
+        ),
+        ("ocpp1.6", "Reset", {"type": "Soft"}, "Accepted", {"type": "Soft"}),
+        ("ocpp2.0.1", "Reset", {"type": "OnIdle"}, "Scheduled", {"type": "OnIdle"}),
+    ],
+)
+async def test_internal_command_uses_command_id_to_correlate_wire_response(
+    protocol: str, action: str, payload: dict[str, Any], status: str, wire_payload: dict[str, Any]
+) -> None:
     command_id = "01K0M0JJ5X0M0JJ5X0M0JJ5X0M"
-    settings = Settings(allowed_commands=("TriggerMessage",), raw_message_logging=False)
+    settings = Settings(allowed_commands=(action,), raw_message_logging=False)
     store = MemoryGatewayStore()
     metrics = GatewayMetrics()
     identity = ChargerIdentity(
@@ -526,20 +551,21 @@ async def test_internal_command_uses_command_id_to_correlate_wire_response() -> 
         "basic",
     )
     connection = HangingConnection()
-    charge_point = Ocpp16ChargePoint(
+    adapter = Ocpp16ChargePoint if protocol == "ocpp1.6" else Ocpp201ChargePoint
+    charge_point = adapter(
         "CP-1",
         connection,
         store=store,
         settings=settings,
         identity=identity,
-        publisher=EventPublisher(store, settings, identity, "ocpp1.6", "connection", metrics),
+        publisher=EventPublisher(store, settings, identity, protocol, "connection", metrics),
         metrics=metrics,
     )
     pending = asyncio.create_task(
         charge_point.send_command(
             command_id,
-            "TriggerMessage",
-            {"requested_message": "Heartbeat"},
+            action,
+            payload,
             2,
         )
     )
@@ -548,12 +574,13 @@ async def test_internal_command_uses_command_id_to_correlate_wire_response() -> 
             break
         await asyncio.sleep(0.001)
     command_frame = json.loads(connection.sent[0])
-    assert command_frame[0:3] == [2, command_id, "TriggerMessage"]
+    assert command_frame[0:3] == [2, command_id, action]
+    assert command_frame[3] == wire_payload
 
-    await charge_point.route_message(json.dumps([3, command_id, {"status": "Accepted"}]))
+    await charge_point.route_message(json.dumps([3, command_id, {"status": status}]))
     response = await pending
 
-    assert response["status"] == "Accepted"
+    assert response["status"] == status
 
 
 @pytest.mark.asyncio

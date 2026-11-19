@@ -19,6 +19,9 @@ final readonly class CommandOutcomeService
 
     public function apply(ChargerCommand $command): void
     {
+        if ($command->type->isStationControl()) {
+            return;
+        }
         $session = $command->session()->lockForUpdate()->firstOrFail();
         if ($command->type === ChargerCommandType::RemoteStart) {
             if ($command->state === ChargerCommandState::Acknowledged) {

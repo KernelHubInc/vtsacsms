@@ -247,3 +247,12 @@ station discovery; credentials and connection IDs remain private. See
 ### Prepaid wallet postings
 
 Real prepaid credits/spends reuse `billing.ledger_transaction.posted.v1` with event_type `prepaid_credit` / `prepaid_spend` and reference_type `qr_topup` / `prepaid_reservation`. No new event schema. Simulated activity emits no financial ledger event. Payments confirmation and Billing posting commit in one local transaction via the Billing application contract; future external consumers must deduplicate the existing ledger event ID.
+
+### Station recovery commands
+
+`charging.station_command.state_changed.v1` uses the existing event envelope and
+the `charger_command` aggregate. Data includes `station_id`, nullable
+`connector_id`, `type` (`unlock_connector` or `restart_charger`), `state` and a safe
+`reason`. Charging records it atomically with each command transition. A charger
+acknowledgement requires separate physical confirmation for restart completion.
+See [ADR 0034](decisions/0034-station-recovery-commands.md).

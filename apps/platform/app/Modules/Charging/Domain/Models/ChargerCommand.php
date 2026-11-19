@@ -17,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property string $id
  * @property string $tenant_id
- * @property string $session_id
+ * @property string|null $session_id
  * @property string $charging_station_id
- * @property string $connector_id
+ * @property string|null $connector_id
  * @property string $charge_point_identity
  * @property ChargerCommandType $type
  * @property string $ocpp_action
