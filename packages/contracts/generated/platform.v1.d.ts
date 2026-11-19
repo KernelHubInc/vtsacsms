@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/mobile/support/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report an accessible charging-session issue
+         * @description Accepts the existing mobile Report an issue payload. Reusing an intent key returns its ticket; changing the intent for that key is rejected. Submission requires an enabled, verified identity and is feature-gated for staging. It never changes a session, wallet, payment or refund.
+         */
+        post: operations["submitMobileSupportIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/charging-accounts": {
         parameters: {
             query?: never;
@@ -2583,6 +2603,100 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    submitMobileSupportIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable intent scoped to the authenticated reporter and tenant. */
+                "Idempotency-Key": string;
+                /** @description Optional selector that must equal the tenant bound to the credential. */
+                "X-Tenant-ID"?: components["parameters"]["TenantSelector"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    session_id: string;
+                    /** @enum {string} */
+                    category: "charger" | "session" | "payment" | "receipt" | "general" | "other";
+                    description: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Ticket accepted and acknowledgement queued; existing clients can ignore the response body. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            id: string;
+                            ticket_number: string;
+                            /** @enum {string} */
+                            status: "open" | "pending_customer" | "in_progress" | "escalated" | "resolved" | "closed";
+                        };
+                    };
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Enabled and verified identity required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled or session inaccessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request or conflicting intent key. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Submission limit exceeded; honor Retry-After. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Safe support error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: {
+                            code: string;
+                            message: string;
+                            correlation_id: string;
+                            fields: {
+                                [key: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+    };
     listChargingAccounts: {
         parameters: {
             query?: never;

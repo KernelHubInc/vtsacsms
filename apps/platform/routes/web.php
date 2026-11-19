@@ -11,11 +11,13 @@ use App\Http\Controllers\PublicArticleController;
 use App\Http\Controllers\PublicPageController;
 use App\Http\Controllers\PublicRedirectController;
 use App\Http\Controllers\PublicStationController;
+use App\Http\Controllers\PublicSupportController;
 use App\Http\Controllers\RobotsController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StagingKycPolicyController;
 use App\Http\Controllers\WorkforceEnrollmentController;
 use App\Http\Middleware\RequireEnabledFeature;
+use App\Http\Middleware\RequireSupportIntake;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', PublicPageController::class)->defaults('slug', 'home')->name('home');
@@ -40,6 +42,13 @@ Route::post('/account-deletion/confirm', [AccountDeletionController::class, 'con
 Route::get('/staging/kyc/{page}', StagingKycPolicyController::class)
     ->name('kyc.staging-policy');
 
+Route::get('/support', [PublicSupportController::class, 'show'])->name('public.support');
+Route::middleware([RequireSupportIntake::class, 'throttle:5,10'])->group(function (): void {
+    Route::post('/support/code', [PublicSupportController::class, 'send'])->block(15, 3)->name('public.support.send');
+    Route::post('/support/confirm', [PublicSupportController::class, 'confirm'])->block(15, 3)->name('public.support.confirm');
+    Route::post('/support/new', [PublicSupportController::class, 'reset'])->block(15, 3)->name('public.support.reset');
+});
+
 $publicPages = [
     'network' => 'ev-charging-network',
     'charging-map' => 'charging-map',
@@ -51,7 +60,6 @@ $publicPages = [
     'partner-program' => 'partner-program',
     'frequently-asked-questions' => 'frequently-asked-questions',
     'contact' => 'contact',
-    'support' => 'support',
     'privacy-policy' => 'privacy-policy',
     'terms-of-service' => 'terms-of-service',
     'charging-terms' => 'charging-terms',
