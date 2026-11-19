@@ -54,6 +54,25 @@ final class ConnectorSnapshotQuery
         return $this->snapshot($this->baseQuery()->whereKey($connectorId)->first());
     }
 
+    /** @return list<ConnectorSnapshot> */
+    public function forStation(string $stationId): array
+    {
+        $connectors = $this->baseQuery()->whereHas('evse', fn (Builder $query): Builder => $query->where('charging_station_id', $stationId))->get();
+        $statuses = ConnectorStatus::query()->whereIn('connector_id', $connectors->modelKeys())->get()->keyBy('connector_id');
+        $connections = app(StationConnectionQuery::class);
+        $presence = $connections->forStations([$stationId]);
+
+        return array_values($connectors->map(function (Connector $connector) use ($statuses, $connections, $presence, $stationId): ConnectorSnapshot {
+            $status = $statuses->get((string) $connector->getKey());
+            $availability = $status === null ? ConnectorAvailability::Unknown : ConnectorAvailability::from($connections->availability(
+                $presence[$stationId] ?? null, $status->status->value, $status->observed_at->toIso8601String(),
+                $status->stale_after_seconds, $status->ocpp_connection_id,
+            ));
+
+            return $this->snapshot($connector, $availability) ?? throw new \LogicException('An active connector snapshot is required.');
+        })->all());
+    }
+
     public function forGatewayEvent(
         string $stationId,
         ?int $evseNumber,
@@ -86,7 +105,7 @@ final class ConnectorSnapshotQuery
             ->whereHas('evse.station', fn (Builder $query): Builder => $query->where('lifecycle_status', AssetLifecycleStatus::Active->value));
     }
 
-    private function snapshot(?Connector $connector): ?ConnectorSnapshot
+    private function snapshot(?Connector $connector, ?ConnectorAvailability $knownAvailability = null): ?ConnectorSnapshot
     {
         if ($connector === null) {
             return null;
@@ -95,22 +114,25 @@ final class ConnectorSnapshotQuery
         $evse = $connector->evse;
         $station = $evse->station;
         $site = $station->site;
-        $status = ConnectorStatus::query()->where('connector_id', $connector->getKey())->first();
-        $availability = $status->status ?? ConnectorAvailability::Unknown;
+        $availability = $knownAvailability;
+        if ($availability === null) {
+            $status = ConnectorStatus::query()->where('connector_id', $connector->getKey())->first();
+            $availability = $status->status ?? ConnectorAvailability::Unknown;
 
-        if ($status !== null && $status->observed_at->addSeconds($status->stale_after_seconds)->isPast()) {
-            $availability = ConnectorAvailability::Unknown;
-        }
-        if ($status !== null) {
-            $connections = app(StationConnectionQuery::class);
-            $presence = $connections->forStations([(string) $station->getKey()]);
-            $availability = ConnectorAvailability::from($connections->availability(
-                $presence[(string) $station->getKey()] ?? null,
-                $status->status->value,
-                $status->observed_at->toIso8601String(),
-                $status->stale_after_seconds,
-                $status->ocpp_connection_id,
-            ));
+            if ($status !== null && $status->observed_at->addSeconds($status->stale_after_seconds)->isPast()) {
+                $availability = ConnectorAvailability::Unknown;
+            }
+            if ($status !== null) {
+                $connections = app(StationConnectionQuery::class);
+                $presence = $connections->forStations([(string) $station->getKey()]);
+                $availability = ConnectorAvailability::from($connections->availability(
+                    $presence[(string) $station->getKey()] ?? null,
+                    $status->status->value,
+                    $status->observed_at->toIso8601String(),
+                    $status->stale_after_seconds,
+                    $status->ocpp_connection_id,
+                ));
+            }
         }
 
         return new ConnectorSnapshot(

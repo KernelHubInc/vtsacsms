@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Charging\Jobs;
 
+use App\Modules\Assets\Application\GatewayStationQuery;
 use App\Modules\Charging\Application\ChargerCommandStateMachine;
 use App\Modules\Charging\Application\CommandOutcomeService;
 use App\Modules\Charging\Application\Gateway\GatewayCommandClient;
+use App\Modules\Charging\Application\StationRecovery;
 use App\Modules\Charging\Domain\ChargerCommandState;
 use App\Modules\Charging\Domain\ChargerCommandType;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
@@ -15,9 +17,13 @@ use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Tenancy\Application\Queue\TenantJobEnvelope;
 use App\Modules\Tenancy\Application\Queue\TenantServiceJob;
 use App\Modules\Tenancy\Application\Queue\UseTenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
@@ -75,7 +81,7 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
     ): void {
         $command = DB::transaction(function () use ($states): ?ChargerCommand {
             $command = $this->lockedCommand();
-            $session = $command->session()->firstOrFail();
+            $session = $command->type->isStationControl() ? null : $command->session()->firstOrFail();
             if ($command->state->isTerminal()) {
                 return $command;
             }
@@ -88,8 +94,17 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
 
                 return $command;
             }
+            if ($command->type->isStationControl()) {
+                try {
+                    app(StationRecovery::class)->validateDispatch($command);
+                } catch (AuthorizationException|ModelNotFoundException|ValidationException|HttpExceptionInterface $exception) {
+                    $states->transition($command, ChargerCommandState::Rejected, 'station_recovery_precondition_changed');
+
+                    return null;
+                }
+            }
             if ($command->type === ChargerCommandType::RemoteStop
-                && (! $command->targetsTransaction($session) || $session->stopped_at !== null
+                && ($session === null || ! $command->targetsTransaction($session) || $session->stopped_at !== null
                     || (! $session->state->isPhysicallyActive() && $session->state->value !== 'starting'))) {
                 $states->transition($command, ChargerCommandState::Rejected, 'stop_target_no_longer_active');
 
@@ -113,7 +128,7 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
         try {
             $result = $gateway->dispatch($command);
             [$next, $reason] = match ($result->status) {
-                'completed' => $this->protocolOutcome($result->response),
+                'completed' => $this->protocolOutcome($result->response, $command->type),
                 'rejected' => [ChargerCommandState::Rejected, 'gateway_rejected_command'],
                 'timed_out' => [ChargerCommandState::TimedOut, 'gateway_command_timeout'],
                 'not_connected' => [ChargerCommandState::DeliveryUnknown, 'charger_not_connected'],
@@ -148,9 +163,13 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
 
     private function lockedCommand(): ChargerCommand
     {
-        $sessionId = ChargerCommand::query()->whereKey($this->commandId)->value('session_id');
-        // Match the monitor's session-before-command order, including after the gateway call.
-        ChargingSession::query()->whereKey($sessionId)->lockForUpdate()->firstOrFail();
+        $target = ChargerCommand::query()->whereKey($this->commandId)->firstOrFail();
+        if ($target->type->isStationControl()) {
+            app(GatewayStationQuery::class)->validateAndLock($target->charging_station_id, $target->charge_point_identity, (string) ($target->expected_state['protocol'] ?? ''));
+        } else {
+            // Match the monitor's session-before-command order, including after the gateway call.
+            ChargingSession::query()->whereKey($target->session_id)->lockForUpdate()->firstOrFail();
+        }
 
         return ChargerCommand::query()->whereKey($this->commandId)->lockForUpdate()->firstOrFail();
     }
@@ -158,11 +177,13 @@ final class DispatchChargerCommand implements ShouldQueue, TenantServiceJob
     /** @param array<string, mixed>|null $response
      * @return array{ChargerCommandState, string}
      */
-    private function protocolOutcome(?array $response): array
+    private function protocolOutcome(?array $response, ChargerCommandType $type): array
     {
         $status = is_string($response['status'] ?? null) ? mb_strtolower($response['status']) : null;
 
-        return $status === null || in_array($status, ['accepted', 'scheduled'], true)
+        $accepted = $type === ChargerCommandType::UnlockConnector ? ['unlocked'] : ['accepted', 'scheduled'];
+
+        return (($status === null && ! $type->isStationControl()) || in_array($status, $accepted, true))
             ? [ChargerCommandState::Acknowledged, 'charger_acknowledged_command']
             : [ChargerCommandState::Rejected, 'charger_rejected_command'];
     }

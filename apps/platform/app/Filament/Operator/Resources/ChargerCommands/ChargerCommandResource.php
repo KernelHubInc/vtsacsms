@@ -7,6 +7,7 @@ namespace App\Filament\Operator\Resources\ChargerCommands;
 use App\Filament\Operator\Resources\ChargerCommands\Pages\ListChargerCommands;
 use App\Filament\Shared\Actions\RecordViewAction;
 use App\Models\User;
+use App\Modules\Assets\Application\AccessibleStationsQuery;
 use App\Modules\Charging\Application\AccessibleChargingSessionsQuery;
 use App\Modules\Charging\Domain\ChargerCommandState;
 use App\Modules\Charging\Domain\ChargerCommandType;
@@ -36,6 +37,7 @@ final class ChargerCommandResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->poll('5s')
             ->columns([
                 TextColumn::make('id')->label('Command')->copyable()->searchable(),
                 TextColumn::make('type')->badge(),
@@ -112,6 +114,9 @@ final class ChargerCommandResource extends Resource
         }
         $sessions = app(AccessibleChargingSessionsQuery::class)->for($user)->select('charging_sessions.id');
 
-        return parent::getEloquentQuery()->whereIn('session_id', $sessions);
+        $stations = app(AccessibleStationsQuery::class)->for($user)->select('charging_stations.id');
+
+        return parent::getEloquentQuery()->where(fn (Builder $query): Builder => $query->whereIn('session_id', $sessions)
+            ->orWhere(fn (Builder $query): Builder => $query->whereNull('session_id')->whereIn('charging_station_id', $stations)));
     }
 }

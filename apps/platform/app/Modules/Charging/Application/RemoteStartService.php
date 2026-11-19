@@ -8,6 +8,7 @@ use App\Foundation\Audit\AuditEntry;
 use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
 use App\Modules\Assets\Application\ConnectorSnapshotQuery;
+use App\Modules\Assets\Application\GatewayStationQuery;
 use App\Modules\Charging\Domain\AuthorizationStatus;
 use App\Modules\Charging\Domain\ChargerCommandState;
 use App\Modules\Charging\Domain\ChargerCommandType;
@@ -76,6 +77,8 @@ final readonly class RemoteStartService
                 return new RemoteCommandResult($existing->session, $existing);
             }
 
+            app(GatewayStationQuery::class)->validateAndLock($connector->stationId, $connector->chargePointIdentity, $connector->protocol);
+            app(StationRecovery::class)->assertNoRecovery($connector->stationId);
             $status = ConnectorStatus::query()->where('connector_id', $connector->connectorId)->lockForUpdate()->first();
             // A concurrent request can commit while this transaction waits for the connector lock.
             $existing = ChargerCommand::query()->where('idempotency_key', $idempotencyKey)->first();

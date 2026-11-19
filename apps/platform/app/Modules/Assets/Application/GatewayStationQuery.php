@@ -42,6 +42,22 @@ final class GatewayStationQuery
         return ['tenant_id' => $station->tenant_id, 'charger_id' => (string) $station->getKey()];
     }
 
+    /** @return array{station_id:string,site_id:string,identity:string,protocol:string} */
+    public function controlTarget(User $user, string $stationId, PermissionKey $permission): array
+    {
+        $station = app(AccessibleStationsQuery::class)->for($user, $permission)
+            ->with('ocppVersion')->whereKey($stationId)->where('lifecycle_status', 'active')->firstOrFail();
+
+        return [
+            'station_id' => (string) $station->getKey(),
+            'site_id' => $station->site_id,
+            'identity' => $station->charge_point_identity,
+            'protocol' => match ($station->ocppVersion?->code) {
+                '1.6J' => 'ocpp1.6', '2.0.1' => 'ocpp2.0.1', default => '',
+            },
+        ];
+    }
+
     public function validateAndLock(string $stationId, string $identity, string $protocol): void
     {
         // Serialize projection creation even before a station has a connection row.

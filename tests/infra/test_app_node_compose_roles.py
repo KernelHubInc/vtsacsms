@@ -27,6 +27,27 @@ def services(profiles: str) -> set[str]:
 
 
 class AppNodeComposeRolesTest(unittest.TestCase):
+    def test_wallet_settings_reach_production_web_and_jobs(self):
+        wallet = {
+            "FEATURE_REAL_PAYMENTS": "true",
+            "WALLET_MODE": "live", "WALLET_MINIMUM_MINOR": "100",
+            "WALLET_MAXIMUM_MINOR": "50000", "AUB_QRPH_APPROVED": "true",
+            "AUB_TENANT_ID": "01J00000000000000000000001",
+            "AUB_MERCHANT_ID": "synthetic-merchant", "AUB_SIGNING_KEY": "synthetic-test-only",
+            "AUB_SERVER_IP": "192.0.2.1",
+            "AUB_NOTIFY_URL": "https://charging.example.test/api/v1/webhooks/aub/qrph",
+        }
+        env = {**os.environ, **wallet, "COMPOSE_PROFILES": "worker,scheduler"}
+        result = subprocess.run(
+            ["docker", "compose", "--env-file", str(ENV_FILE), "-f", str(COMPOSE),
+             "config", "--format", "json"],
+            cwd=ROOT, env=env, capture_output=True, text=True, timeout=30, check=True,
+        )
+        services = json.loads(result.stdout)["services"]
+        for name in ("platform", "worker", "charging-worker", "scheduler"):
+            for key, value in wallet.items():
+                self.assertEqual(services[name]["environment"].get(key), value, f"{name}.{key}")
+
     def test_google_sign_in_is_disabled_without_deployment_configuration(self):
         for source in (STAGING_ENV_FILE, ENV_FILE):
             env = os.environ.copy()

@@ -44,6 +44,8 @@ enum PermissionKey: string
     case AssetManage = 'assets.manage';
     case ChargingSessionView = 'charging.sessions.view';
     case ChargingRemoteCommand = 'charging.remote_commands.execute';
+    case ChargingConnectorUnlock = 'charging.connectors.unlock';
+    case ChargingStationRestart = 'charging.stations.restart';
     case ChargingSessionReview = 'charging.sessions.review';
     case TariffView = 'tariffs.view';
     case TariffManage = 'tariffs.manage';
