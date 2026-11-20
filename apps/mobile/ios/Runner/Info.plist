@@ -24,7 +24,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock your Power Solutions account when you enable quick unlock.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Power Solutions can access a selected photo only when you choose it for identity verification.</string>
+	<string>Power Solutions accesses photos you select to verify your identity or attach images to a support ticket.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save a QR Ph payment code to Photos so you can import it into your bank or e-wallet app.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
