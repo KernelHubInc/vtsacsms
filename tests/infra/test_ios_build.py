@@ -49,9 +49,9 @@ class IosBuildTest(unittest.TestCase):
         args = ios.parser().parse_args(['--mode', 'simulator', '--version', '1.0.0', '--build-number', '1'])
         with patch.object(ios.platform, 'system', return_value='Darwin'), patch.object(ios.shutil, 'which', return_value='/tool'):
             with patch.object(ios.subprocess, 'check_output', return_value='Apple Swift version 6.1.2'):
-                with self.assertRaisesRegex(ValueError, 'Swift 6.2.1'):
+                with self.assertRaisesRegex(ValueError, 'Swift 6.2.3'):
                     ios.preflight(args)
-            with patch.object(ios.subprocess, 'check_output', return_value='Apple Swift version 6.2.1'):
+            with patch.object(ios.subprocess, 'check_output', return_value='Apple Swift version 6.2.3'):
                 ios.preflight(args)
 
 

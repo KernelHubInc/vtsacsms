@@ -11,7 +11,7 @@ Use the existing Codemagic Flutter workflow editor and its connected App Store C
 | Shorebird | Disabled |
 | Instance | macOS M2 or a supported newer Mac instance |
 | Flutter | `3.47.9`, stable |
-| Xcode | `26.6` (Swift 6.2.1 or newer is required by Firebase); record the resolved version in build evidence |
+| Xcode | `26.6` (Swift 6.2.3 or newer is required by Firebase); record the resolved version in build evidence |
 | CocoaPods | Default |
 | Project path | `apps/mobile` |
 | Mode | Release |
