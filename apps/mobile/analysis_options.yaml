@@ -2,8 +2,11 @@ include: package:flutter_lints/flutter.yaml
 
 analyzer:
   exclude:
-    # SwiftPM copies plugin packages, including their upstream test fixtures, here.
-    - build/ios/SourcePackages/**
+    # Flutter 3.47 generates Dart fixtures under native platform/build directories.
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
   language:
     strict-casts: true
     strict-inference: true
