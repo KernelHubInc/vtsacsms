@@ -1,6 +1,9 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  exclude:
+    # SwiftPM copies plugin packages, including their upstream test fixtures, here.
+    - build/ios/SourcePackages/**
   language:
     strict-casts: true
     strict-inference: true
