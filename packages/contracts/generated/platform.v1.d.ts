@@ -4749,7 +4749,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    platform: "android" | "web";
+                    platform: "android" | "web" | "ios";
                     installation_id: string;
                 };
             };

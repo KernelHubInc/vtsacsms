@@ -1,5 +1,7 @@
 # Power Solutions iOS builds
 
+For the production Firebase-enabled App Store/TestFlight build, use the [final Codemagic settings](codemagic-production-ios.md). The simulator instructions below remain a separate unsigned compilation check.
+
 The existing Flutter app supports an iOS build target. Native compilation and device acceptance are pending access to macOS and Xcode. No signed IPA has been generated. Windows and the Linux staging VPS cannot compile an iOS binary.
 
 ## Required tools and accounts

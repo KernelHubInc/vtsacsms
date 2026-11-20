@@ -554,7 +554,7 @@ paths:
               type: object
               required: [platform, installation_id]
               properties:
-                platform: {type: string, enum: [android, web]}
+                platform: {type: string, enum: [android, web, ios]}
                 installation_id: {type: string, minLength: 10, maxLength: 512, writeOnly: true}
       responses:
         '204': {description: Installation registered idempotently.}

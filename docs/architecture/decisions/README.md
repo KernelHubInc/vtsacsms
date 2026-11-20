@@ -45,4 +45,6 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 
 ## ADR Template
 
+| [0036](0036-ios-driver-notice-push.md) | iOS driver notice delivery through Firebase/APNs | Accepted; signed-device acceptance required |
+
 New records should include status, date, owners, context, decision, decision details, consequences, alternatives, risks/controls, and follow-up decisions. Use the next zero-padded number and a stable descriptive filename.

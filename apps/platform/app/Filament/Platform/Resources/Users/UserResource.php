@@ -6,6 +6,7 @@ namespace App\Filament\Platform\Resources\Users;
 
 use App\Filament\Platform\Resources\Users\Pages\ListUsers;
 use App\Filament\Shared\Actions\RecordViewAction;
+use App\Filament\Shared\Actions\UserPasswordResetAction;
 use App\Models\User;
 use App\Modules\Identity\Application\AccountLifecycleService;
 use App\Modules\Organizations\Application\AuthorizationService;
@@ -47,6 +48,7 @@ final class UserResource extends Resource
                 ->falseLabel('Active')
                 ->placeholder('All accounts'),
         ])->recordActions([
+            UserPasswordResetAction::make(),
             RecordViewAction::make([
                 'public_id' => 'Public identifier',
                 'name' => 'Name',

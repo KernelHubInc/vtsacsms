@@ -221,17 +221,24 @@ final class AppDependencies {
     );
     late final AppDependencies dependencies;
     NoticePushRegistration noticePush = const NoopNoticePushRegistration();
-    if ((kIsWeb || defaultTargetPlatform == TargetPlatform.android) &&
-        localEnvironment.name == AppEnvironmentName.staging &&
-        (!kIsWeb || Uri.base.host == 'staging.evcspowersolutions.com')) {
+    final firebaseProject = noticeFirebaseProject(
+      environment: localEnvironment.name,
+      platform: defaultTargetPlatform,
+      browserHost: kIsWeb ? Uri.base.host : null,
+    );
+    if (firebaseProject != null) {
       try {
-        await Firebase.initializeApp(
+        final firebase = await Firebase.initializeApp(
           options: kIsWeb ? stagingWebFirebase : null,
         );
+        if (firebase.options.projectId != firebaseProject) {
+          throw StateError('Firebase project does not match the environment.');
+        }
         noticePush = FirebaseNoticePushRegistration(
           client: client,
           messaging: FirebaseMessaging.instance,
           isBrowser: kIsWeb,
+          platform: defaultTargetPlatform,
           webOptedIn: preferences.getBool('web_notice_push_enabled') ?? false,
           saveWebPreference: (enabled) async {
             await preferences.setBool('web_notice_push_enabled', enabled);
@@ -376,6 +383,28 @@ final class AppDependencies {
     vehicles.dispose();
     network.dispose();
   }
+}
+
+@visibleForTesting
+String? noticeFirebaseProject({
+  required AppEnvironmentName environment,
+  required TargetPlatform platform,
+  String? browserHost,
+}) {
+  if (browserHost != null) {
+    return environment == AppEnvironmentName.staging &&
+            browserHost == 'staging.evcspowersolutions.com'
+        ? stagingWebFirebase.projectId
+        : null;
+  }
+  if (platform != TargetPlatform.android && platform != TargetPlatform.iOS) {
+    return null;
+  }
+  return switch (environment) {
+    AppEnvironmentName.local => null,
+    AppEnvironmentName.staging => stagingWebFirebase.projectId,
+    AppEnvironmentName.production => 'evcs-power-solutions',
+  };
 }
 
 final class _UnavailableDirectionsService implements DirectionsService {

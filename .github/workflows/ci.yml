@@ -288,6 +288,8 @@ jobs:
         run: python3 tests/infra/test_compose_environment.py
       - name: Validate primary and web-only Compose roles
         run: python3 -m unittest discover -s tests/infra -p 'test_app_node_compose_roles.py'
+      - name: Validate iOS Firebase preparation and signing safeguards
+        run: python3 -m unittest discover -s tests/infra -p 'test_ios*.py'
       - name: Validate OCPP staging isolation and enrollment configuration
         run: python3 tests/infra/test_ocpp_staging.py
       - name: Validate cluster release ordering and dry run

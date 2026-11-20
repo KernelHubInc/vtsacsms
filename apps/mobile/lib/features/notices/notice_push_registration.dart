@@ -43,11 +43,15 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
     required this.onNotice,
     this.onOpened,
     this.isBrowser = false,
+    TargetPlatform? platform,
     this.webOptedIn = false,
     this.saveWebPreference,
     this.vapidKey,
     this.serviceWorkerScriptPath,
-  });
+  }) : platform = platform ?? defaultTargetPlatform;
+
+  final TargetPlatform platform;
+  bool get _isApple => !isBrowser && platform == TargetPlatform.iOS;
 
   final ApiClient client;
   final FirebaseMessaging messaging;
@@ -60,6 +64,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
   final String? serviceWorkerScriptPath;
   NoticePushStatus status = NoticePushStatus.idle;
   bool _busy = false;
+  int _generation = 0;
   bool _disposed = false;
   Completer<void>? _registered;
 
@@ -74,6 +79,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
   Future<void> disable() async {
     if (_busy) return;
     _busy = true;
+    _generation++;
     _active = false;
     _setStatus(NoticePushStatus.disabling);
     webOptedIn = false;
@@ -108,6 +114,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
   Future<void> _register({required bool prompt}) async {
     if (_busy || _disposed || status == NoticePushStatus.unsupported) return;
     _busy = true;
+    final generation = ++_generation;
     _setStatus(NoticePushStatus.enabling);
     _registrations ??= messaging.onRegistered.listen((installationId) {
       if (_active) unawaited(_sendInstallationId(installationId));
@@ -140,7 +147,27 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
         );
         return;
       }
-      if (_disposed) return;
+      if (_disposed || generation != _generation) return;
+      if (_isApple) {
+        await messaging.setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: false,
+          sound: true,
+        );
+        // APNs can finish registering after permission has already been granted.
+        var ready = false;
+        for (var attempt = 0; attempt < 40; attempt++) {
+          if (_disposed || generation != _generation) return;
+          if (await messaging.getAPNSToken() != null) {
+            ready = true;
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        }
+        if (!ready)
+          throw StateError('Apple notification registration timed out.');
+      }
+      if (_disposed || generation != _generation) return;
       _active = true;
       _registered = Completer<void>();
       // Attach the error handler before an asynchronous registration can fail.
@@ -172,7 +199,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
       await client.dio.put<void>(
         '/api/v1/mobile/notification-device',
         data: {
-          'platform': isBrowser ? 'web' : 'android',
+          'platform': isBrowser ? 'web' : (_isApple ? 'ios' : 'android'),
           'installation_id': installationId,
         },
       );
@@ -196,6 +223,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
 
   @override
   Future<void> unregister() async {
+    _generation++;
     if (!_active) return;
     _active = false;
     if (_registered?.isCompleted == false) _registered!.complete();
@@ -210,6 +238,7 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
   @override
   void dispose() {
     _disposed = true;
+    _generation++;
     _active = false;
     unawaited(_registrations?.cancel());
     unawaited(_openedMessages?.cancel());

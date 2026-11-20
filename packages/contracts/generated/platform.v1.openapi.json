@@ -2967,7 +2967,8 @@
                     "type": "string",
                     "enum": [
                       "android",
-                      "web"
+                      "web",
+                      "ios"
                     ]
                   },
                   "installation_id": {

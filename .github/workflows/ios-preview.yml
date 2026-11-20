@@ -29,7 +29,7 @@ jobs:
           channel: stable
           cache: true
       - name: Check build script safeguards
-        run: python3 -m unittest discover -s tests/infra -p test_ios_build.py
+        run: python3 -m unittest discover -s tests/infra -p 'test_ios*.py'
       - name: Build and check simulator app
         env:
           IOS_VERSION: ${{ inputs.version }}

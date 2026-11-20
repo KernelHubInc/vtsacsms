@@ -6,6 +6,7 @@ namespace App\Filament\Operator\Resources\Memberships;
 
 use App\Filament\Operator\Resources\Memberships\Pages\ListMemberships;
 use App\Filament\Shared\Actions\RecordViewAction;
+use App\Filament\Shared\Actions\UserPasswordResetAction;
 use App\Models\User;
 use App\Modules\Organizations\Application\AccessibleMembershipsQuery;
 use App\Modules\Organizations\Application\AuthorizationService;
@@ -63,6 +64,7 @@ final class MembershipResource extends Resource
             TextColumn::make('assignments_count')->counts('assignments')->label('Roles'),
             TextColumn::make('expires_at')->dateTime()->placeholder('No expiry'),
         ])->recordActions([
+            UserPasswordResetAction::make(),
             Action::make('manageAccess')->label('Manage access')
                 ->visible(fn (): bool => app()->environment('staging')
                     && app(AuthorizationService::class)->holdsAnywhere(self::actor(), PermissionKey::RoleAssign))
