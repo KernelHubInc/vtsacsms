@@ -2,7 +2,7 @@
 
 ## Scope and ownership
 
-Android staging supports the native APK and the `/mobile/` PWA in Android Chrome. Native iOS still needs APNs setup; iOS browser acceptance testing is outside this release. A staging credential must not be reused implicitly for production.
+Native Android and iOS support environment-matched Firebase registration. The `/mobile/` PWA supports Android Chrome on staging; iOS browser acceptance testing is outside this release. A staging credential must not be reused implicitly for production. See the [production iOS Codemagic guide](codemagic-production-ios.md) for private plist injection, App Store signing and physical-device acceptance.
 
 CMS owns the notice, publication dates and explicit `send_push` selection. Its `PushNoticeQuery` provides active content to Notifications without cross-context writes. Identity's `PushRecipientQuery` checks the mobile token, security version, enabled and verified identity, and current membership. Notifications owns encrypted installation registrations and durable delivery records. No wallet, charging or settlement behavior changes.
 
@@ -15,6 +15,7 @@ NOTICE_PUSH_ENABLED=false
 NOTICE_PUSH_PROJECT_ID=evcs-power-solutions-staging
 NOTICE_PUSH_CREDENTIALS=/run/secrets/firebase-notice-push.json
 NOTICE_PUSH_ANDROID_PACKAGE=com.vtsa.vtsa_mobile
+NOTICE_PUSH_IOS_BUNDLE_ID=com.vtsa.vtsaMobile
 ```
 
 Run the additive migration and rebuild Laravel's configuration cache. Validate OAuth and FCM permission using validation-only mode without sending:
@@ -37,20 +38,20 @@ Firebase Messaging 17 uses `register()` / `onRegistered` installation IDs. The H
 
 ## Admin instructions
 
-1. Open **Content studio → Driver notices**.
+1. Open **Content studio â†’ Driver notices**.
 2. Create a maintenance notice, announcement or promotion; enter title and message.
 3. Set its start and end dates (the form labels UTC explicitly).
 4. Choose whether to show the in-app opening banner.
 5. Enable **Send push notification**, then set status to **Published** and save.
 6. Open **Push delivery** on that notice to inspect counts and the latest 100 attempts.
 
-Existing notices default to push off. CMS edit permission permits drafts; CMS publish permission is required to publish or enable push. Delivery is tenant-scoped to signed-in, verified, active Android or browser installations that have granted notification permission. There is no site-specific audience filter in this release. Each installation is sent at most one accepted push per notice; editing or republishing does not resend an accepted notification. Create a new notice for an intentional new announcement. Devices that register later can receive a still-active opted-in notice.
+Existing notices default to push off. CMS edit permission permits drafts; CMS publish permission is required to publish or enable push. Delivery is tenant-scoped to signed-in, verified, active Android, iOS or browser installations that have granted notification permission. There is no site-specific audience filter in this release. Each installation is sent at most one accepted push per notice; editing or republishing does not resend an accepted notification. Create a new notice for an intentional new announcement. Devices that register later can receive a still-active opted-in notice.
 
 ## Android Chrome / PWA setup
 
 The provided Firebase Web app and public VAPID key are in `staging_web_push.dart`. These are public client values, not the Admin SDK credential. Analytics is not initialized. Initialization is restricted to the staging build on `staging.evcspowersolutions.com`.
 
-After verified sign-in, open **Updates → Stay informed → Enable notifications**, then allow Chrome's permission request. Registration is never prompted automatically on first visit. A previous opt-in is restored without prompting; **Turn off notifications** removes the backend registration and FCM registration and persists the opt-out. Chrome site settings are needed to reverse a browser-level block. Logout revokes the session-bound server registration. The APK and browser are separate installations and may each receive a notice if both are opted in.
+After verified sign-in, open **Updates â†’ Stay informed â†’ Enable notifications**, then allow Chrome's permission request. Registration is never prompted automatically on first visit. A previous opt-in is restored without prompting; **Turn off notifications** removes the backend registration and FCM registration and persists the opt-out. Chrome site settings are needed to reverse a browser-level block. Logout revokes the session-bound server registration. The APK and browser are separate installations and may each receive a notice if both are opted in.
 
 The Firebase JS 13.0.0 worker is served at `/mobile/push/firebase-messaging-sw.js`, with its own `/mobile/push/` scope so it does not replace the existing app worker. It must be served as JavaScript over HTTPS, without authentication or an HTML fallback, and the CDN scripts must be allowed by the site's content security policy. FCM displays background notification payloads once; foreground delivery refreshes Updates. Tapping a background notification opens `/mobile/#/updates`, subject to normal login/onboarding guards. Browser delivery uses the webpush payload and the same per-tenant delivery ledger and retries as Android.
 
@@ -70,7 +71,7 @@ Network operations run after an atomic database claim, outside database transact
 - Confirm the admin shows `accepted`; confirm actual display on the test phone separately.
 - No live test announcement is broadcast automatically by the deployment.
 
-## Staging deployment — 3 November 2026
+## Staging deployment â€” 3 November 2026
 
 The staging backend runs snapshot `notice-2feeb57e21688c9b`, derived from release `b46baff94fdf4c420bb9a5e7d44f924ec392ea23`. Its source hashes, database backup location and Compose rollback commands are recorded in `/opt/vtsa-releases/notice-2feeb57e21688c9b/deployed.json` on App02. Production containers were not changed.
 
@@ -80,7 +81,7 @@ APK 1.0.38 (build 39) uses the staging endpoint and Firebase project. Its signin
 
 Server OAuth/FCM validation, timer execution, database/Redis readiness, and the downloaded APK checksum were verified. A real-phone foreground/background notification test remains a user acceptance step; deployment did not publish or send a test announcement.
 
-### Browser notification follow-up — 3 November 2026
+### Browser notification follow-up â€” 3 November 2026
 
 Staging now runs backend snapshot `notice-f10a289711cb4f91` and browser release `webpush-3c188b1118aee7f1`. Backend source hashes, the verified PostgreSQL backup and Compose rollback commands are in `/opt/vtsa-releases/notice-f10a289711cb4f91/deployed.json`. The PWA release is under `/var/www/staging-mobile/releases/`; its previous target is `20261101-089790a9`. Browser publishing verifies hashes before switching the `current` symlink and restores the previous target if public verification fails.
 

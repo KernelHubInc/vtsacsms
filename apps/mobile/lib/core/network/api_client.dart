@@ -79,6 +79,9 @@ final class ApiClient {
       if (refreshed != null) {
         request.extra['auth_retried'] = true;
         request.headers['Authorization'] = 'Bearer ${refreshed.accessToken}';
+        if (request.data case final FormData form) {
+          request.data = form.clone();
+        }
         return handler.resolve(await _dio.fetch<Object?>(request));
       }
       await _tokens.clear();

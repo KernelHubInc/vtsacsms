@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
+import 'package:vtsa_mobile/features/charging/domain/support_image.dart';
 
 final class ApiChargingRepository implements ChargingRepository {
   ApiChargingRepository(this._client, {this.accountId});
@@ -177,15 +178,33 @@ final class ApiChargingRepository implements ChargingRepository {
     required String category,
     required String description,
     required String idempotencyKey,
+    List<SupportImage> images = const [],
   }) async {
     try {
       await _client.dio.post<void>(
         '/api/v1/mobile/support/issues',
-        data: {
-          'session_id': sessionId,
-          'category': category,
-          'description': description,
-        },
+        data: images.isEmpty
+            ? {
+                'session_id': sessionId,
+                'category': category,
+                'description': description,
+              }
+            : FormData.fromMap({
+                'session_id': sessionId,
+                'category': category,
+                'description': description,
+                'images[]': [
+                  for (final image in images)
+                    MultipartFile.fromBytes(
+                      image.bytes,
+                      filename: image.name,
+                      contentType: DioMediaType(
+                        'image',
+                        image.name.endsWith('.png') ? 'png' : 'jpeg',
+                      ),
+                    ),
+                ],
+              }),
         options: Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
     } on Object catch (error) {

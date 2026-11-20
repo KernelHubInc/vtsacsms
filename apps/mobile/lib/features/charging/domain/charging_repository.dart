@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/domain/support_image.dart';
 
 @immutable
 final class StartChargingRequest {
@@ -44,6 +45,7 @@ abstract interface class ChargingRepository {
     required String category,
     required String description,
     required String idempotencyKey,
+    List<SupportImage> images = const [],
   });
 }
 

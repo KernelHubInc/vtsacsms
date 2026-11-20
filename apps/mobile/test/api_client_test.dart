@@ -7,9 +7,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vtsa_mobile/core/network/api_client.dart';
 import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
+
 import 'support/quick_unlock_fakes.dart';
 
 void main() {
+  test(
+    'multipart ticket upload can be retried after token refresh with the same intent key',
+    () async {
+      final tokens = MemoryTokenStore()
+        ..value = TokenBundle(
+          accessToken: 'expired',
+          refreshToken: 'refresh-reference',
+          expiresAt: DateTime.utc(2026),
+          tenantId: 'tenant-a',
+          deviceId: 'device-a',
+        );
+      final adapter = _RefreshAdapter();
+      final client = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test'),
+        tokenStore: tokens,
+        dio: Dio()..httpClientAdapter = adapter,
+      );
+      final body = FormData.fromMap({
+        'description': 'A support image test.',
+        'images[]': MultipartFile.fromBytes([1, 2, 3], filename: 'fixture.png'),
+      });
+      final response = await client.dio.post<Map<String, dynamic>>(
+        '/api/v1/mobile/support/issues',
+        data: body,
+        options: Options(headers: {'Idempotency-Key': 'ticket-refresh-once'}),
+      );
+      expect(response.data?['ok'], isTrue);
+      expect(body.isFinalized, isTrue);
+      expect(adapter.protectedCalls, 2);
+      expect(adapter.intentKeys, [
+        'ticket-refresh-once',
+        'ticket-refresh-once',
+      ]);
+    },
+  );
   test(
     'locked background requests never reach the server or expire the session',
     () async {
@@ -203,6 +239,7 @@ final class _ScriptedAdapter implements HttpClientAdapter {
 }
 
 final class _RefreshAdapter implements HttpClientAdapter {
+  final intentKeys = <String?>[];
   var refreshCalls = 0;
   var protectedCalls = 0;
 
@@ -226,6 +263,7 @@ final class _RefreshAdapter implements HttpClientAdapter {
       });
     }
     protectedCalls++;
+    intentKeys.add(options.headers['Idempotency-Key'] as String?);
     if (options.headers['Authorization'] == 'Bearer rotated') {
       return _json(200, {'ok': true});
     }

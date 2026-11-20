@@ -22,7 +22,7 @@ final readonly class DriverNoticePush
         // Authentication failures must not consume device delivery attempts.
         $this->sender->authenticate();
         foreach ($this->notices->activeIds($tenantId) as $noticeId) {
-            foreach (NotificationDevice::query()->where('tenant_id', $tenantId)->whereIn('platform', ['android', 'web'])
+            foreach (NotificationDevice::query()->where('tenant_id', $tenantId)->whereIn('platform', ['android', 'web', 'ios'])
                 ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('notice_push_deliveries')
                     ->whereColumn('notice_push_deliveries.tenant_id', 'notification_devices.tenant_id')
                     ->whereColumn('notice_push_deliveries.installation_hash', 'notification_devices.installation_hash')

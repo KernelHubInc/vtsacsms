@@ -10,7 +10,9 @@ import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
 import 'package:vtsa_mobile/design_system/theme/vtsa_tokens.dart';
 import 'package:vtsa_mobile/features/accounts/charging_account_screen.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
+import 'package:vtsa_mobile/features/charging/domain/support_image.dart';
 import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.dart';
+import 'package:vtsa_mobile/features/charging/presentation/support_image_picker.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({required this.dependencies, super.key});
@@ -472,6 +474,7 @@ class IssueReportScreen extends StatefulWidget {
 class _IssueReportScreenState extends State<IssueReportScreen> {
   final _description = TextEditingController();
   String _category = 'charger';
+  List<SupportImage> _images = const [];
   bool _submitted = false;
   bool _busy = false;
   String? _error;
@@ -519,6 +522,11 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
                 required: true,
               ),
               const SizedBox(height: VtsaSpacing.lg),
+              SupportImagePicker(
+                enabled: !_busy,
+                onChanged: (images) => _images = images,
+              ),
+              const SizedBox(height: VtsaSpacing.md),
               SelectableText('Session reference: ${widget.sessionId}'),
               TextButton.icon(
                 onPressed: () =>
@@ -566,6 +574,7 @@ class _IssueReportScreenState extends State<IssueReportScreen> {
       sessionId: widget.sessionId,
       category: _category,
       description: _description.text.trim(),
+      images: _images,
     );
     if (mounted) {
       final failure = widget.dependencies.charging.failure;

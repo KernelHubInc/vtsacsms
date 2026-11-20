@@ -14,21 +14,27 @@ use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\CMS\Domain\Models\CmsPage;
 use App\Modules\Locations\Domain\Models\Site;
 use App\Modules\Notifications\Mail\SupportVerificationMail;
+use App\Modules\Organizations\Domain\Models\Organization;
 use App\Modules\Organizations\Domain\Models\Role;
 use App\Modules\Organizations\Domain\PermissionKey;
 use App\Modules\Organizations\Domain\ResourceScope;
 use App\Modules\Organizations\Domain\ScopeType;
 use App\Modules\Support\Application\AccessibleSupportTickets;
 use App\Modules\Support\Application\SupportContactRetention;
+use App\Modules\Support\Application\SupportImageRetention;
+use App\Modules\Support\Application\SupportImages;
 use App\Modules\Support\Application\SupportTicketService;
 use App\Modules\Support\Application\WebsiteSupportRequests;
 use App\Modules\Support\Domain\Models\SupportTicket;
+use App\Modules\Support\Domain\Models\SupportTicketImage;
 use App\Modules\Tariffs\Domain\Models\TariffVersion;
 use App\Modules\Tenancy\Domain\Models\Tenant;
 use App\Policies\SupportTicketPolicy;
 use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -306,6 +312,119 @@ final class SupportIntakeTest extends TenantSecurityTestCase
         $this->get('/support')->assertOk()->assertDontSee('No app account is required.');
         $this->post('/support/code', $this->webData())->assertNotFound();
         Mail::assertNothingSent();
+    }
+
+    public function test_mobile_multiple_images_are_atomic_encrypted_and_idempotent_with_level_two_default(): void
+    {
+        [$tenant, $actor, $session] = $this->customer();
+        $body = ['session_id' => $session->getKey(), 'category' => 'charger', 'description' => 'Two images show the connector issue.',
+            'images' => [UploadedFile::fake()->image('one.jpg', 40, 40), UploadedFile::fake()->image('two.png', 40, 40)], 'support_level' => 3];
+        $this->withToken($this->login($actor, $tenant))->withHeader('Accept', 'application/json')->withHeader('Idempotency-Key', 'mobile-images-once')
+            ->post('/api/v1/mobile/support/issues', $body)->assertCreated();
+        $this->post('/api/v1/mobile/support/issues', $body)->assertCreated();
+        $this->assertDatabaseCount('support_tickets', 1);
+        $this->assertDatabaseCount('support_ticket_images', 2);
+        $this->assertDatabaseHas('support_tickets', ['support_level' => 2]);
+        $raw = DB::table('support_ticket_images')->first();
+        self::assertNotSame(file_get_contents($body['images'][0]->getPathname()), $raw->content);
+        $this->withinTenant($tenant, $actor, function (): void {
+            $image = SupportTicketImage::query()->firstOrFail();
+            self::assertArrayNotHasKey('content', $image->toArray());
+            self::assertNotFalse(getimagesizefromstring($image->content));
+        });
+        $this->post('/api/v1/mobile/support/issues', [...$body, 'images' => [UploadedFile::fake()->image('different.jpg', 50, 50)]])->assertUnprocessable();
+        $this->assertDatabaseCount('support_ticket_images', 2);
+    }
+
+    public function test_invalid_images_never_create_a_ticket_or_durable_upload(): void
+    {
+        [$tenant, $actor, $session] = $this->customer();
+        $body = ['session_id' => $session->getKey(), 'category' => 'charger', 'description' => 'An image validation regression test.'];
+        $this->withToken($this->login($actor, $tenant))->withHeader('Accept', 'application/json')->withHeader('Idempotency-Key', 'mobile-images-invalid');
+        foreach ([
+            [UploadedFile::fake()->createWithContent('payload.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')],
+            [UploadedFile::fake()->image('large.jpg')->size(2049)],
+            [UploadedFile::fake()->image('wide.png', 3001, 1)],
+            array_fill(0, 6, UploadedFile::fake()->image('many.png', 10, 10)),
+        ] as $files) {
+            $this->post('/api/v1/mobile/support/issues', [...$body, 'images' => $files])->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('support_tickets', 0);
+        $this->assertDatabaseCount('support_ticket_images', 0);
+    }
+
+    public function test_website_images_are_accepted_only_after_verification_and_payload_metadata_is_removed(): void
+    {
+        $this->publicTenant();
+        $requests = app(WebsiteSupportRequests::class);
+        $challenge = $requests->start($this->webData(), null);
+        $original = UploadedFile::fake()->image('photo.jpg', 50, 50);
+        $image = UploadedFile::fake()->createWithContent('photo.jpg', file_get_contents($original->getPathname()).'PRIVATE_APPENDED_CONTENT');
+        $this->withSession(['support.challenge' => $challenge])->post('/support/confirm', ['support_code' => '00000000', 'images' => [$image]])
+            ->assertSessionHasErrors('support_code');
+        $this->assertDatabaseCount('support_ticket_images', 0);
+        $this->post('/support/confirm', ['support_code' => $this->lastCode(), 'images' => [$image]])->assertRedirect('/support')->assertSessionHas('support.receipt');
+        $this->assertDatabaseCount('support_ticket_images', 1);
+        self::assertStringNotContainsString('PRIVATE_APPENDED_CONTENT', Crypt::decryptString(DB::table('support_ticket_images')->value('content')));
+    }
+
+    public function test_support_levels_are_validated_audited_and_do_not_grant_cross_site_access(): void
+    {
+        $tenant = $this->createTenant('support-levels');
+        $actor = $this->createUser();
+        $this->withinTenant($tenant, $actor, function () use ($tenant, $actor): void {
+            $this->staff($tenant, $actor);
+            $ticket = $this->ticket();
+            self::assertSame(2, (int) $ticket->fresh()->support_level);
+            foreach ([2, 3, 1] as $level) {
+                app(SupportTicketService::class)->escalate($actor, $ticket, $level);
+                self::assertSame($level, (int) $ticket->fresh()->support_level);
+            }
+            $this->assertDatabaseHas('audit_events', ['action' => 'support.ticket.escalated', 'target_id' => $ticket->getKey()]);
+            $this->expectException(ValidationException::class);
+            app(SupportTicketService::class)->escalate($actor, $ticket, 4);
+        });
+    }
+
+    public function test_image_download_checks_authentication_tenant_and_reveals_only_safe_image_bytes(): void
+    {
+        $tenant = $this->createTenant('support-image-reader');
+        $actor = $this->createUser();
+        $imageId = $this->withinTenant($tenant, $actor, function () use ($tenant, $actor): string {
+            Organization::factory()->create(['type' => 'platform']);
+            $this->assignDirectly($tenant, $this->createMembership($tenant, $actor), $this->createRole($tenant, 'image-reader', [PermissionKey::PlatformPanelAccess, PermissionKey::SupportView]));
+            $ticket = $this->ticket();
+            app(SupportImages::class)->save($ticket, app(SupportImages::class)->prepare([UploadedFile::fake()->image('private.jpg', 30, 30)]));
+
+            return (string) $ticket->images()->firstOrFail()->getKey();
+        });
+        $url = '/support-images/admin/'.$imageId;
+        $this->get($url)->assertUnauthorized();
+        $this->actingAs($actor)->get($url)->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff')->assertHeader('Content-Type', 'image/jpeg');
+        $other = $this->createTenant('support-image-outside');
+        $outsider = $this->createUser();
+        $this->withinTenant($other, $outsider, function () use ($other, $outsider): void {
+            Organization::factory()->create(['type' => 'platform']);
+            $this->assignDirectly($other, $this->createMembership($other, $outsider), $this->createRole($other, 'image-reader', PermissionKey::cases()));
+        });
+        $this->actingAs($outsider)->get($url)->assertNotFound();
+    }
+
+    public function test_image_retention_is_tenant_scoped_and_keeps_reopened_cases(): void
+    {
+        $tenant = $this->createTenant('support-image-retention');
+        $actor = $this->createUser();
+        $this->withinTenant($tenant, $actor, function (): void {
+            $ticket = $this->ticket(['status' => 'resolved', 'resolved_at' => now()->subDays(89)]);
+            app(SupportImages::class)->save($ticket, app(SupportImages::class)->prepare([UploadedFile::fake()->image('closed.jpg', 30, 30)]));
+            self::assertSame(0, app(SupportImageRetention::class)->purgeDue());
+            $ticket->update(['status' => 'open', 'resolved_at' => now()->subDays(91)]);
+            self::assertSame(0, app(SupportImageRetention::class)->purgeDue());
+            $ticket->update(['status' => 'resolved']);
+            self::assertSame(1, app(SupportImageRetention::class)->purgeDue());
+            $this->assertDatabaseHas('support_ticket_images', ['content' => null]);
+            self::assertSame(0, app(SupportImageRetention::class)->purgeDue());
+        });
     }
 
     private function publicTenant(): Tenant

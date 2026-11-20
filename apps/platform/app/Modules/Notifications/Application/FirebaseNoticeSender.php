@@ -22,7 +22,10 @@ final class FirebaseNoticeSender
                 ->post('https://fcm.googleapis.com/v1/projects/'.rawurlencode((string) config('notice_push.project_id')).'/messages:send', [
                     'validate_only' => true,
                     'message' => ['topic' => 'configuration-validation',
-                        'notification' => ['title' => 'Configuration check', 'body' => 'Validation only; not delivered.']],
+                        'notification' => ['title' => 'Configuration check', 'body' => 'Validation only; not delivered.'],
+                        'apns' => ['headers' => ['apns-topic' => (string) config('notice_push.ios_bundle_id'),
+                            'apns-push-type' => 'alert', 'apns-priority' => '10'],
+                            'payload' => ['aps' => ['sound' => 'default']]]],
                 ]);
         } catch (ConnectionException) {
             throw new RuntimeException('firebase_api_unreachable');
@@ -84,14 +87,19 @@ final class FirebaseNoticeSender
                         'fid' => $installationId,
                         'notification' => ['title' => $notice['title'], 'body' => $notice['message']],
                         'data' => ['notice_id' => $noticeId, 'category' => $notice['category'], 'type' => 'driver_notice'],
-                        ...($platform === 'web' ? ['webpush' => [
+                        ...($platform === 'ios' ? ['apns' => [
+                            'headers' => ['apns-topic' => (string) config('notice_push.ios_bundle_id'),
+                                'apns-push-type' => 'alert', 'apns-priority' => '10',
+                                'apns-expiration' => (string) now()->addSeconds($notice['ttl'])->timestamp],
+                            'payload' => ['aps' => ['sound' => 'default', 'thread-id' => 'driver-notices']],
+                        ]] : ($platform === 'web' ? ['webpush' => [
                             'headers' => ['TTL' => (string) $notice['ttl'], 'Urgency' => 'high'],
                             'notification' => ['tag' => 'notice-'.$noticeId,
                                 'icon' => rtrim((string) config('app.url'), '/').'/mobile/icons/Icon-192.png'],
                             'fcm_options' => ['link' => rtrim((string) config('app.url'), '/').'/mobile/#/updates'],
                         ]] : ['android' => ['priority' => 'high', 'ttl' => $notice['ttl'].'s',
                             'restricted_package_name' => config('notice_push.android_package'),
-                            'notification' => ['tag' => 'notice-'.$noticeId, 'channel_id' => 'driver_notices']]]),
+                            'notification' => ['tag' => 'notice-'.$noticeId, 'channel_id' => 'driver_notices']]])),
                     ],
                 ]);
         } catch (ConnectionException) {
@@ -103,6 +111,9 @@ final class FirebaseNoticeSender
         }
         $error = 'http_'.$response->status();
         foreach ((array) $response->json('error.details', []) as $detail) {
+            if ($platform === 'ios' && is_array($detail) && ($detail['errorCode'] ?? '') === 'THIRD_PARTY_AUTH_ERROR') {
+                return ['status' => 'failed', 'error' => 'apns_auth_rejected', 'delay' => 0];
+            }
             if (is_array($detail) && ($detail['errorCode'] ?? '') === 'UNREGISTERED') {
                 return ['status' => 'invalid', 'error' => 'unregistered', 'delay' => 0];
             }

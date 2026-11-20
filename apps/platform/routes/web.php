@@ -15,6 +15,7 @@ use App\Http\Controllers\PublicSupportController;
 use App\Http\Controllers\RobotsController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StagingKycPolicyController;
+use App\Http\Controllers\SupportImageController;
 use App\Http\Controllers\WorkforceEnrollmentController;
 use App\Http\Middleware\RequireEnabledFeature;
 use App\Http\Middleware\RequireSupportIntake;
@@ -43,6 +44,8 @@ Route::get('/staging/kyc/{page}', StagingKycPolicyController::class)
     ->name('kyc.staging-policy');
 
 Route::get('/support', [PublicSupportController::class, 'show'])->name('public.support');
+Route::get('/support-images/{panel}/{image}', SupportImageController::class)
+    ->whereIn('panel', ['admin', 'operator'])->whereUlid('image')->middleware('throttle:120,1')->name('support.images.show');
 Route::middleware([RequireSupportIntake::class, 'throttle:5,10'])->group(function (): void {
     Route::post('/support/code', [PublicSupportController::class, 'send'])->block(15, 3)->name('public.support.send');
     Route::post('/support/confirm', [PublicSupportController::class, 'confirm'])->block(15, 3)->name('public.support.confirm');

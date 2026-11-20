@@ -8,6 +8,7 @@ import 'package:vtsa_mobile/core/platform/platform_services.dart';
 import 'package:vtsa_mobile/features/charging/data/active_session_store.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
+import 'package:vtsa_mobile/features/charging/domain/support_image.dart';
 
 final class ChargingController extends ChangeNotifier {
   factory ChargingController({
@@ -480,11 +481,13 @@ final class ChargingController extends ChangeNotifier {
     String? sessionId,
     required String category,
     required String description,
+    List<SupportImage> images = const [],
   }) => _runSessionMutation(
     (sessionId, idempotencyKey) => _repository.reportIssue(
       sessionId: sessionId,
       category: category,
       description: description,
+      images: images,
       idempotencyKey: idempotencyKey,
     ),
     prefix: 'mobile-issue',

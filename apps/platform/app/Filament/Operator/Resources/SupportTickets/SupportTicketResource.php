@@ -67,9 +67,11 @@ final class SupportTicketResource extends Resource
                     'accepted' => 'success', 'failed' => 'danger', 'retrying' => 'warning', default => 'gray'
                 }),
             TextColumn::make('messages_count')->counts('messages')->label('Responses'),
-            TextColumn::make('escalation_level')->label('Escalation')->numeric(),
+            TextColumn::make('support_level')->label('Support level')->badge()->sortable()
+                ->formatStateUsing(fn (int $state): string => SupportTicket::LEVELS[$state] ?? 'Level 2 — EVCS Admin'),
             TextColumn::make('updated_at')->dateTime()->sortable(),
         ])->filters([
+            SelectFilter::make('support_level')->label('Support level')->options(SupportTicket::LEVELS),
             SelectFilter::make('category')->options(fn (): array => [...SupportIntake::CATEGORIES, ...(self::canViewAccountDeletion() ? [SupportTicket::ACCOUNT_DELETION => 'Account deletion'] : [])]),
             SelectFilter::make('status')->options([
                 'open' => 'Open',
@@ -101,7 +103,8 @@ final class SupportTicketResource extends Resource
             ]),
             Action::make('conversation')->label('Conversation')->icon(Heroicon::OutlinedChatBubbleLeftRight)
                 ->modalContent(fn (SupportTicket $record) => view('filament.operator.support-conversation', [
-                    'ticket' => $record, 'messages' => $record->messages()->with('author:id,name')->latest('id')->limit(100)->get()->reverse(),
+                    'ticket' => $record, 'images' => $record->images()->whereNull('purged_at')->orderBy('position')->get(['id', 'tenant_id', 'ticket_id']),
+                    'messages' => $record->messages()->with('author:id,name')->latest('id')->limit(100)->get()->reverse(),
                 ]))->modalSubmitAction(false)->modalCancelActionLabel('Close'),
             Action::make('revealContact')->label('View contact')->requiresConfirmation()
                 ->visible(fn (SupportTicket $record): bool => app(AuthorizationService::class)->allows(self::actor(), PermissionKey::SupportSensitiveReveal,
@@ -138,13 +141,17 @@ final class SupportTicketResource extends Resource
                     Notification::make()->title(($data['is_internal'] ?? false) ? 'Internal note saved' : (config('support.enabled') ? 'Reply saved and email queued' : 'Response saved'))->success()->send();
                 }),
             Action::make('escalate')
+                ->label('Assign support level')
                 ->icon(Heroicon::OutlinedArrowTrendingUp)
                 ->color('warning')
                 ->requiresConfirmation()
-                ->visible(fn (SupportTicket $record): bool => Gate::allows('update', $record) && $record->status !== 'resolved')
-                ->action(function (SupportTicket $record): void {
-                    app(SupportTicketService::class)->escalate(self::actor(), $record);
-                    Notification::make()->title('Ticket escalated')->warning()->send();
+                ->schema([Select::make('support_level')->label('Support team')->options(SupportTicket::LEVELS)->required()
+                    ->default(fn (SupportTicket $record): int => (int) $record->support_level)
+                    ->helperText('Select the responsible support level. Existing tenant and station permissions still apply.')])
+                ->visible(fn (SupportTicket $record): bool => Gate::allows('update', $record) && ! in_array($record->status, ['resolved', 'closed'], true))
+                ->action(function (SupportTicket $record, array $data): void {
+                    app(SupportTicketService::class)->escalate(self::actor(), $record, (int) $data['support_level']);
+                    Notification::make()->title('Support level assigned')->success()->send();
                 }),
             Action::make('resolveAccountDeletion')
                 ->label('Mark deletion request resolved')

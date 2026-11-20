@@ -25,6 +25,22 @@ class _Messaging extends Fake implements FirebaseMessaging {
   String? usedWorker;
   bool failUnregister = false;
   RemoteMessage? opening;
+  int apnsReads = 0;
+  int apnsReadyAfter = 0;
+  bool foregroundAlerts = false;
+
+  @override
+  Future<String?> getAPNSToken() async =>
+      ++apnsReads > apnsReadyAfter ? 'apple-token-fixture' : null;
+
+  @override
+  Future<void> setForegroundNotificationPresentationOptions({
+    bool alert = false,
+    bool badge = false,
+    bool sound = false,
+  }) async {
+    foregroundAlerts = alert && sound && !badge;
+  }
 
   @override
   Stream<String> get onRegistered => registrations.stream;
@@ -71,6 +87,92 @@ class _Messaging extends Fake implements FirebaseMessaging {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'iOS waits for APNs, registers its platform and opens Updates',
+    () async {
+      final requests = <RequestOptions>[];
+      final messaging = _Messaging()
+        ..apnsReadyAfter = 1
+        ..status = AuthorizationStatus.provisional
+        ..opening = const RemoteMessage(messageId: 'apple-fixture');
+      var opened = 0;
+      final push = FirebaseNoticePushRegistration(
+        client: ApiClient(
+          baseUrl: Uri.parse('https://example.test'),
+          tokenStore: MemoryTokenStore(),
+          dio: Dio()
+            ..interceptors.add(
+              InterceptorsWrapper(
+                onRequest: (request, handler) {
+                  requests.add(request);
+                  handler.resolve(
+                    Response<void>(requestOptions: request, statusCode: 204),
+                  );
+                },
+              ),
+            ),
+        ),
+        messaging: messaging,
+        platform: TargetPlatform.iOS,
+        onNotice: () async {},
+        onOpened: () async {
+          opened++;
+        },
+      );
+      await push.register();
+      expect(messaging.apnsReads, 2);
+      expect(messaging.foregroundAlerts, isTrue);
+      expect(messaging.registered, 1);
+      expect(requests.single.data, {
+        'platform': 'ios',
+        'installation_id': 'test-firebase-installation',
+      });
+      expect(push.status, NoticePushStatus.enabled);
+      expect(opened, 1);
+      await push.unregister();
+      expect(requests.last.method, 'DELETE');
+      messaging.registrations.add('after-apple-logout');
+      await Future<void>.delayed(Duration.zero);
+      expect(requests.length, 2);
+      push.dispose();
+      await messaging.registrations.close();
+    },
+  );
+
+  test('iOS APNs timeout is bounded and can be retried', () async {
+    final messaging = _Messaging()..apnsReadyAfter = 100;
+    final requests = <RequestOptions>[];
+    final push = FirebaseNoticePushRegistration(
+      client: ApiClient(
+        baseUrl: Uri.parse('https://example.test'),
+        tokenStore: MemoryTokenStore(),
+        dio: Dio()
+          ..interceptors.add(
+            InterceptorsWrapper(
+              onRequest: (request, handler) {
+                requests.add(request);
+                handler.resolve(
+                  Response<void>(requestOptions: request, statusCode: 204),
+                );
+              },
+            ),
+          ),
+      ),
+      messaging: messaging,
+      platform: TargetPlatform.iOS,
+      onNotice: () async {},
+    );
+    await push.register();
+    expect(push.status, NoticePushStatus.failed);
+    expect(messaging.registered, 0);
+    expect(requests, isEmpty);
+    messaging.apnsReadyAfter = 0;
+    await push.register();
+    expect(push.status, NoticePushStatus.enabled);
+    push.dispose();
+    await messaging.registrations.close();
+  });
 
   test(
     'failed browser opt-out stays retryable and is not reported as off',

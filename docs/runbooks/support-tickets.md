@@ -1,5 +1,13 @@
 # Customer support tickets — staging acceptance
 
+## Images and support levels
+
+The updated mobile build adds **Add images** in **Activity → Session → Report an issue**. Choose up to five JPEG/PNG images, 2 MB each (maximum 3000 × 3000 pixels); review previews and remove unwanted images before submitting. Existing installed builds still support text reports. The website offers the same optional upload on the email-code confirmation step, after entering the request details. The server validates and sanitizes every image; invalid uploads never partially create a ticket. Avoid passwords, payment details, faces and identity documents.
+
+In **Support → Support Tickets**, filter by **Support level**. New tickets and existing unclassified tickets default to **Level 2 — EVCS Admin**. **Assign support level** lets authorized staff select **Level 1 — Operator site admin**, **Level 2 — EVCS Admin**, or **Level 3 — Kernel Hub (App Developer)** and confirm. **Conversation** displays the private customer images; choose **Open image** for a larger view. Level selection does not give another person/organization access: staff still need the existing Support permissions for the ticket's tenant/site. General enquiries without a station require the tenant-wide inbox. No developer account or cross-tenant access is created automatically.
+
+Optional images are encrypted in the shared database, excluded from email and public storage, and removed 90 days after resolution/closure by the existing purge command. Reopening keeps them until the next completed retention period. Apply additive migration `2026_11_20_000001_add_support_images_and_levels` after a backup. Preserve the application encryption key; monitor database/backup growth. Confirm GD is enabled, PHP `post_max_size=12M` / `upload_max_filesize=2M` / `max_file_uploads=10` (the application accepts five), and a proxy body limit of at least 12 MB. The previous staging-only rollout notes below describe the earlier release; the current owner has requested both staging and production promotion.
+
 ## Submit from the existing mobile app
 
 Use the staging app: **Activity → select a session → Report an issue**. Choose a category, enter at least ten characters and submit. The unchanged app request now creates a ticket linked to its accessible session/site. The current app shows its existing confirmation; the new ticket reference arrives in the acknowledgement email. A new APK is not required.

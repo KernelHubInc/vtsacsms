@@ -7,6 +7,7 @@ namespace App\Modules\Support\Application;
 use App\Modules\Notifications\Application\SupportMailTransport;
 use App\Modules\Notifications\Mail\SupportVerificationMail;
 use App\Modules\Tenancy\Application\PublicSupportTenant;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
@@ -46,12 +47,15 @@ final readonly class WebsiteSupportRequests
         return $challenge;
     }
 
-    /** @return array{id:string,ticket_number:string}|null */
-    public function confirm(string $challenge, #[\SensitiveParameter] string $code, string $correlationId): ?array
+    /**
+     * @param  list<UploadedFile>  $images
+     * @return array{id:string,ticket_number:string}|null
+     */
+    public function confirm(string $challenge, #[\SensitiveParameter] string $code, string $correlationId, array $images = []): ?array
     {
         abort_unless(config('support.enabled'), 404);
 
-        return Cache::lock('support:confirm:'.$challenge, 15)->block(3, function () use ($challenge, $code, $correlationId): ?array {
+        return Cache::lock('support:confirm:'.$challenge, 15)->block(3, function () use ($challenge, $code, $correlationId, $images): ?array {
             $key = 'support:challenge:'.$challenge;
             $record = Cache::get($key);
             if (! is_array($record) || ($record['tenant_id'] ?? null) !== app(PublicSupportTenant::class)->id()) {
@@ -69,6 +73,7 @@ final readonly class WebsiteSupportRequests
                 return null;
             }
             $data = json_decode(Crypt::decryptString($record['payload']), true, 512, JSON_THROW_ON_ERROR);
+            $data['images'] = $images;
             $ticket = app(PublicSupportContext::class)->run($correlationId, fn () => app(SupportIntake::class)->verifiedWebsite($data, 'website:'.$challenge));
 
             return ['id' => (string) $ticket->getKey(), 'ticket_number' => (string) $ticket->ticket_number];

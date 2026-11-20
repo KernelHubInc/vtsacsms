@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Report an accessible charging-session issue
-         * @description Accepts the existing mobile Report an issue payload. Reusing an intent key returns its ticket; changing the intent for that key is rejected. Submission requires an enabled, verified identity and is feature-gated for staging. It never changes a session, wallet, payment or refund.
+         * @description Accepts the existing mobile Report an issue payload. Reusing an intent key returns its ticket; changing the intent for that key is rejected. Submission requires an enabled, verified identity and is feature-gated per environment. New tickets start at Level 2 (EVCS Admin). Multipart submissions may include up to five JPEG/PNG images, 2 MiB and 3000 x 3000 pixels each. It never changes a session, wallet, payment or refund.
          */
         post: operations["submitMobileSupportIssue"];
         delete?: never;
@@ -2623,6 +2623,13 @@ export interface operations {
                     category: "charger" | "session" | "payment" | "receipt" | "general" | "other";
                     description: string;
                 };
+                "multipart/form-data": {
+                    session_id: string;
+                    /** @enum {string} */
+                    category: "charger" | "session" | "payment" | "receipt" | "general" | "other";
+                    description: string;
+                    images?: string[];
+                };
             };
         };
         responses: {
@@ -4749,7 +4756,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    platform: "android" | "web";
+                    platform: "android" | "web" | "ios";
                     installation_id: string;
                 };
             };

@@ -17,19 +17,21 @@ permissions:
 
 jobs:
   simulator:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.8'
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
       - name: Check build script safeguards
-        run: python3 -m unittest discover -s tests/infra -p test_ios_build.py
+        run: python3 -m unittest discover -s tests/infra -p 'test_ios*.py'
       - name: Build and check simulator app
         env:
           IOS_VERSION: ${{ inputs.version }}

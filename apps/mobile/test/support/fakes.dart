@@ -15,6 +15,7 @@ import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_models.dart';
 import 'package:vtsa_mobile/features/charging/domain/charging_repository.dart';
+import 'package:vtsa_mobile/features/charging/domain/support_image.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station.dart';
 import 'package:vtsa_mobile/features/discovery/domain/station_repository.dart';
 import 'package:vtsa_mobile/features/favorites/data/local_favorites_repository.dart';
@@ -388,6 +389,7 @@ final class FakeChargingRepository implements ChargingRepository {
     required String category,
     required String description,
     required String idempotencyKey,
+    List<SupportImage> images = const [],
   }) async {
     issueCalls++;
     if (issueFailure case final failure?) throw failure;

@@ -1,0 +1,9 @@
+# Administrator-assisted password recovery
+
+In the administration panel, open **Users & access** (or **Operator users** on the current production navigation), choose the user's **Reset password** action and confirm **Send reset link**. The same action is available on the **Users** identity list. The email contains a one-time link; the user chooses their own password. The existing password remains valid until recovery is completed. Completion uses the existing identity workflow, which rotates the security version and revokes existing browser/mobile/API sessions, including push registrations tied to revoked tokens.
+
+Super administrator and Admin roles can use the action through their existing tenant-wide administration and membership-management permissions. Custom roles need both `identity.panels.platform.access` and `identity.memberships.manage`; the target must be a visible member of the same active tenant. Operators with only scoped membership access cannot reset global identities. The server checks permissions and target membership again when executing the action; hiding a menu is not the authorization boundary. No new permission grants or production seed data are introduced.
+
+Disabled or unactivated accounts must follow their activation/enrollment process first. The password broker throttles repeated requests to the same account for 60 seconds and expires unused links after 60 minutes. SMTP errors show a retry message and a failed audit outcome; they never report success. Successful and failed requests record `identity.password.recovery_requested` without passwords, recovery tokens, email bodies or provider details. Receiving a recovery request does not bypass MFA, activation or email verification.
+
+Test the flow with a controlled mailbox before training users. Check the production and staging SMTP configuration separately. Do not send a real recovery email during deployment verification without approval from its recipient.

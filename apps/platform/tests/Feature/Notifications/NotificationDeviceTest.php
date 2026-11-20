@@ -21,7 +21,7 @@ final class NotificationDeviceTest extends TenantSecurityTestCase
         $body = ['platform' => 'android', 'installation_id' => str_repeat('a', 40)];
 
         $this->putJson($url, $body)->assertUnauthorized();
-        $this->withToken($token)->putJson($url, ['platform' => 'ios', 'installation_id' => 'short'])
+        $this->withToken($token)->putJson($url, ['platform' => 'unknown', 'installation_id' => 'short'])
             ->assertUnprocessable()->assertJsonValidationErrors(['platform', 'installation_id']);
         $this->putJson($url, $body)->assertNoContent();
         $this->putJson($url, $body)->assertNoContent();
@@ -68,6 +68,19 @@ final class NotificationDeviceTest extends TenantSecurityTestCase
         ])->assertNoContent();
         $this->assertDatabaseCount('notification_devices', 1);
 
+        $this->postJson('/api/v1/auth/logout')->assertSuccessful();
+        $this->assertDatabaseCount('notification_devices', 0);
+    }
+
+    public function test_ios_registration_is_tenant_scoped_and_removed_on_logout(): void
+    {
+        $tenant = $this->createTenant('push-ios');
+        $user = $this->createUser();
+        $this->withinTenant($tenant, $user, fn () => $this->createMembership($tenant, $user));
+        $this->withToken($this->login($user, $tenant))->putJson('/api/v1/mobile/notification-device', [
+            'platform' => 'ios', 'installation_id' => 'ios-installation-fixture',
+        ])->assertNoContent();
+        $this->assertDatabaseHas('notification_devices', ['tenant_id' => $tenant->getKey(), 'platform' => 'ios']);
         $this->postJson('/api/v1/auth/logout')->assertSuccessful();
         $this->assertDatabaseCount('notification_devices', 0);
     }

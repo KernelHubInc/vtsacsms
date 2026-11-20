@@ -26,10 +26,16 @@
                 <p class="text-xs font-bold uppercase tracking-wider text-teal-700">Step 2 of 2 · Verify your email</p>
                 <h2 class="mt-3 text-2xl font-semibold text-[#12366b]">One last step.</h2>
                 <p class="mt-3 leading-relaxed text-slate-600">Check your email for an eight-digit code. It expires in 15 minutes. Your ticket is created after you confirm the code.</p>
-                <form method="post" action="{{ route('public.support.confirm') }}" class="mt-7 space-y-5">
+                <form method="post" enctype="multipart/form-data" action="{{ route('public.support.confirm') }}" class="mt-7 space-y-5">
                     @csrf
                     <div><label class="mb-2 block text-sm font-semibold" for="support-code">Verification code</label><input class="w-full rounded-xl border border-slate-300 px-4 py-3 text-xl tracking-[0.25em] focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-200" id="support-code" name="support_code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code" required></div>
                     @error('support_code')<p role="alert" class="text-sm text-red-700">{{ $message }}</p>@enderror
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold" for="support-images">Images <span class="font-normal text-slate-500">(optional)</span></label>
+                        <input class="block w-full rounded-xl border border-slate-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300" type="file" id="support-images" name="images[]" accept="image/jpeg,image/png" multiple>
+                        <p class="mt-2 text-xs text-slate-500">Up to five JPEG or PNG images, 2 MB each, maximum 3000 × 3000 pixels. Images are private to authorized support staff. Avoid passwords, payment details, faces and identity documents.</p>
+                        @foreach ($errors->get('images*') as $messages) @foreach ($messages as $message)<p role="alert" class="mt-2 text-sm text-red-700">{{ $message }}</p>@endforeach @endforeach
+                    </div>
                     <button class="button" type="submit">Verify and submit request</button>
                 </form>
                 <form method="post" action="{{ route('public.support.reset') }}" class="mt-6 border-t border-slate-100 pt-5">@csrf<button type="submit" class="text-sm font-semibold text-[#12366b] underline underline-offset-4">Change details or request a new code</button></form>
@@ -48,6 +54,7 @@
                     <div><label class="mb-2 block text-sm font-semibold" for="support-description">What happened?</label><textarea class="w-full rounded-xl border border-slate-300 px-4 py-3 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-200" id="support-description" name="description" rows="6" minlength="10" maxlength="5000" required></textarea><p class="mt-2 text-xs text-slate-500">At least 10 characters. Describe the issue and include a reference when available.</p></div>
                     <div class="hidden" aria-hidden="true"><label for="support-company">Company website</label><input id="support-company" name="company_website" tabindex="-1" autocomplete="off"></div>
                     <p class="text-xs leading-relaxed text-slate-500">We use these details to handle your request under our <a class="font-semibold underline" href="{{ route('public.privacy-policy') }}">privacy policy</a>. This form does not request an account deletion or authorize a payment or refund.</p>
+                    <p class="text-xs text-slate-500">You can add images on the email verification step.</p>
                     <button class="button" type="submit">Send verification code <span aria-hidden="true">→</span></button>
                 </form>
             @endif

@@ -96,6 +96,42 @@ final class DriverNoticePushTest extends TenantSecurityTestCase
         $this->assertSame(0, $push->deliver((string) $tenant->getKey()));
     }
 
+    public function test_ios_delivery_uses_an_expiring_apple_alert_and_deduplicates(): void
+    {
+        config(['notice_push.ios_bundle_id' => 'com.vtsa.vtsaMobile']);
+        $tenant = $this->createTenant('push-apple');
+        $other = $this->createTenant('push-apple-other');
+        $device = $this->device($tenant);
+        $device->update(['platform' => 'ios']);
+        $this->device($other)->update(['platform' => 'ios']);
+        $notice = $this->notice($tenant);
+        $push = app(DriverNoticePush::class);
+        $this->assertSame(1, $push->deliver((string) $tenant->getKey()));
+        $this->assertSame(0, $push->deliver((string) $tenant->getKey()));
+        Http::assertSent(fn (Request $request) => str_contains($request->url(), 'messages:send')
+            && $request['message']['fid'] === $device->installation_ciphertext
+            && $request['message']['apns']['headers']['apns-topic'] === 'com.vtsa.vtsaMobile'
+            && $request['message']['apns']['headers']['apns-push-type'] === 'alert'
+            && $request['message']['apns']['headers']['apns-priority'] === '10'
+            && $request['message']['apns']['headers']['apns-expiration'] === (string) now()->addHour()->timestamp
+            && $request['message']['apns']['payload']['aps']['sound'] === 'default'
+            && $request['message']['data']['notice_id'] === $notice->id
+            && ! isset($request['message']['android']) && ! isset($request['message']['webpush']));
+        $this->assertDatabaseCount('notice_push_deliveries', 1);
+    }
+
+    public function test_apple_credentials_failure_does_not_delete_the_device_or_expose_provider_details(): void
+    {
+        $this->responses(401, ['error' => ['message' => 'private APNs detail', 'details' => [['errorCode' => 'THIRD_PARTY_AUTH_ERROR']]]]);
+        $tenant = $this->createTenant('push-apple-auth');
+        $this->device($tenant)->update(['platform' => 'ios']);
+        $this->notice($tenant);
+        app(DriverNoticePush::class)->deliver((string) $tenant->getKey());
+        $this->assertDatabaseCount('notification_devices', 1);
+        $this->assertDatabaseHas('notice_push_deliveries', ['status' => 'failed', 'error_code' => 'apns_auth_rejected']);
+        $this->assertStringNotContainsString('private APNs', (string) NoticePushDelivery::query()->firstOrFail()->toJson());
+    }
+
     public function test_configuration_check_uses_validation_only_and_does_not_create_deliveries(): void
     {
         $this->assertSame(0, Artisan::call('notifications:send-driver-notices', ['--check' => true]));
