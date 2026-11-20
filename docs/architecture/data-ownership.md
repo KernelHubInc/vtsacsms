@@ -241,6 +241,8 @@ Charging owns `charging_budget_settings` and the final fee projections on sessio
 
 ### Support intake and correspondence contracts
 
+Support owns optional sanitized, encrypted ticket images and the three-level routing field. Image acceptance is atomic with the ticket; authorized staff image reads reuse ticket tenant/site policies. Level labels do not grant access or transfer customer content to Kernel Hub. See [ADR 0037](decisions/0037-private-ticket-images-and-support-levels.md) for bounded file sizes, database storage, private viewing and image retention. Notifications continues to receive text-only email facts through the existing contract.
+
 SUP-001–SUP-004 use Charging's `SupportSessionQuery` and Assets' `SupportStationQuery` for minimal authorized/public target facts. Support owns ticket/message content, idempotency intent and encrypted verified visitor contact. Identity's verified-contact query supplies the current enabled account email without exposing a full identity record.
 
 Support calls Notifications' `SupportEmailRequests` public application contract inside the acceptance transaction. Notifications owns `support_email_deliveries`, including source ULIDs, intent deduplication, claims, attempts and provider acceptance. Support's `SupportEmailQuery` supplies a currently verified recipient and a public message when sending; it never returns an internal note. No network call occurs inside the source or claim transaction. No source descriptions, email addresses or provider error text are copied into delivery telemetry. See ADR 0035 for cache lifetime, visitor contact expiry, scope enforcement and the SMTP crash window.

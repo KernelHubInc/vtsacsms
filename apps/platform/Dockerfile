@@ -18,6 +18,8 @@ COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 
 FROM php-base AS php-dependencies
 
+COPY docker/support-images.ini /usr/local/etc/php/conf.d/zz-support-images.ini
+
 COPY composer.json composer.lock ./
 RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     COMPOSER_CACHE_DIR=/tmp/composer-cache \
@@ -77,6 +79,8 @@ RUN --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
     composer install --no-interaction --prefer-dist --no-dev --no-scripts --no-progress
 
 FROM production-base AS runtime
+
+COPY docker/support-images.ini /usr/local/etc/php/conf.d/zz-support-images.ini
 
 COPY --from=production-dependencies /app/vendor ./vendor
 COPY . .

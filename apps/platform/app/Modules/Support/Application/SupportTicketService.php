@@ -95,21 +95,28 @@ final readonly class SupportTicketService
         });
     }
 
-    public function escalate(User $actor, SupportTicket $ticket): SupportTicket
+    public function escalate(User $actor, SupportTicket $ticket, ?int $level = null): SupportTicket
     {
         Gate::forUser($actor)->authorize('update', $ticket);
+        $level ??= min(3, (int) $ticket->support_level + 1);
+        Validator::make(compact('level'), ['level' => ['required', 'integer', 'in:1,2,3']])->validate();
 
-        return DB::transaction(function () use ($actor, $ticket): SupportTicket {
+        return DB::transaction(function () use ($actor, $ticket, $level): SupportTicket {
             $ticket = SupportTicket::query()->whereKey($ticket->getKey())->lockForUpdate()->firstOrFail();
             Gate::forUser($actor)->authorize('update', $ticket);
+            abort_if(in_array($ticket->status, ['resolved', 'closed'], true), 422);
+            if ((int) $ticket->support_level === $level) {
+                return $ticket;
+            }
             $this->guardReopening($ticket);
-            $before = ['status' => $ticket->status, 'escalation_level' => $ticket->escalation_level];
+            $before = ['status' => $ticket->status, 'escalation_level' => $ticket->escalation_level, 'support_level' => $ticket->support_level];
             $ticket->forceFill([
                 'status' => 'escalated',
                 'open_fingerprint' => $ticket->request_fingerprint,
                 'resolved_at' => null,
                 'contact_expires_at' => null,
                 'escalation_level' => min(99, (int) $ticket->escalation_level + 1),
+                'support_level' => $level,
             ]);
             $this->saveState($ticket);
 
@@ -119,7 +126,7 @@ final readonly class SupportTicketService
                 (string) $ticket->getKey(),
                 AuditResult::Succeeded,
                 before: $before,
-                after: ['status' => $ticket->status, 'escalation_level' => $ticket->escalation_level],
+                after: ['status' => $ticket->status, 'escalation_level' => $ticket->escalation_level, 'support_level' => $ticket->support_level],
             ));
 
             return $ticket->refresh();

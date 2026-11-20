@@ -45,7 +45,7 @@ final class PublicSupportController extends Controller
     public function confirm(ConfirmSupportCode $request, WebsiteSupportRequests $support): RedirectResponse
     {
         $challenge = $request->session()->get('support.challenge');
-        $receipt = is_string($challenge) ? $support->confirm($challenge, $request->validated('support_code'), (string) $request->attributes->get('correlation_id')) : null;
+        $receipt = is_string($challenge) ? $support->confirm($challenge, $request->validated('support_code'), (string) $request->attributes->get('correlation_id'), $request->validated('images', [])) : null;
         if ($receipt === null) {
             return to_route('public.support')->withErrors(['support_code' => 'That code is invalid or expired. Request a new code and try again.']);
         }

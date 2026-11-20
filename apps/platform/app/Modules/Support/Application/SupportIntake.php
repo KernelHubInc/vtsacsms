@@ -52,14 +52,20 @@ final readonly class SupportIntake
     /** @param array<string,mixed> $data */
     private function create(array $data, string $key, string $source, ?int $requester, ?string $site, ?string $session): SupportTicket
     {
+        $images = app(SupportImages::class)->prepare($data['images'] ?? []);
+        unset($data['images']);
         $data = Validator::make($data, ['category' => ['required', 'in:'.implode(',', array_keys(self::CATEGORIES))],
             'description' => ['required', 'string', 'min:10', 'max:5000'], 'subject' => ['nullable', 'string', 'max:160'],
             'email' => [$source === 'website' ? 'required' : 'nullable', 'email', 'max:254'],
         ])->validate();
         Validator::make(['key' => $key], ['key' => ['required', 'string', 'min:8', 'max:160', 'regex:/^[A-Za-z0-9._:-]+$/']])->validate();
-        $fingerprint = hash_hmac('sha256', json_encode([$source, $requester, $site, $session, $data], JSON_THROW_ON_ERROR), (string) config('app.key'));
+        $fingerprintData = $data;
+        if ($images !== []) {
+            $fingerprintData['image_digests'] = array_column($images, 'digest');
+        }
+        $fingerprint = hash_hmac('sha256', json_encode([$source, $requester, $site, $session, $fingerprintData], JSON_THROW_ON_ERROR), (string) config('app.key'));
 
-        return DB::transaction(function () use ($data, $key, $source, $requester, $site, $session, $fingerprint): SupportTicket {
+        return DB::transaction(function () use ($data, $key, $source, $requester, $site, $session, $fingerprint, $images): SupportTicket {
             $existing = SupportIntakeRequest::query()->where('idempotency_key', $key)->first();
             if ($existing !== null) {
                 if (! hash_equals((string) $existing->request_fingerprint, $fingerprint)) {
@@ -69,7 +75,7 @@ final readonly class SupportIntake
                 return SupportTicket::query()->findOrFail($existing->ticket_id);
             }
             $ticket = SupportTicket::query()->firstOrCreate(['open_fingerprint' => $fingerprint], [
-                'status' => 'open', 'priority' => 'normal',
+                'status' => 'open', 'priority' => 'normal', 'support_level' => 2,
                 'ticket_number' => 'SUP-'.Str::ulid(), 'requester_user_id' => $requester,
                 'site_id' => $site, 'session_id' => $session, 'source' => $source,
                 'category' => $data['category'], 'subject' => $data['subject'] ?? self::CATEGORIES[$data['category']].' support request',
@@ -86,6 +92,7 @@ final readonly class SupportIntake
             if (! $ticket->wasRecentlyCreated) {
                 return $ticket;
             }
+            app(SupportImages::class)->save($ticket, $images);
             app(SupportEmailRequests::class)->enqueue((string) $ticket->getKey());
             app(AuditRecorder::class)->record(new AuditEntry('support.ticket.created', 'support_ticket', (string) $ticket->getKey(),
                 AuditResult::Succeeded, metadata: ['source' => $source, 'site_id' => $site, 'session_id' => $session]));

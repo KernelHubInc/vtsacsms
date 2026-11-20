@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Modules\Support\Application\SupportImages;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class ConfirmSupportCode extends FormRequest
@@ -16,6 +17,6 @@ final class ConfirmSupportCode extends FormRequest
     /** @return array<string,mixed> */
     public function rules(): array
     {
-        return ['support_code' => ['required', 'string', 'regex:/^[0-9]{8}$/']];
+        return [...SupportImages::rules(), 'support_code' => ['required', 'string', 'regex:/^[0-9]{8}$/']];
     }
 }

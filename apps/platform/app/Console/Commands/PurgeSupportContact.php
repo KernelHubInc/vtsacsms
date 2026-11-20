@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Identity\Domain\ActorType;
 use App\Modules\Support\Application\SupportContactRetention;
+use App\Modules\Support\Application\SupportImageRetention;
 use App\Modules\Tenancy\Application\CurrentTenant;
 use App\Modules\Tenancy\Application\TenantContext;
 use App\Modules\Tenancy\Domain\Models\Tenant;
@@ -24,7 +25,10 @@ final class PurgeSupportContact extends Command
             return self::SUCCESS;
         }
         foreach (Tenant::query()->where('status', 'active')->pluck('id') as $id) {
-            $tenant->run(new TenantContext((string) $id, ActorType::Service, null, (string) Str::ulid()), fn () => $contacts->purgeDue());
+            $tenant->run(new TenantContext((string) $id, ActorType::Service, null, (string) Str::ulid()), function () use ($contacts): void {
+                $contacts->purgeDue();
+                app(SupportImageRetention::class)->purgeDue();
+            });
         }
 
         return self::SUCCESS;

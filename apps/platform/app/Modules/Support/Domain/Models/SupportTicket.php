@@ -26,7 +26,11 @@ final class SupportTicket extends Model
 
     public const ACCOUNT_DELETION = 'account_deletion';
 
+    public const LEVELS = [1 => 'Level 1 — Operator site admin', 2 => 'Level 2 — EVCS Admin', 3 => 'Level 3 — Kernel Hub (App Developer)'];
+
     protected $guarded = [];
+
+    protected $attributes = ['support_level' => 2];
 
     protected $hidden = ['contact_email', 'request_fingerprint', 'open_fingerprint', 'idempotency_key'];
 
@@ -34,6 +38,7 @@ final class SupportTicket extends Model
     {
         return [
             'escalation_level' => 'integer',
+            'support_level' => 'integer',
             'resolved_at' => 'immutable_datetime',
             'contact_email' => 'encrypted',
             'contact_verified_at' => 'immutable_datetime',
@@ -63,5 +68,11 @@ final class SupportTicket extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(SupportTicketMessage::class);
+    }
+
+    /** @return HasMany<SupportTicketImage, $this> */
+    public function images(): HasMany
+    {
+        return $this->hasMany(SupportTicketImage::class, 'ticket_id');
     }
 }

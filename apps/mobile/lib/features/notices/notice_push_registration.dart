@@ -164,8 +164,9 @@ final class FirebaseNoticePushRegistration extends ChangeNotifier
           }
           await Future<void>.delayed(const Duration(milliseconds: 250));
         }
-        if (!ready)
+        if (!ready) {
           throw StateError('Apple notification registration timed out.');
+        }
       }
       if (_disposed || generation != _generation) return;
       _active = true;

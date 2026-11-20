@@ -5,6 +5,16 @@
         <p class="mt-3 whitespace-pre-wrap break-words text-sm">{{ $ticket->description }}</p>
         @if ($ticket->session_id)<p class="mt-3 break-all font-mono text-xs text-gray-500">Session {{ $ticket->session_id }}</p>@endif
     </div>
+    @if ($images->isNotEmpty())
+        <section aria-label="Customer images" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            @foreach ($images as $image)
+                <a class="overflow-hidden rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500" href="{{ route('support.images.show', ['panel' => \Filament\Facades\Filament::getCurrentPanel()->getId(), 'image' => $image->id]) }}" target="_blank" rel="noopener noreferrer">
+                    <img class="h-36 w-full object-contain" loading="lazy" alt="Customer support image {{ $loop->iteration }}" src="{{ route('support.images.show', ['panel' => \Filament\Facades\Filament::getCurrentPanel()->getId(), 'image' => $image->id]) }}">
+                    <span class="block p-2 text-xs font-semibold">Open image {{ $loop->iteration }}</span>
+                </a>
+            @endforeach
+        </section>
+    @endif
     @forelse ($messages as $message)
         <article class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
