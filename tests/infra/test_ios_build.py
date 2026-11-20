@@ -45,6 +45,15 @@ class IosBuildTest(unittest.TestCase):
         args = ios.parser().parse_args(['--mode', 'simulator', '--version', '1.0.16', '--build-number', '17'])
         self.assertEqual(ios.commands(args)[-1][:5], ['flutter', 'build', 'ios', '--simulator', '--debug'])
 
+    def test_old_swift_toolchain_stops_before_analysis_tests_or_compilation(self):
+        args = ios.parser().parse_args(['--mode', 'simulator', '--version', '1.0.0', '--build-number', '1'])
+        with patch.object(ios.platform, 'system', return_value='Darwin'), patch.object(ios.shutil, 'which', return_value='/tool'):
+            with patch.object(ios.subprocess, 'check_output', return_value='Apple Swift version 6.1.2'):
+                with self.assertRaisesRegex(ValueError, 'Swift 6.2.1'):
+                    ios.preflight(args)
+            with patch.object(ios.subprocess, 'check_output', return_value='Apple Swift version 6.2.1'):
+                ios.preflight(args)
+
 
 if __name__ == '__main__':
     unittest.main()

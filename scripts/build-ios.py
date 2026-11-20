@@ -44,6 +44,10 @@ def preflight(args: argparse.Namespace) -> None:
         raise ValueError('The selected Dart configuration file does not exist.')
     if args.mode == 'ipa' and (args.export_options is None or not args.export_options.is_file()):
         raise ValueError('IPA export requires --export-options pointing to your real Xcode export settings, plus installed signing credentials.')
+    swift = subprocess.check_output(['xcrun', 'swift', '--version'], text=True)
+    match = re.search(r'Swift version (\d+)\.(\d+)(?:\.(\d+))?', swift)
+    if match is None or tuple(int(part or 0) for part in match.groups()) < (6, 2, 1):
+        raise ValueError('Firebase requires Swift 6.2.1 or newer. Select Xcode 26.6; the app deployment target remains iOS 15.0.')
 
 
 def commands(args: argparse.Namespace) -> list[list[str]]:

@@ -7,7 +7,7 @@ The existing Flutter app supports an iOS build target. Native compilation and de
 ## Required tools and accounts
 
 - Keep the current Flutter application and its existing plugins; no replacement framework or new Dart dependency is required.
-- Use a Mac with Xcode, its iOS SDK and simulator runtime, Flutter 3.44.8, Python 3, and CocoaPods. A hosted macOS runner can supply the build machine.
+- Use a Mac with Xcode 26.6, its iOS SDK and simulator runtime, Flutter 3.44.8, Python 3, and CocoaPods. Firebase's native package requires Swift 6.2.1 or newer; this does not change the iOS 15.0 deployment target. A hosted macOS runner can supply the build machine.
 - Use an Apple Developer Program account for TestFlight or App Store distribution. A free Apple account can support limited personal device testing through Xcode on a Mac; it does not provide TestFlight distribution.
 - Confirm the existing bundle identifier `com.vtsa.vtsaMobile` is available to your Apple team before registration. No team, certificate, provisioning profile, or signing secret is configured in source.
 
