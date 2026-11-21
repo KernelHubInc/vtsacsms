@@ -235,6 +235,7 @@ ChargingSession sampleChargingSession({
   int durationSeconds = 0,
   int? currentPowerW,
   DateTime? energyReportedAt,
+  DateTime? stoppedAt,
   int? batteryPercentage,
   DateTime? batteryReportedAt,
   int aggregateVersion = 1,
@@ -272,9 +273,11 @@ ChargingSession sampleChargingSession({
   startedAt: state == ChargingSessionState.starting
       ? null
       : DateTime.utc(2026, 7, 26, 3, 1),
-  stoppedAt: state == ChargingSessionState.completed
-      ? DateTime.utc(2026, 7, 26, 3, 31)
-      : null,
+  stoppedAt:
+      stoppedAt ??
+      (state == ChargingSessionState.completed
+          ? DateTime.utc(2026, 7, 26, 3, 31)
+          : null),
   startDeadlineAt: startDeadlineAt,
   aggregateVersion: aggregateVersion,
   paymentState: paymentState,
@@ -304,6 +307,7 @@ final class FakeChargingRepository implements ChargingRepository {
   Completer<ChargePreparation>? prepareCompleter;
   Completer<ChargingSession>? stopCompleter;
   AppFailure? getSessionFailure;
+  Completer<ChargingSession>? getSessionCompleter;
   Completer<ChargingHistoryPage>? historyCompleter;
   int prepareCalls = 0;
   int? lastPreparedBudget;
@@ -349,6 +353,7 @@ final class FakeChargingRepository implements ChargingRepository {
   @override
   Future<ChargingSession> getSession(String sessionId) async {
     if (getSessionFailure case final failure?) throw failure;
+    if (getSessionCompleter case final pending?) return pending.future;
     final result = sessions[sessionId] ?? active;
     if (result == null) {
       throw const AppFailure(

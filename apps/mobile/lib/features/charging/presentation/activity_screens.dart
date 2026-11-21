@@ -42,7 +42,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final history = charging.history
           .where(
             (session) =>
-                active == null || active.isTerminal || session.id != active.id,
+                active == null ||
+                active.isTerminal ||
+                active.isStoppedForReview ||
+                session.id != active.id,
           )
           .where(
             (session) => switch (_filter) {
@@ -83,7 +86,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 message: charging.failure?.message,
                 correlationId: charging.failure?.correlationId,
               ),
-              if (active != null && !active.isTerminal) ...[
+              if (active != null &&
+                  !active.isTerminal &&
+                  !active.isStoppedForReview) ...[
                 if (active.attribution['payer'] case final String payer)
                   Text('Current session payer: $payer'),
                 Text(
@@ -198,11 +203,21 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         );
       }
       return VtsaPageShell(
-        eyebrow: session.state.name.toUpperCase(),
+        eyebrow: session.isStoppedForReview
+            ? 'CHARGING STOPPED · BILLING REVIEW'
+            : session.state.name.toUpperCase(),
         title: session.stationName,
         body: ListView(
           children: [
             _SessionRow(session: session, onTap: () {}),
+            if (session.isStoppedForReview) ...[
+              const SizedBox(height: VtsaSpacing.md),
+              const DriverNotice(
+                title: 'Charging stopped',
+                message:
+                    'Billing review is pending. Funds reserved for this session remain held until review. Your available wallet balance can be used for another session.',
+              ),
+            ],
             const SizedBox(height: VtsaSpacing.md),
             VtsaCard(
               title: 'Charge summary',
@@ -215,7 +230,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   ),
                   _Fact(
                     label: 'Final cost',
-                    value: formatMoney(session.finalCost),
+                    value: session.isStoppedForReview
+                        ? 'Pending review'
+                        : formatMoney(session.finalCost),
                   ),
                   if (session.chargingTotal != null)
                     _Fact(
@@ -642,14 +659,18 @@ class _SessionRow extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  '${formatMoney(session.finalCost ?? session.estimatedCost)}${session.finalCost == null ? ' estimated' : ''}',
+                  session.isStoppedForReview
+                      ? 'Billing review pending'
+                      : '${formatMoney(session.finalCost ?? session.estimatedCost)}${session.finalCost == null ? ' estimated' : ''}',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 VtsaStatusChip(
-                  label: session.state.name.replaceAllMapped(
-                    RegExp(r'[A-Z]'),
-                    (m) => ' ${m[0]!.toLowerCase()}',
-                  ),
+                  label: session.isStoppedForReview
+                      ? 'Charging stopped'
+                      : session.state.name.replaceAllMapped(
+                          RegExp(r'[A-Z]'),
+                          (m) => ' ${m[0]!.toLowerCase()}',
+                        ),
                   state: session.state == ChargingSessionState.completed
                       ? VtsaOperationalState.available
                       : session.state == ChargingSessionState.charging

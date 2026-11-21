@@ -119,6 +119,121 @@ void main() {
     },
   );
 
+  test(
+    'stopped billing review clears recovery and permits a fresh quote',
+    () async {
+      final stopped = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        paymentState: PaymentState.requiresAction,
+        stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+        energyWh: 22,
+        durationSeconds: 28,
+      );
+      repository.sessions[stopped.id] = stopped;
+      await controller.recoverSession(stopped.id);
+      expect(controller.hasUnfinishedSession, isFalse);
+      expect(await store.read('driver-1'), isNull);
+      expect(controller.session!.paymentState, PaymentState.requiresAction);
+      expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isTrue);
+      expect(repository.stopCalls, 0);
+    },
+  );
+
+  test(
+    'review without stop evidence remains recoverable and blocks a new start',
+    () async {
+      final uncertain = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        paymentState: PaymentState.requiresAction,
+      );
+      repository.sessions[uncertain.id] = uncertain;
+      await controller.recoverSession(uncertain.id);
+      expect(controller.hasUnfinishedSession, isTrue);
+      expect(await store.read('driver-1'), isNotNull);
+      expect(await controller.prepare(rawCode: 'VSTA-ABC_123'), isFalse);
+    },
+  );
+
+  test('saved stopped review does not hide a newer active session', () async {
+    final stopped = sampleChargingSession(
+      state: ChargingSessionState.reviewRequired,
+      stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+      paymentState: PaymentState.requiresAction,
+    );
+    final active = sampleChargingSession(
+      id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0Z',
+      state: ChargingSessionState.charging,
+    );
+    repository.sessions[stopped.id] = stopped;
+    repository.active = active;
+    await store.write(
+      ActiveSessionReference(
+        ownerId: 'driver-1',
+        sessionId: stopped.id,
+        savedAt: DateTime.utc(2026),
+      ),
+    );
+    await controller.restoreAuthoritativeSession();
+    expect(controller.session!.id, active.id);
+    expect(controller.hasUnfinishedSession, isTrue);
+    expect((await store.read('driver-1'))!.sessionId, active.id);
+  });
+
+  test(
+    'a delayed old review refresh cannot replace a new charging request',
+    () async {
+      final stopped = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+        paymentState: PaymentState.requiresAction,
+      );
+      repository.sessions[stopped.id] = stopped;
+      await controller.recoverSession(stopped.id);
+      final delayed = Completer<ChargingSession>();
+      repository.getSessionCompleter = delayed;
+      final refresh = controller.refresh();
+      await controller.prepare(rawCode: 'VSTA-ABC_123');
+      repository.startResult = sampleChargingSession(
+        id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0Z',
+      );
+      expect(await controller.start(), isTrue);
+      delayed.complete(stopped);
+      await refresh;
+      expect(controller.session!.id, repository.startResult.id);
+      expect(controller.hasUnfinishedSession, isTrue);
+    },
+  );
+
+  test(
+    'a delayed old review error does not affect a new charging request',
+    () async {
+      final stopped = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+        paymentState: PaymentState.requiresAction,
+      );
+      repository.sessions[stopped.id] = stopped;
+      await controller.recoverSession(stopped.id);
+      final delayed = Completer<ChargingSession>();
+      repository.getSessionCompleter = delayed;
+      final refresh = controller.refresh();
+      await controller.prepare(rawCode: 'VSTA-ABC_123');
+      repository.startResult = sampleChargingSession(
+        id: '01K0M0JJ5X0M0JJ5X0M0JJ5X0Z',
+      );
+      expect(await controller.start(), isTrue);
+      delayed.completeError(
+        const AppFailure(
+          kind: FailureKind.timeout,
+          message: 'Old read timed out',
+        ),
+      );
+      await refresh;
+      expect(controller.session!.id, repository.startResult.id);
+      expect(controller.failure, isNull);
+    },
+  );
+
   test('selected budget is sent when requesting a fresh quote', () async {
     expect(
       await controller.prepare(rawCode: 'VSTA-ABC_123', budgetMinor: 75000),

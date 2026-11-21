@@ -26,7 +26,7 @@ The proposed QR-to-payment orchestration, simulator interaction, recovery behavi
 | --- | --- | --- |
 | `POST /api/v1/mobile/charging/prepare` | Resolve a charger code and return connector readiness, compatibility context, expiring tariff disclosure, estimated preauthorization, and safe tokenized method summaries | Customer authentication, code rate limit, public ULIDs, no card data |
 | `POST /api/v1/mobile/charging-sessions/remote-start` | Reserve/orchestrate start from the accepted quote and payment reference | Required idempotency key, customer ownership, quote expiry, connector concurrency guard |
-| `GET /api/v1/mobile/charging-sessions/active` | Recover the caller's pending/live/finalizing/payment-pending session | Customer ownership only; at most the policy-approved active result |
+| `GET /api/v1/mobile/charging-sessions/active` | Recover the caller's pending/live/finalizing/payment-pending session, excluding a billing review with a confirmed physical stop | Customer ownership only; at most the policy-approved active result |
 | `GET /api/v1/mobile/charging-sessions` | Cursor-paginated customer history | Customer ownership in query and policy; no tenant-wide fallback |
 | `GET /api/v1/mobile/charging-sessions/{sessionId}` | Read one customer session projection | Customer ownership and tenant scope; ULID route binding |
 | `POST /api/v1/mobile/charging-sessions/{sessionId}/remote-stop` | Request stop for the caller's physically active session | Required idempotency key; ownership; canonical transition guard |
@@ -64,3 +64,7 @@ Clients that show idle pricing send `supports_idle_fee` on prepare. An opted-in 
 - Realtime transport and authorization handshake.
 
 No provider credentials, tax registrations, charger-specific exceptions, or production infrastructure details are assumed.
+
+## Confirmed stop with billing review
+
+See [ADR 0038](decisions/0038-stopped-charging-and-billing-review.md). `review_required` with non-null `stopped_at` means charging ended and billing remains pending. It remains in authorized history/detail but is excluded from the customer active flow. A review without `stopped_at` remains blocking. The mobile app must not show a final receipt or release held funds based on a stop acknowledgement or this UI distinction.

@@ -312,6 +312,92 @@ void main() {
       }
     },
   );
+  testWidgets('confirmed stop shows a popup and a way out of billing review', (
+    tester,
+  ) async {
+    final active = sampleChargingSession(state: ChargingSessionState.charging);
+    final repository = FakeChargingRepository()..sessions[active.id] = active;
+    final fixture = await buildTestDependencies(
+      signedIn: true,
+      chargingRepository: repository,
+    );
+    final charging = fixture.dependencies.charging;
+    await charging.recoverSession(active.id);
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: VtsaTheme.light(),
+          home: LiveChargingScreen(
+            dependencies: fixture.dependencies,
+            sessionId: active.id,
+          ),
+        ),
+      );
+      repository.sessions[active.id] = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+        paymentState: PaymentState.requiresAction,
+        aggregateVersion: 2,
+      );
+      await charging.refresh();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Charging stopped'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Charging stopped — billing review pending'),
+        findsOneWidget,
+      );
+      expect(find.text('Back to home'), findsOneWidget);
+      expect(find.text('View in Activity'), findsOneWidget);
+      expect(charging.hasUnfinishedSession, isFalse);
+      await charging.refresh();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      fixture.dependencies.dispose();
+    }
+  });
+
+  testWidgets(
+    'a stopped review appears in history rather than current charging',
+    (tester) async {
+      final stopped = sampleChargingSession(
+        state: ChargingSessionState.reviewRequired,
+        stoppedAt: DateTime.utc(2026, 7, 26, 3, 1, 28),
+        paymentState: PaymentState.requiresAction,
+      );
+      final repository = FakeChargingRepository()
+        ..sessions[stopped.id] = stopped
+        ..historyResult = ChargingHistoryPage(
+          sessions: [stopped],
+          nextCursor: null,
+        );
+      final fixture = await buildTestDependencies(
+        signedIn: true,
+        chargingRepository: repository,
+      );
+      await fixture.dependencies.charging.recoverSession(stopped.id);
+      try {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: VtsaTheme.light(),
+            home: ActivityScreen(dependencies: fixture.dependencies),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('CURRENT SESSION'), findsNothing);
+        expect(find.text('Charging stopped'), findsOneWidget);
+        expect(find.text('Billing review pending'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox.shrink());
+        fixture.dependencies.dispose();
+      }
+    },
+  );
+
   testWidgets('unplug countdown uses the server deadline until settlement', (
     tester,
   ) async {
