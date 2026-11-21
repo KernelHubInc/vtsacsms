@@ -15,6 +15,9 @@ import 'package:vtsa_mobile/features/charging/presentation/charging_formatters.d
 import 'package:vtsa_mobile/features/charging/presentation/charging_page.dart';
 import 'package:vtsa_mobile/features/charging/presentation/vehicle_battery_progress.dart';
 
+const _billingReviewMessage =
+    'The charger confirmed this session has ended. Your final bill needs an operator review. Funds reserved for this session remain held until review. You can return home and use your available wallet balance for another session.';
+
 class LiveChargingScreen extends StatefulWidget {
   const LiveChargingScreen({
     required this.dependencies,
@@ -34,6 +37,7 @@ class LiveChargingScreen extends StatefulWidget {
 class _LiveChargingScreenState extends State<LiveChargingScreen> {
   final _scroll = ScrollController();
   Object? _lastStatus;
+  bool _reviewNoticeShown = false;
 
   void _statusChanged() {
     final charging = widget.dependencies.charging;
@@ -41,6 +45,7 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
       charging.phase,
       charging.session?.state,
       charging.session?.cancellationRequested,
+      charging.session?.stoppedAt,
     );
     if (_lastStatus == status) return;
     _lastStatus = status;
@@ -48,7 +53,26 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
       if (mounted && _scroll.hasClients) {
         _scroll.jumpTo(0);
       }
+      _showStoppedReview();
     });
+  }
+
+  void _showStoppedReview() {
+    if (!mounted ||
+        _reviewNoticeShown ||
+        widget.dependencies.charging.session?.isStoppedForReview != true ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    _reviewNoticeShown = true;
+    unawaited(
+      showVtsaAlert(
+        context,
+        title: 'Charging stopped',
+        message: _billingReviewMessage,
+        tone: VtsaAlertTone.info,
+      ),
+    );
   }
 
   @override
@@ -60,12 +84,14 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
       charging.phase,
       charging.session?.state,
       charging.session?.cancellationRequested,
+      charging.session?.stoppedAt,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
           widget.dependencies.charging.session?.id != widget.sessionId) {
         widget.dependencies.charging.recoverSession(widget.sessionId);
       }
+      _showStoppedReview();
     });
   }
 
@@ -140,7 +166,7 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                   description:
                       'Values are the last confirmed server state. Start and stop requests are disabled until the connection returns.',
                 ),
-              if (session.chargerDisconnected)
+              if (session.chargerDisconnected && session.stoppedAt == null)
                 const _Notice(
                   icon: Icons.power_off_outlined,
                   title: 'Charger connection interrupted',
@@ -187,7 +213,7 @@ class _LiveChargingScreenState extends State<LiveChargingScreen> {
                   percentage: percentage,
                   reportedAt: session.batteryReportedAt,
                   connected: charging.isOnline && !session.chargerDisconnected,
-                  sessionEnded: session.isTerminal,
+                  sessionEnded: session.stoppedAt != null || session.isTerminal,
                 ),
                 const SizedBox(height: VtsaSpacing.md),
               ],
@@ -379,10 +405,14 @@ class _PhasePanel extends StatelessWidget {
             ),
             ChargingFlowPhase.finalizing => (
               Icons.receipt_long_outlined,
-              session.state == ChargingSessionState.reviewRequired
+              session.isStoppedForReview
+                  ? 'Charging stopped — billing review pending'
+                  : session.state == ChargingSessionState.reviewRequired
                   ? 'Session requires review'
                   : 'Finalizing measurements',
-              'Energy, duration, tariff, and payment are being finalized. Totals are not final yet.',
+              session.isStoppedForReview
+                  ? _billingReviewMessage
+                  : 'Energy, duration, tariff, and payment are being finalized. Totals are not final yet.',
               VtsaOperationalState.finishing,
             ),
             ChargingFlowPhase.paymentProcessing => (
@@ -741,6 +771,19 @@ class _Actions extends StatelessWidget {
   Widget build(BuildContext context) {
     final charging = dependencies.charging;
     final actions = <Widget>[];
+    if (session.isStoppedForReview) {
+      actions.addAll([
+        VtsaButton(
+          label: 'Back to home',
+          onPressed: () => context.go('/explore'),
+        ),
+        VtsaButton(
+          label: 'View in Activity',
+          variant: VtsaButtonVariant.secondary,
+          onPressed: () => context.go('/activity'),
+        ),
+      ]);
+    }
     if (session.canCancelStart) {
       actions.addAll([
         VtsaButton(
@@ -762,7 +805,9 @@ class _Actions extends StatelessWidget {
         ),
       ]);
     }
-    if (session.cancellationRequested && !session.isTerminal) {
+    if (session.cancellationRequested &&
+        !session.isTerminal &&
+        !session.isStoppedForReview) {
       actions.add(
         VtsaButton(
           label: 'Refresh status',

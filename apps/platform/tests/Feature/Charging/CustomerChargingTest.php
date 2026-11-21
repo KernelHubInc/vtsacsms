@@ -1020,7 +1020,71 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         });
     }
 
-    private function fixture(User $actor, bool $idlePricing = false): Connector
+    public function test_short_stopped_review_preserves_held_funds_and_allows_another_session(): void
+    {
+        $actor = $this->createUser();
+        $other = $this->createUser();
+        $tenant = $this->createTenant('short-stopped-review');
+        $otherTenant = $this->createTenant('isolated-short-review');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $other, $tenant): void {
+            $connector = $this->fixture($actor, timePricing: true);
+            $wallet = app(PrepaidWallet::class);
+            $wallet->credit($actor->public_id, 'live', (string) Str::ulid(), 100);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'short-first');
+            $this->event((string) $tenant->getKey(), $connector, 'start_transaction', ['connector_id' => 1,
+                'protocol_transaction_id' => 91, 'meter_start_wh' => 262005, 'authorization_status' => 'Accepted']);
+            $this->travel(8)->seconds();
+            app(MeterValueService::class)->record($session->refresh(), (string) Str::ulid(), [
+                ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Power.Active.Import', 'unit' => 'W', 'value' => 129],
+            ], CarbonImmutable::now('UTC'));
+            $this->travel(20)->seconds();
+            $this->event((string) $tenant->getKey(), $connector, 'stop_transaction', ['protocol_transaction_id' => 91,
+                'meter_stop_wh' => 262027, 'reason' => 'Remote', 'samples' => []]);
+            app(PrepaidChargingMonitor::class)->reconcile((string) $session->getKey());
+            self::assertSame('review_required', $session->refresh()->state->value);
+            self::assertNotNull($session->stopped_at);
+            self::assertSame(22, $session->energy_wh);
+            self::assertNull($session->final_cost_minor);
+            self::assertSame('requires_action', $session->customer->payment_state);
+            self::assertNull($service->active($actor->public_id));
+            self::assertNull($service->active($other->public_id));
+            self::assertSame(100, $wallet->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(100, $wallet->summary($actor->public_id, 'live')['available_minor']);
+            $this->event((string) $tenant->getKey(), $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Available']);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $next = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'short-next');
+            self::assertNotSame($session->getKey(), $next->getKey());
+            $active = app(CustomerCharging::class)->active($actor->public_id);
+            self::assertNotNull($active);
+            self::assertSame($next->getKey(), $active->getKey());
+            self::assertSame(200, $wallet->summary($actor->public_id, 'live')['reserved_minor']);
+            self::assertSame(0, $wallet->summary($actor->public_id, 'live')['available_minor']);
+            self::assertNull($session->refresh()->customer->settled_at);
+        });
+        $this->withinTenant($otherTenant, $actor, function () use ($actor): void {
+            self::assertNull(app(CustomerCharging::class)->active($actor->public_id));
+        });
+    }
+
+    public function test_review_without_a_confirmed_stop_still_blocks_customer_charging(): void
+    {
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('unconfirmed-review');
+        $this->withinTenant($tenant, $actor, function () use ($actor): void {
+            $connector = $this->fixture($actor);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'unconfirmed');
+            $session->forceFill(['state' => 'review_required', 'stopped_at' => null])->save();
+            self::assertSame($session->getKey(), $service->active($actor->public_id)?->getKey());
+            $this->expectExceptionMessage('Finish your current charging session');
+            $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'another-unconfirmed');
+        });
+    }
+
+    private function fixture(User $actor, bool $idlePricing = false, bool $timePricing = false): Connector
     {
         Membership::query()->firstOrCreate(['user_id' => $actor->getKey()], ['status' => 'active', 'joined_at' => now('UTC')]);
         $site = Site::factory()->activePublic()->create();
@@ -1030,7 +1094,7 @@ final class CustomerChargingTest extends TenantSecurityTestCase
         $connector = Connector::factory()->create(['evse_id' => $evse->id, 'lifecycle_status' => 'active', 'connector_number' => 1, 'maximum_power_w' => 7000]);
         ConnectorStatus::query()->create(['connector_id' => (string) $connector->getKey(), 'status' => 'occupied', 'reported_status' => 'preparing', 'observed_at' => now(), 'stale_after_seconds' => 300]);
         $tariff = app(TariffManagementService::class)->create(['name' => 'PHP 1/kWh', 'currency' => 'PHP']);
-        app(PortalPricing::class)->publish($tariff, ['mode' => 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => (string) $connector->getKey(), 'idle_fee_enabled' => $idlePricing, 'idle_price' => $idlePricing ? '1.00' : null]);
+        app(PortalPricing::class)->publish($tariff, ['mode' => $timePricing ? 'time' : 'energy', 'price' => '1.00', 'time_unit' => 'minute', 'timezone' => 'Asia/Manila', 'tax_treatment' => 'inclusive', 'tax_rate_basis_points' => 0, 'connector_id' => (string) $connector->getKey(), 'idle_fee_enabled' => $idlePricing, 'idle_price' => $idlePricing ? '1.00' : null]);
         app(PrepaidWallet::class)->credit($actor->public_id, 'live', (string) Str::ulid(), 100);
 
         return $connector;

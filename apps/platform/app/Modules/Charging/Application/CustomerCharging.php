@@ -276,6 +276,7 @@ final readonly class CustomerCharging
         return ChargingSession::query()->whereIn('id', CustomerChargingSession::query()->where('subject_id', $subject)->select('session_id'))
             ->where(fn ($query) => $query->whereNotIn('state', ['completed', 'failed', 'cancelled', 'expired'])
                 ->orWhereIn('id', CustomerChargingSession::query()->where('subject_id', $subject)->whereNull('settled_at')->select('session_id')))
+            ->where(fn ($query) => $query->where('state', '!=', 'review_required')->orWhereNull('stopped_at'))
             ->latest('id')->first();
     }
 

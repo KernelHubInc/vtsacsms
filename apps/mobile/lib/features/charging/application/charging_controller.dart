@@ -101,6 +101,7 @@ final class ChargingController extends ChangeNotifier {
   bool get hasMoreHistory => _historyCursor != null;
   bool get hasUnfinishedSession =>
       _session != null &&
+      !_session!.isStoppedForReview &&
       (!_session!.isTerminal || _phase == ChargingFlowPhase.paymentProcessing);
 
   Future<void> restoreAuthoritativeSession() async {
@@ -126,9 +127,7 @@ final class ChargingController extends ChangeNotifier {
       if (!_isCurrent(request)) return;
       if (recovered != null) {
         await _applySession(recovered, request);
-        if (reference != null &&
-            recovered.isTerminal &&
-            _phase != ChargingFlowPhase.paymentProcessing) {
+        if (reference != null && !hasUnfinishedSession) {
           final active = await _repository.activeSession();
           if (active != null && active.id != recovered.id) {
             await _applySession(active, request);
@@ -282,9 +281,7 @@ final class ChargingController extends ChangeNotifier {
           }.contains(failure.kind)) {
         await restoreAuthoritativeSession();
         if (!_isCurrent(request)) return false;
-        if (_session != null &&
-            (!_session!.isTerminal ||
-                _phase == ChargingFlowPhase.paymentProcessing)) {
+        if (hasUnfinishedSession) {
           return true;
         }
       }
@@ -380,9 +377,11 @@ final class ChargingController extends ChangeNotifier {
     _syncing = true;
     notifyListeners();
     try {
-      await _applySession(await _repository.getSession(current.id), request);
+      final authoritative = await _repository.getSession(current.id);
+      if (_session?.id != current.id) return;
+      await _applySession(authoritative, request);
     } on AppFailure catch (failure) {
-      if (!_isCurrent(request)) return;
+      if (!_isCurrent(request) || _session?.id != current.id) return;
       _failure = failure;
     } finally {
       if (_isCurrent(request)) {
@@ -533,6 +532,7 @@ final class ChargingController extends ChangeNotifier {
     _selectedPaymentMethod = null;
     _startIdempotencyKey = null;
     _failure = null;
+    if (_session?.isStoppedForReview == true) _session = null;
     if (_session == null || _session!.isTerminal) {
       _phase = ChargingFlowPhase.idle;
     }
@@ -596,8 +596,9 @@ final class ChargingController extends ChangeNotifier {
     _session = authoritative;
     _phase = _phaseFor(authoritative);
     final keepForRecovery =
-        !authoritative.isTerminal ||
-        _phase == ChargingFlowPhase.paymentProcessing;
+        !authoritative.isStoppedForReview &&
+        (!authoritative.isTerminal ||
+            _phase == ChargingFlowPhase.paymentProcessing);
     if (keepForRecovery) {
       await _store.write(
         ActiveSessionReference(
@@ -738,8 +739,8 @@ final class ChargingController extends ChangeNotifier {
       unawaited(restoreAuthoritativeSession());
     } else if (current.id == event.sessionId) {
       unawaited(refresh());
-    } else if (current.isTerminal) {
-      unawaited(recoverSession(event.sessionId));
+    } else if (!hasUnfinishedSession) {
+      unawaited(restoreAuthoritativeSession());
     }
   }
 

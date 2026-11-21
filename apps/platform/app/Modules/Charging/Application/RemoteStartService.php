@@ -91,7 +91,8 @@ final readonly class RemoteStartService
             $ready = $live?->availability === ConnectorAvailability::Available
                 || ($live?->availability === ConnectorAvailability::Occupied && $status?->reported_status === 'preparing');
             $occupied = ChargingSession::query()->where('connector_id', $connector->connectorId)
-                ->whereNotIn('state', ['completed', 'failed', 'cancelled', 'expired'])->exists();
+                ->whereNotIn('state', ['completed', 'failed', 'cancelled', 'expired'])
+                ->where(fn ($query) => $query->where('state', '!=', 'review_required')->orWhereNull('stopped_at'))->exists();
             if ($status === null || ! $ready || $occupied) {
                 throw new DomainException('Connector is not currently available for remote start.');
             }

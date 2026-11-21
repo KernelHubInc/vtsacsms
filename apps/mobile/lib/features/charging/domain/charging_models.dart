@@ -502,6 +502,9 @@ final class ChargingSession {
     ChargingSessionState.expired,
   }.contains(state);
 
+  bool get isStoppedForReview =>
+      state == ChargingSessionState.reviewRequired && stoppedAt != null;
+
   bool get chargerDisconnected => anomalyFlags.contains('charger_disconnected');
 
   static ChargingSessionState _sessionState(String value) =>
