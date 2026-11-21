@@ -90,7 +90,7 @@ Run one worker consuming `charging`, plus one prepaid monitor every ten seconds.
 
 The gateway allowlist must include the required start/stop actions, and the internal URL must reach the gateway holding the device connection. Do not connect a simulator using the physical charger's ID.
 
-The pilot supports PHP wallet payments, one all-day pricing dimension, one unsettled customer session, and no automatic billing of incomplete or over-budget evidence. Refund execution, support submission and legal invoice generation remain outside this pilot; retain the session reference for operator assistance.
+The pilot supports PHP wallet payments, one all-day pricing dimension, one pending/physical charging flow per customer (a confirmed stopped billing review retains its own hold without blocking another funded session), and no automatic billing of incomplete or over-budget evidence. Refund execution, support submission and legal invoice generation remain outside this pilot; retain the session reference for operator assistance.
 
 ## Staging release: 12 October 2026
 
@@ -135,3 +135,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-stagin
 ```
 
 Acceptance checked: automated backend/mobile/gateway tests, authenticated internal command transport to a nonexistent ID, PostgreSQL migrations, physical charger heartbeat/Available status, and public APK download. No physical charging or real wallet debit was initiated. With no EV present, install and browse only. Physical Start, meter values, pause/resume, Stop and final wallet debit still need a supervised EV test.
+
+## Short sessions awaiting time-billing review
+
+A time-priced session can receive fewer than two aggregate power samples before a confirmed StopTransaction. The CDR records `missing_energy_flow_evidence`; this is a billing exception, not evidence that the charger continued delivering power. Inspect the matched transaction stop, connector status and actual device before taking recovery action.
+
+With ADR 0038 deployed, a `review_required` session with authoritative `stopped_at` remains in Activity as **Charging stopped / Billing review pending**, rather than preventing the driver from leaving the charging flow. Its wallet hold remains reserved and its final charge remains unknown. The driver can start another eligible session using unreserved funds. Missing stop evidence, uncertain starts and idle-fee finalization remain protected by the existing guards.
+
+Do not change historical tariff snapshots, mark a review completed, release its hold or charge elapsed time as a shortcut. Use the audited review workflow for the financial decision. Configure approximately 15-second aggregate Wh/W samples and validate the physical charger before using time billing commercially; short sessions may still need financial review. No migration or wallet backfill is required for the UI/start-guard correction.
