@@ -64,7 +64,21 @@ final class EnergyFlowDuration
             $previousPower = $power;
         }
         if ($session->stopped_at !== null && $previousAt->diffInSeconds($session->stopped_at) > $gap) {
-            $complete = false;
+            $lastStatus = $statuses->last();
+            // Chargers may stop periodic metering while suspended. This confirms a pause, not billable time.
+            $suspendedTail = $lastStatus !== null
+                && (($lastStatus->occurred_at->gte($previousAt) && $previousAt->diffInSeconds($lastStatus->occurred_at) <= $gap)
+                    || ($lastStatus->occurred_at->lt($previousAt) && $previousPower === 0))
+                && in_array(strtolower((string) ($lastStatus->payload['data']['status'] ?? '')), ['suspendedev', 'suspendedevse'], true)
+                && ! ($lastStatus->payload['data']['clock_skew_detected'] ?? false)
+                && ! $statuses->contains(fn (InboundOcppEvent $event): bool => $event->occurred_at->eq($lastStatus->occurred_at)
+                    && strtolower((string) ($event->payload['data']['status'] ?? '')) !== strtolower((string) ($lastStatus->payload['data']['status'] ?? '')))
+                && ! InboundOcppEvent::query()->where('aggregate_id', $session->charging_station_id)
+                    ->whereIn('event_type', ['gateway.ocpp.charger_connected.received.v1', 'gateway.ocpp.charger_disconnected.received.v1'])
+                    ->where('outcome', 'processed')->whereBetween('occurred_at', [$previousAt, $session->stopped_at])->exists();
+            if (! $suspendedTail) {
+                $complete = false;
+            }
         }
 
         return ['seconds' => $seconds, 'complete' => $complete];

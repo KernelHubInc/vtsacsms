@@ -25,10 +25,111 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\TenantSecurityTestCase;
 
 final class PortalPricingTest extends TenantSecurityTestCase
 {
+    #[DataProvider('suspendedTails')]
+    public function test_time_billing_accepts_only_a_confirmed_suspended_tail(string $status, int $pauseAt, ?int $resumeAt, int $connector, string $outcome, bool $complete, int $lastPower = 6500): void
+    {
+        $this->freezeTime();
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('suspended-tail');
+        $this->withinTenant($tenant, $actor, function () use ($status, $pauseAt, $resumeAt, $connector, $outcome, $complete, $lastPower): void {
+            $start = CarbonImmutable::now('UTC')->subMinutes(10);
+            $session = ChargingSession::factory()->create([
+                'started_at' => $start, 'stopped_at' => $start->addSeconds(200),
+                'tariff_snapshot' => ['subject' => ['connector_number' => 1]],
+            ]);
+            foreach ([0, 30, 60] as $seconds) {
+                MeterReading::query()->create([
+                    'session_id' => $session->id, 'event_id' => (string) Str::ulid(), 'sample_index' => 0,
+                    'sampled_at' => $start->addSeconds($seconds), 'received_at' => now(),
+                    'measurand' => 'Power.Active.Import', 'unit' => 'W', 'value' => $seconds === 60 ? $lastPower : 6500,
+                ]);
+            }
+            $events = [[$pauseAt, $status]];
+            if ($resumeAt !== null) {
+                $events[] = [$resumeAt, 'Charging'];
+            }
+            foreach ($events as [$at, $reported]) {
+                InboundOcppEvent::query()->create([
+                    'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.status_notification.received.v1',
+                    'correlation_id' => (string) Str::ulid(), 'schema_version' => 1,
+                    'aggregate_id' => $session->charging_station_id, 'occurred_at' => $start->addSeconds($at),
+                    'received_at' => now(), 'outcome' => $outcome === 'quarantined' ? $outcome : 'processed',
+                    'payload' => ['data' => ['connector_id' => $connector, 'status' => $reported, 'clock_skew_detected' => $outcome === 'clock skew']],
+                ]);
+            }
+            if ($outcome === 'disconnected' || $outcome === 'conflicting') {
+                InboundOcppEvent::query()->create([
+                    'event_id' => (string) Str::ulid(), 'event_type' => $outcome === 'disconnected'
+                        ? 'gateway.ocpp.charger_disconnected.received.v1' : 'gateway.ocpp.status_notification.received.v1',
+                    'correlation_id' => (string) Str::ulid(), 'schema_version' => 1,
+                    'aggregate_id' => $session->charging_station_id,
+                    'occurred_at' => $start->addSeconds($outcome === 'disconnected' ? 100 : $pauseAt),
+                    'received_at' => now(), 'outcome' => 'processed',
+                    'payload' => ['data' => ['connector_id' => $connector, 'status' => 'Charging']],
+                ]);
+            }
+            self::assertSame(['seconds' => $lastPower === 0 ? 30 : 60, 'complete' => $complete], app(EnergyFlowDuration::class)->measure($session));
+        });
+    }
+
+    /** @return array<string, array{0: string, 1: int, 2: ?int, 3: int, 4: string, 5: bool, 6?: int}> */
+    public static function suspendedTails(): array
+    {
+        return [
+            'EV suspended without final power samples' => ['SuspendedEV', 65, null, 1, 'processed', true],
+            'EVSE suspended without final power samples' => ['SuspendedEVSE', 65, null, 1, 'processed', true],
+            'charging gap remains unsafe' => ['Charging', 65, null, 1, 'processed', false],
+            'available is not a pause measurement' => ['Available', 65, null, 1, 'processed', false],
+            'pause reported after an unobserved active gap' => ['SuspendedEV', 125, null, 1, 'processed', false],
+            'charging resumed after suspension' => ['SuspendedEV', 65, 150, 1, 'processed', false],
+            'different connector cannot justify pause' => ['SuspendedEV', 65, null, 2, 'processed', false],
+            'quarantined evidence cannot justify pause' => ['SuspendedEV', 65, null, 1, 'quarantined', false],
+            'zero power confirms continued suspension' => ['SuspendedEV', 45, null, 1, 'processed', true, 0],
+            'disconnected charger cannot prove continued suspension' => ['SuspendedEV', 65, null, 1, 'disconnected', false],
+            'conflicting statuses cannot prove continued suspension' => ['SuspendedEV', 65, null, 1, 'conflicting', false],
+            'skewed status cannot prove continued suspension' => ['SuspendedEV', 65, null, 1, 'clock skew', false],
+        ];
+    }
+
+    public function test_another_tenants_pause_cannot_complete_time_evidence(): void
+    {
+        $this->freezeTime();
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('local-pause');
+        $foreign = $this->createTenant('foreign-pause');
+        $start = CarbonImmutable::now('UTC')->subMinutes(10);
+        $session = $this->withinTenant($tenant, $actor, function () use ($start): ChargingSession {
+            $session = ChargingSession::factory()->create([
+                'started_at' => $start, 'stopped_at' => $start->addSeconds(200),
+                'tariff_snapshot' => ['subject' => ['connector_number' => 1]],
+            ]);
+            foreach ([0, 30, 60] as $seconds) {
+                MeterReading::query()->create([
+                    'session_id' => $session->id, 'event_id' => (string) Str::ulid(), 'sample_index' => 0,
+                    'sampled_at' => $start->addSeconds($seconds), 'received_at' => now(),
+                    'measurand' => 'Power.Active.Import', 'unit' => 'W', 'value' => 6500,
+                ]);
+            }
+
+            return $session;
+        });
+        $this->withinTenant($foreign, $actor, fn () => InboundOcppEvent::query()->create([
+            'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.status_notification.received.v1',
+            'correlation_id' => (string) Str::ulid(), 'schema_version' => 1,
+            'aggregate_id' => $session->charging_station_id, 'occurred_at' => $start->addSeconds(65),
+            'received_at' => now(), 'outcome' => 'processed',
+            'payload' => ['data' => ['connector_id' => 1, 'status' => 'SuspendedEV']],
+        ]));
+        $this->withinTenant($tenant, $actor, function () use ($session): void {
+            self::assertSame(['seconds' => 60, 'complete' => false], app(EnergyFlowDuration::class)->measure($session));
+        });
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

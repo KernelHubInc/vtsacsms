@@ -160,9 +160,11 @@ final readonly class ChargeDetailRecordGenerator
                 'idle_fee_minor' => $billable ? $idleFee : null,
                 'estimated_cost_minor' => $billable ? $rating->totalMinor : $locked->estimated_cost_minor,
                 'finalization_outcome' => $outcome,
+                'energy_flow_seconds' => $flow['seconds'],
+                'energy_flow_evidence_complete' => $flow['complete'],
             ])->save();
             if ($locked->state === ChargingSessionState::ReviewRequired) {
-                $this->sessions->transition($locked, ChargingSessionState::Finalizing, 'manual_review_resolved');
+                $this->sessions->transition($locked, ChargingSessionState::Finalizing, $reviewApproved ? 'manual_review_resolved' : 'cdr_evidence_revalidated');
             }
             $this->sessions->transition($locked, ChargingSessionState::Completed, 'cdr_finalized');
 
