@@ -17,6 +17,7 @@ use App\Modules\Charging\Application\CommandOutcomeService;
 use App\Modules\Charging\Application\CustomerCharging;
 use App\Modules\Charging\Application\Gateway\GatewayCommandClient;
 use App\Modules\Charging\Application\Gateway\GatewayCommandResult;
+use App\Modules\Charging\Application\ManualSessionReviewService;
 use App\Modules\Charging\Application\MeterValueService;
 use App\Modules\Charging\Application\OcppEventConsumer;
 use App\Modules\Charging\Application\PrepaidChargingMonitor;
@@ -57,6 +58,91 @@ use Tests\Support\TenantSecurityTestCase;
 
 final class CustomerChargingTest extends TenantSecurityTestCase
 {
+    #[DataProvider('suspendedSettlementCases')]
+    public function test_confirmed_stop_after_ev_suspension_settles_once_and_queues_one_receipt(string $case, bool $settles): void
+    {
+        Mail::fake();
+        config(['mail.default' => 'smtp']);
+        $actor = $this->createUser();
+        $tenant = $this->createTenant('suspended-settlement');
+        $this->withinTenant($tenant, $actor, function () use ($actor, $tenant, $case, $settles): void {
+            $connector = $this->fixture($actor, timePricing: true);
+            $service = app(CustomerCharging::class);
+            $quote = $service->prepare($actor->public_id, (string) $connector->getKey());
+            $session = $service->start($actor->public_id, $quote['quote']['id'], (string) $connector->getKey(), 'suspended-settlement-start');
+            $id = (string) $session->getKey();
+            $start = CarbonImmutable::now('UTC');
+            $tenantId = (string) $tenant->getKey();
+            $this->event($tenantId, $connector, 'start_transaction', ['connector_id' => 1, 'protocol_transaction_id' => 101, 'meter_start_wh' => 1000, 'authorization_status' => 'Accepted']);
+            $this->event($tenantId, $connector, 'status_notification', ['connector_id' => 1, 'status' => 'Charging']);
+            foreach ([0, 15, 30, 45] as $seconds) {
+                $this->travelTo($start->addSeconds($seconds));
+                $this->event($tenantId, $connector, 'meter_values', ['connector_id' => 1, 'protocol_transaction_id' => 101, 'samples' => [
+                    ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Power.Active.Import', 'unit' => 'W', 'value' => 6500],
+                    ['timestamp' => now('UTC')->toISOString(), 'measurand' => 'Energy.Active.Import.Register', 'unit' => 'Wh', 'value' => 1000 + $seconds],
+                ]]);
+            }
+            $delayed = $case !== 'new stop' && $case !== 'no stop';
+            $this->travelTo($start->addSeconds(50));
+            if (! $delayed) {
+                $this->event($tenantId, $connector, 'status_notification', ['connector_id' => 1, 'status' => 'SuspendedEV']);
+            }
+            $this->travelTo($start->addSeconds(200));
+            if ($case !== 'no stop') {
+                $this->event($tenantId, $connector, 'stop_transaction', ['protocol_transaction_id' => 101, 'meter_stop_wh' => 1081, 'reason' => 'Remote', 'samples' => []]);
+            }
+            if ($delayed) {
+                self::assertSame('review_required', $session->refresh()->state->value);
+                InboundOcppEvent::query()->create([
+                    'event_id' => (string) Str::ulid(), 'event_type' => 'gateway.ocpp.status_notification.received.v1',
+                    'schema_version' => 1, 'aggregate_id' => $session->charging_station_id,
+                    'correlation_id' => (string) Str::ulid(), 'occurred_at' => $start->addSeconds(50),
+                    'received_at' => now(), 'outcome' => 'processed',
+                    'payload' => ['data' => ['connector_id' => 1, 'status' => 'SuspendedEV']],
+                ]);
+                if ($case === 'manual review') {
+                    app(ManualSessionReviewService::class)->open($session, 'customer_dispute');
+                } elseif ($case === 'invalid meter') {
+                    $session->forceFill(['anomaly_flags' => ['meter_reset']])->save();
+                }
+            }
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            app(PrepaidChargingMonitor::class)->reconcile($id);
+            $wallet = app(PrepaidWallet::class)->summary($actor->public_id, 'live');
+            if (! $settles) {
+                self::assertNull($session->customer()->sole()->settled_at);
+                self::assertSame(100, $wallet['reserved_minor']);
+                $this->assertDatabaseCount('charging_email_deliveries', 0);
+
+                return;
+            }
+            self::assertSame('completed', $session->refresh()->state->value);
+            self::assertSame(75, $session->final_cost_minor);
+            self::assertTrue($session->energy_flow_evidence_complete);
+            self::assertSame('captured', $session->customer()->sole()->payment_state);
+            self::assertSame(25, $wallet['available_minor']);
+            self::assertSame(0, $wallet['reserved_minor']);
+            $this->assertDatabaseCount('charge_detail_records', 1);
+            $this->assertDatabaseCount('charging_email_deliveries', 1);
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            app(ChargingSummaryDelivery::class)->deliverDue();
+            Mail::assertSentCount(1);
+            Mail::assertSent(ChargingSummaryMail::class, fn (ChargingSummaryMail $mail): bool => $mail->summary['amount_minor'] === 75 && count($mail->attachments()) === 1);
+        });
+    }
+
+    /** @return array<string, array{string, bool}> */
+    public static function suspendedSettlementCases(): array
+    {
+        return [
+            'new stopped transaction' => ['new stop', true],
+            'existing automatic time review' => ['old review', true],
+            'human review remains pending' => ['manual review', false],
+            'invalid meter remains pending' => ['invalid meter', false],
+            'suspended transaction has not ended' => ['no stop', false],
+        ];
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

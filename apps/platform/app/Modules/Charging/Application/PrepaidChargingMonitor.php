@@ -9,6 +9,8 @@ use App\Modules\Charging\Domain\Models\AuthorizationToken;
 use App\Modules\Charging\Domain\Models\ChargeDetailRecord;
 use App\Modules\Charging\Domain\Models\ChargerCommand;
 use App\Modules\Charging\Domain\Models\ChargingSession;
+use App\Modules\Charging\Domain\Models\ChargingSessionReview;
+use App\Modules\Charging\Domain\Models\ChargingStateTransition;
 use App\Modules\Charging\Domain\Models\ConnectorStatus;
 use App\Modules\Charging\Domain\Models\CustomerChargingSession;
 use App\Modules\Charging\Domain\Models\InboundOcppEvent;
@@ -48,6 +50,7 @@ final readonly class PrepaidChargingMonitor
 
                 return;
             }
+            $this->retryStoppedTimeReview($session);
             if ($session->failure_reason === 'prepaid_start_unconfirmed' || $session->state->value === 'review_required') {
                 $owner->forceFill(['payment_state' => 'requires_action'])->save();
             }
@@ -165,6 +168,29 @@ final readonly class PrepaidChargingMonitor
                     'lookahead_seconds' => $bufferSeconds, 'reading_age_seconds' => $readingAge, 'queue_delay_seconds' => $queueSeconds,
                     'stale_meter' => $stale]);
         });
+    }
+
+    private function retryStoppedTimeReview(ChargingSession $session): void
+    {
+        if ($session->state->value !== 'review_required' || $session->started_at === null || $session->stopped_at === null
+            || $session->stopped_at->lt($session->started_at) || $session->meter_start_wh === null || $session->meter_stop_wh === null
+            || $session->anomaly_flags !== [] || ($session->tariff_snapshot['time_basis'] ?? null) !== 'energy_flow'
+            || ChargingSessionReview::query()->where('session_id', $session->getKey())->exists()) {
+            return;
+        }
+        $cdr = ChargeDetailRecord::query()->where('session_id', $session->getKey())->latest('version')->first();
+        if ($cdr === null || $cdr->state->value !== 'review_required') {
+            return;
+        }
+        $cause = ChargingStateTransition::query()->where('aggregate_type', 'cdr')->where('aggregate_id', $cdr->getKey())
+            ->where('to_state', 'review_required')->latest('id')->first();
+        if ($cause?->reason !== 'cdr_blocking_anomaly' || ($cause->evidence['anomalies'] ?? []) !== ['missing_energy_flow_evidence']
+            || ! app(EnergyFlowDuration::class)->measure($session)['complete']) {
+            return;
+        }
+        // Re-run every quality gate; this is not a manual approval or a replacement tariff.
+        app(ChargeDetailRecordGenerator::class)->generate($session);
+        $session->refresh();
     }
 
     private function hasCurrentConnection(ChargingSession $session, CarbonImmutable $meteredAt): bool
