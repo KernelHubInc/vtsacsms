@@ -11,7 +11,7 @@ Use the existing Codemagic Flutter workflow editor and its connected App Store C
 | Shorebird | Disabled |
 | Instance | macOS M2 or a supported newer Mac instance |
 | Flutter | `3.47.9`, stable |
-| Xcode | `26.6` (Swift 6.2.3 or newer is required by Firebase); record the resolved version in build evidence |
+| Xcode | `27.2` stable; select this version explicitly, rather than `edge` or an older default. Record Xcode and iPhoneOS SDK versions in build evidence |
 | CocoaPods | Default |
 | Project path | `apps/mobile` |
 | Mode | Release |
@@ -36,6 +36,8 @@ Use this **pre-build script** (repository root is explicit):
 ```bash
 set -euo pipefail
 cd "$CM_BUILD_DIR"
+xcodebuild -version
+xcrun --sdk iphoneos --show-sdk-version
 python3 scripts/prepare-ios-firebase.py --environment production
 ```
 
@@ -52,6 +54,14 @@ Set **Release** in the UI. In the iOS build arguments field use:
 Set your release version and a new build number in Codemagic's versioning configuration. Keep the version consistent with the App Store Connect version record; each upload needs a build number not previously used for that version. Do not reuse an already uploaded build number. If versioning is managed in build arguments instead, append `--build-name=<your-version> --build-number=<unused-build-number>` with real values before starting the build.
 
 The generated production definitions use `https://evcspowersolutions.com`, Power Solutions' production tenant, live remote charging and real payments. Simulation flags are false. Do not override them with staging-demo arguments. Client build flags do not replace backend authorization or server-side feature settings.
+
+## Foreground location and App Store processing warnings
+
+The app requests location while open to center the map and find nearby chargers. `NSLocationWhenInUseUsageDescription` explains this use; background location and Always authorization are not part of the current feature. The Podfile sets `BYPASS_PERMISSION_LOCATION_ALWAYS=1` for every `geolocator_apple` build configuration while preserving existing compiler definitions and Flutter's build settings. This excludes the plugin's unused Always authorization code that can trigger `ITMS-90683`. Do not add an Always-location purpose string or background location mode to conceal that warning.
+
+For the first build containing this Podfile correction, clear the Codemagic dependency/build cache so CocoaPods regenerates its settings. Build from the updated `main` commit and use an unused iOS build number. Test nearby-station location permission when allowed and denied on an iPhone; denial must leave manual station discovery available. The Windows regression checks and Ruby Podfile-hook test do not prove a signed IPA or Apple's binary processing. Confirm that the new upload no longer reports `ITMS-90683` before selecting it for review.
+
+`ITMS-90725` on the earlier iOS 26.5 SDK upload is an advance SDK deadline notice. Apple's April 2027 requirement is the iOS 27 SDK or newer; the Xcode 27.2 Codemagic image meets that SDK generation while retaining the application's iOS 15.0 deployment target. These are build-time changes and require a new iOS binary, with no backend deployment or Android rebuild.
 
 Add this **post-build script** to fail the workflow before upload if the signed archive has the wrong Firebase project, bundle ID, or APNs signing:
 
@@ -74,9 +84,11 @@ Google sign-in on a public iOS release requires an equivalent privacy-focused lo
 3. On a physical iPhone, install through TestFlight, sign in with a verified account and allow notifications. Initial APNs registration can take several seconds; returning to the app retries registration. Denying notifications must not prevent sign-in, wallet access or charging.
 4. With an approved test audience, explicitly publish a short-lived driver notice with **Send push notification** selected. Check foreground, background and locked-screen display, sound, and tap-to-Updates. A tenant-wide notice reaches that tenant's eligible installations; use an isolated test tenant unless a production announcement has been approved. Do not broadcast a test to all production users.
 5. Check logout and account switching: the old user's registration must be revoked and notices must not cross tenant boundaries. An `accepted` delivery means Firebase accepted the request, not that the phone displayed it.
-6. Before public App Review, finish the approved privacy policy, App Privacy answers, support/deletion URLs, screenshots, review login and store metadata. The owner's deferred privacy publication is still an outstanding store-submission requirement; server deployment is not evidence that this business requirement is complete.
+6. Before public App Review, verify the published privacy policy, App Privacy answers, support/deletion URLs, screenshots, review login and store metadata against the tested build.
 7. Select the tested build on the public App Store version, submit for App Review, then release after approval using the chosen release option. A separate rebuild is unnecessary when the same signed build passes testing and its configuration remains correct.
 
 For a staging iOS workflow use `test_env`, a separate secure plist from `evcs-power-solutions-staging` and `--environment staging` in both scripts. Do not use the production plist for staging. The Apple bundle/profile must match the chosen Firebase iOS app. The supplied production plist does not establish that staging's iOS Firebase app or APNs key has been configured.
 
 Official references: [Firebase Flutter setup](https://firebase.google.com/docs/cloud-messaging/flutter/get-started), [Codemagic iOS signing](https://docs.codemagic.io/flutter-code-signing/ios-code-signing/), [App Store Connect upload](https://docs.codemagic.io/flutter-publishing/publishing-to-app-store/).
+
+Location/SDK references: [Geolocator iOS configuration](https://github.com/Baseflow/flutter-geolocator/blob/main/geolocator/README.md#ios), [Codemagic Xcode 27.2 image](https://docs.codemagic.io/specs-macos/xcode-27-2/), [Apple's April 2027 SDK requirement](https://developer.apple.com/news/?id=k1mtkt1k).
