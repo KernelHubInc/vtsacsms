@@ -1,4 +1,5 @@
 import java.util.Base64
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -15,6 +16,14 @@ val dartDefines = providers.gradleProperty("dart-defines").getOrElse("").split("
     String(Base64.getDecoder().decode(it), Charsets.UTF_8)
 }
 val productionBuild = "APP_ENVIRONMENT=production" in dartDefines
+if (productionBuild) {
+    val approved = JsonSlurper().parse(file("../../dart_defines.production.json")) as Map<*, *>
+    require(listOf("GOOGLE_SIGN_IN_ENABLED", "GOOGLE_SIGN_IN_SERVER_CLIENT_ID").all {
+        "$it=${approved[it]}" in dartDefines
+    }) {
+        "Production Google sign-in settings are missing or differ from the approved production build definitions."
+    }
+}
 val uploadKeystore = providers.environmentVariable("VTSA_ANDROID_UPLOAD_KEYSTORE").orNull
 val uploadStorePassword = providers.environmentVariable("VTSA_ANDROID_UPLOAD_STORE_PASSWORD").orNull
 val uploadKeyAlias = providers.environmentVariable("VTSA_ANDROID_UPLOAD_KEY_ALIAS").orNull

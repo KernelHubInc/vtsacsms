@@ -24,6 +24,13 @@ def verify(app, entitlements, environment):
         raise ValueError('Signing application identifier does not match the bundle.')
     if entitlements.get('get-task-allow', False):
         raise ValueError('A development signing profile cannot be uploaded to the App Store.')
+    defines = firebase.build_defines(environment)
+    if defines.get('GOOGLE_SIGN_IN_ENABLED') == 'true':
+        client = defines['GOOGLE_SIGN_IN_IOS_CLIENT_ID']
+        schemes = [scheme for item in info.get('CFBundleURLTypes', []) for scheme in item.get('CFBundleURLSchemes', [])]
+        if (info.get('GIDClientID') != client or info.get('GIDServerClientID') != defines['GOOGLE_SIGN_IN_SERVER_CLIENT_ID']
+                or firebase.reversed_client_id(client) not in schemes):
+            raise ValueError('Archived Google sign-in client or callback scheme is missing or incorrect.')
 
 
 def main(argv=None):

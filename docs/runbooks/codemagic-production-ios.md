@@ -39,7 +39,7 @@ cd "$CM_BUILD_DIR"
 python3 scripts/prepare-ios-firebase.py --environment production
 ```
 
-The script rejects a staging project, a mismatched bundle identifier, incomplete client settings, or service-account material. It writes the ignored native plist and `.codemagic/ios-defines.json` inside `apps/mobile`. Xcode copies the plist into the app bundle. Ordinary simulator builds without a plist still compile; Firebase remains unavailable until a matching client file is provided.
+The script rejects a staging project, a mismatched bundle identifier, incomplete client settings, or service-account material. It writes the ignored native plist and `.codemagic/ios-defines.json` inside `apps/mobile`. Production uses the public settings tracked in `apps/mobile/dart_defines.production.json`, including the approved Google Web/server and iOS OAuth client IDs. It adds the matching Google callback scheme to Runner's Info.plist while retaining the `vtsa` app link. A conflicting OAuth client in the supplied Firebase plist fails preparation. Xcode copies the plist into the app bundle. Ordinary simulator builds without a plist still compile; Firebase remains unavailable until a matching client file is provided.
 
 ## Build arguments
 
@@ -63,7 +63,9 @@ python3 scripts/verify-ios-archive.py \
   --app apps/mobile/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
 ```
 
-Keep Flutter analysis and tests enabled. Preserve build logs and the signed IPA privately. Successful macOS simulator compilation is separate evidence from a signed archive and physical-device push delivery.
+Keep Flutter analysis and tests enabled. Preserve build logs and the signed IPA privately. Archive validation also rejects incorrect Google client IDs or a missing Google callback scheme. Successful macOS simulator compilation is separate evidence from a signed archive and physical-device push delivery.
+
+Google sign-in on a public iOS release requires an equivalent privacy-focused login option under [App Review guideline 4.8](https://developer.apple.com/app-store/review/guidelines/#login-services), normally Sign in with Apple. The Google integration does not implement that additional provider. Internal TestFlight can validate Google sign-in, but do not submit this change for public App Review until the login-service requirement is satisfied.
 
 ## Upload and acceptance
 

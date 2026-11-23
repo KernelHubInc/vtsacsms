@@ -18,6 +18,8 @@ import 'package:vtsa_mobile/core/storage/token_store.dart';
 import 'package:vtsa_mobile/features/accounts/charging_accounts.dart';
 import 'package:vtsa_mobile/features/auth/application/auth_controller.dart';
 import 'package:vtsa_mobile/features/auth/data/api_auth_repository.dart';
+import 'package:vtsa_mobile/features/auth/data/browser_google_identity_stub.dart'
+    if (dart.library.js_interop) 'package:vtsa_mobile/features/auth/data/browser_google_identity.dart';
 import 'package:vtsa_mobile/features/auth/data/device_authenticator.dart';
 import 'package:vtsa_mobile/features/auth/data/native_google_identity.dart';
 import 'package:vtsa_mobile/features/auth/data/quick_unlock_store.dart';
@@ -282,11 +284,18 @@ final class AppDependencies {
         environment: environment,
       ),
       googleIdentityProvider:
-          !kIsWeb &&
-              defaultTargetPlatform == TargetPlatform.android &&
-              environment.googleSignInEnabled &&
-              environment.googleServerClientId.isNotEmpty
-          ? NativeGoogleIdentity(environment.googleServerClientId)
+          environment.supportsGoogleSignIn(
+            isWeb: kIsWeb,
+            platform: defaultTargetPlatform,
+          )
+          ? kIsWeb
+                ? createBrowserGoogleIdentity(environment.googleServerClientId)
+                : NativeGoogleIdentity(
+                    environment.googleServerClientId,
+                    clientId: defaultTargetPlatform == TargetPlatform.iOS
+                        ? environment.googleIosClientId
+                        : null,
+                  )
           : null,
       stationRepository: ApiStationRepository(client),
       vehicleRepository: ApiVehicleRepository(

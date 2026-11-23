@@ -7,4 +7,5 @@ return [
     'tenant_id' => env('GOOGLE_SIGN_IN_TENANT_ID'),
     'server_client_id' => env('GOOGLE_SIGN_IN_SERVER_CLIENT_ID'),
     'android_client_id' => env('GOOGLE_SIGN_IN_ANDROID_CLIENT_ID'),
+    'ios_client_id' => env('GOOGLE_SIGN_IN_IOS_CLIENT_ID'),
 ];
