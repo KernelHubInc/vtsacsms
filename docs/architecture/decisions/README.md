@@ -48,6 +48,8 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 
 | [0039](0039-suspended-tail-billing-evidence.md) | Settle confirmed stops after suspended metering | Accepted for staging validation |
 
+| [0040](0040-google-sign-in-across-driver-clients.md) | Google sign-in across driver clients | Candidate; live provider and signed-device acceptance required |
+
 ## ADR Template
 
 New records should include status, date, owners, context, decision, decision details, consequences, alternatives, risks/controls, and follow-up decisions. Use the next zero-padded number and a stable descriptive filename.

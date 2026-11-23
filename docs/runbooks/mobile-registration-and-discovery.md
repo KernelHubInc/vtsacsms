@@ -63,6 +63,26 @@ Deployment acceptance requires an actual signed Android APK with the correct Goo
 
 Official references: [Flutter Google sign-in](https://pub.dev/packages/google_sign_in), [Android configuration](https://pub.dev/packages/google_sign_in_android), [Google backend token verification](https://developers.google.com/identity/sign-in/android/backend-auth), and [button artwork](https://developers.google.com/identity/branding-guidelines). The Google G image in `apps/mobile/assets/interface/google-g.png` is the official asset downloaded from Google's branding guide.
 
+## Production Google sign-in and browser/iOS expansion (2026-11-23)
+
+See [ADR 0040](../architecture/decisions/0040-google-sign-in-across-driver-clients.md). Production Android and web builds use the tracked public `apps/mobile/dart_defines.production.json`. Native Android builds refuse missing or mismatched production Google settings. The Web client is the server audience for all three clients; it is not a server secret. Configure the production backend consistently on both application nodes:
+
+```dotenv
+GOOGLE_SIGN_IN_ENABLED=true
+GOOGLE_SIGN_IN_TENANT_ID=01M5TYA79VGM9C3AGJB4PMNZ2Q
+GOOGLE_SIGN_IN_SERVER_CLIENT_ID=16318993523-1lo280lm8n9fsnhdhrorj615ofrt330v.apps.googleusercontent.com
+GOOGLE_SIGN_IN_ANDROID_CLIENT_ID=16318993523-0d5gibqjc088gcnkt5epmcg61bl88aiu.apps.googleusercontent.com
+GOOGLE_SIGN_IN_IOS_CLIENT_ID=16318993523-0i4nnu6qegkvjbkm6flgiaf2aullgvjn.apps.googleusercontent.com
+```
+
+The owner supplied Play app-signing SHA-1 `F8:35:9E:23:CA:DC:24:D4:2B:AE:77:BC:5B:CD:C1:1A:59:F1:3F:09`. A locally upload-key-signed APK does not establish that Google login works in a Play-installed build. Test the new signed AAB through a Play testing track. Keep the existing signing key and package; use a new unused version code.
+
+The browser driver app at `/mobile/` uses Google's rendered GIS button, not the native `authenticate()` API. Google Cloud must authorize the exact HTTPS origin (`https://evcspowersolutions.com`) on the production Web client. Staging requires `https://staging.evcspowersolutions.com` on its own existing Web client. Origins have no path. The backend retains exact server-audience and configured authorized-party checks; do not add arbitrary Google clients to resolve an authentication failure. Admin/operator workforce sign-in is outside this driver sign-in change.
+
+Native iOS uses the supplied iOS client and its reversed callback scheme through the existing Codemagic Firebase preparation and archive verification scripts. Staging iOS remains disabled without its own Apple OAuth client. Public iOS release requires the equivalent privacy-focused login option described in the [Codemagic runbook](codemagic-production-ios.md); Google alone does not satisfy Apple guideline 4.8.
+
+After deployment verify cancellation, new-driver registration, existing password-confirmed linking, repeat login/logout, disabled identities, expired proofs and wrong-tenant attempts. Email/password remains available if Google cannot load or the provider is unavailable. A rendered button is not evidence of successful provider authentication. Preserve private test evidence without storing live ID tokens or credentials.
+
 ## Verification boundaries
 
 Automated tests use fake mobile repositories and an in-memory backend database. They do not create live accounts, charge a vehicle, debit a wallet or send email. Screen previews are fixture data. Camera permission and QR detection must also be checked on a physical phone and a supported HTTPS browser after deployment.

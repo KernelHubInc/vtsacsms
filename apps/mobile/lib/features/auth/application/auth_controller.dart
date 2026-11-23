@@ -27,14 +27,15 @@ final class AuthController extends ChangeNotifier {
       _googleProvider != null && _repository is GoogleAuthRepository;
   GoogleProfile? get googleRegistration => _googleProfile;
   bool get googleLinkRequired => _googleLinkRequired;
+  GoogleIdentityProvider? get googleIdentityProvider => _googleProvider;
 
-  Future<void> signInWithGoogle({String? password}) async {
+  Future<void> signInWithGoogle({String? password, String? credential}) async {
     if (_busy || !googleAvailable) return;
     _setBusy(true);
     try {
       if (password == null) {
         _clearGoogle();
-        _googleToken = await _googleProvider!.authenticate();
+        _googleToken = credential ?? await _googleProvider!.authenticate();
       }
       final token = _googleToken;
       if (token == null) return;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vtsa_mobile/app/app_dependencies.dart';
 import 'package:vtsa_mobile/design_system/components/vtsa_components.dart';
+import 'package:vtsa_mobile/features/auth/presentation/browser_google_button_stub.dart'
+    if (dart.library.js_interop) 'package:vtsa_mobile/features/auth/presentation/browser_google_button.dart';
 
 class GoogleAccessButton extends StatefulWidget {
   const GoogleAccessButton({
@@ -27,12 +29,13 @@ class _GoogleAccessButtonState extends State<GoogleAccessButton> {
     super.dispose();
   }
 
-  Future<void> _signIn({bool link = false}) async {
+  Future<void> _signIn({bool link = false, String? credential}) async {
     final dependencies = widget.dependencies;
-    if (link && _password.text.isEmpty) return;
+    if (dependencies.auth.isBusy || (link && _password.text.isEmpty)) return;
     setState(() => _attempted = true);
     await dependencies.auth.signInWithGoogle(
       password: link ? _password.text : null,
+      credential: credential,
     );
     if (mounted) _password.clear();
     await dependencies.loadSignedInData();
@@ -113,33 +116,42 @@ class _GoogleAccessButtonState extends State<GoogleAccessButton> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          OutlinedButton(
-            key: const ValueKey('continue-with-google'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              backgroundColor: dark ? const Color(0xFF131314) : Colors.white,
-              foregroundColor: dark
-                  ? const Color(0xFFE3E3E3)
-                  : const Color(0xFF1F1F1F),
-              side: BorderSide(
-                color: dark ? const Color(0xFF8E918F) : const Color(0xFF747775),
+          if (auth.googleIdentityProvider!.usesBrowserButton)
+            browserGoogleButton(
+              provider: auth.googleIdentityProvider!,
+              busy: auth.isBusy,
+              onCredential: (token) => _signIn(credential: token),
+            )
+          else
+            OutlinedButton(
+              key: const ValueKey('continue-with-google'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: dark ? const Color(0xFF131314) : Colors.white,
+                foregroundColor: dark
+                    ? const Color(0xFFE3E3E3)
+                    : const Color(0xFF1F1F1F),
+                side: BorderSide(
+                  color: dark
+                      ? const Color(0xFF8E918F)
+                      : const Color(0xFF747775),
+                ),
+              ),
+              onPressed: auth.isBusy ? null : _signIn,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/interface/google-g.png',
+                    width: 20,
+                    height: 20,
+                    excludeFromSemantics: true,
+                  ),
+                  const SizedBox(width: 10),
+                  const Flexible(child: Text('Continue with Google')),
+                ],
               ),
             ),
-            onPressed: auth.isBusy ? null : _signIn,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/interface/google-g.png',
-                  width: 20,
-                  height: 20,
-                  excludeFromSemantics: true,
-                ),
-                const SizedBox(width: 10),
-                const Flexible(child: Text('Continue with Google')),
-              ],
-            ),
-          ),
           if (_attempted && widget.onRegistration != null)
             VtsaAlertRegion(
               title: 'Could not continue with Google',

@@ -17,6 +17,8 @@ final class GoogleTokenVerifier
     {
         $server = config('google_sign_in.server_client_id');
         $android = config('google_sign_in.android_client_id');
+        $ios = config('google_sign_in.ios_client_id');
+        $clients = array_values(array_filter([$server, $android, $ios], fn ($client): bool => is_string($client) && $client !== ''));
         if (config('google_sign_in.enabled') !== true || config('google_sign_in.tenant_id') !== $tenantId
             || ! is_string($server) || $server === '' || ! is_string($android) || $android === '') {
             throw new GoogleSignInException('google_sign_in_unavailable', 'Google sign-in is currently unavailable.', 404);
@@ -39,7 +41,7 @@ final class GoogleTokenVerifier
             if (($headers->alg ?? null) !== 'RS256'
                 || ! in_array($claims->iss ?? null, ['accounts.google.com', 'https://accounts.google.com'], true)
                 || ($claims->aud ?? null) !== $server
-                || (isset($claims->azp) && ! in_array($claims->azp, [$server, $android], true))
+                || (isset($claims->azp) && ! in_array($claims->azp, $clients, true))
                 || ! is_int($claims->exp ?? null) || $claims->exp <= now('UTC')->getTimestamp()
                 || ! is_int($claims->iat ?? null) || $claims->iat > now('UTC')->getTimestamp() + 30
                 || ! is_string($claims->sub ?? null) || $claims->sub === '' || strlen($claims->sub) > 255

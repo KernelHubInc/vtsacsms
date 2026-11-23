@@ -12,6 +12,7 @@ final class AppEnvironment {
     required this.googleMapsApiKey,
     this.googleSignInEnabled = false,
     this.googleServerClientId = '',
+    this.googleIosClientId = '',
     this.maps = const MapConfiguration(
       requestedProvider: MapProviderKind.openstreetmap,
       provider: MapProviderKind.openstreetmap,
@@ -57,6 +58,9 @@ final class AppEnvironment {
       googleServerClientId: const String.fromEnvironment(
         'GOOGLE_SIGN_IN_SERVER_CLIENT_ID',
       ),
+      googleIosClientId: const String.fromEnvironment(
+        'GOOGLE_SIGN_IN_IOS_CLIENT_ID',
+      ),
       maps: MapConfiguration.fromDefines(),
     );
   }
@@ -67,6 +71,17 @@ final class AppEnvironment {
   final String googleMapsApiKey;
   final bool googleSignInEnabled;
   final String googleServerClientId;
+  final String googleIosClientId;
+
+  bool supportsGoogleSignIn({
+    required bool isWeb,
+    required TargetPlatform platform,
+  }) =>
+      googleSignInEnabled &&
+      googleServerClientId.isNotEmpty &&
+      (isWeb ||
+          platform == TargetPlatform.android ||
+          (platform == TargetPlatform.iOS && googleIosClientId.isNotEmpty));
   final MapConfiguration maps;
 
   bool get hasTenant => defaultTenantId.isNotEmpty;
@@ -100,6 +115,7 @@ final class AppEnvironment {
     googleMapsApiKey: googleMapsApiKey,
     googleSignInEnabled: googleSignInEnabled,
     googleServerClientId: googleServerClientId,
+    googleIosClientId: googleIosClientId,
     maps: configuration,
   );
 }
