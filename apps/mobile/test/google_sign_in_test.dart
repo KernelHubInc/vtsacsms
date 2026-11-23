@@ -11,7 +11,7 @@ import 'package:vtsa_mobile/features/auth/domain/google_auth.dart';
 import 'support/fakes.dart';
 import 'support/registration_steps.dart';
 
-class TestGoogleProvider implements GoogleIdentityProvider {
+class TestGoogleProvider extends GoogleIdentityProvider {
   String? token = 'google-test-id-token';
   int calls = 0;
   Completer<String?>? pending;
@@ -68,6 +68,52 @@ class TestGoogleRepository extends FakeAuthRepository
 }
 
 void main() {
+  test(
+    'browser credential uses backend verification and retains password-confirmed linking',
+    () async {
+      final provider = TestGoogleProvider();
+      final repository = TestGoogleRepository()..linkRequired = true;
+      final auth = AuthController(
+        repository: repository,
+        tokens: MemoryTokenStore(),
+        googleIdentityProvider: provider,
+      );
+      addTearDown(auth.dispose);
+      await auth.restore();
+      await auth.signInWithGoogle(credential: 'browser-google-proof');
+      expect(auth.googleLinkRequired, isTrue);
+      expect(auth.status, AuthStatus.guest);
+      expect(provider.calls, 0);
+      expect(repository.receivedToken, 'browser-google-proof');
+      await auth.signInWithGoogle(
+        password: 'wrong',
+        credential: 'replacement-proof',
+      );
+      expect(auth.status, AuthStatus.guest);
+      expect(repository.receivedToken, 'browser-google-proof');
+      await auth.signInWithGoogle(password: 'ExistingPass1!');
+      expect(auth.status, AuthStatus.authenticated);
+      expect(repository.receivedToken, 'browser-google-proof');
+      expect(auth.canConfigureQuickUnlock, isFalse);
+    },
+  );
+
+  test(
+    'browser credential cannot sign in with an unconfigured Google provider',
+    () async {
+      final repository = TestGoogleRepository();
+      final auth = AuthController(
+        repository: repository,
+        tokens: MemoryTokenStore(),
+      );
+      addTearDown(auth.dispose);
+      await auth.restore();
+      await auth.signInWithGoogle(credential: 'untrusted-proof');
+      expect(repository.loginCalls, 0);
+      expect(auth.status, AuthStatus.guest);
+    },
+  );
+
   const profile = GoogleProfile(
     email: 'ada@example.test',
     firstName: 'Ada',

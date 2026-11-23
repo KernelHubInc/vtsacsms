@@ -3,7 +3,9 @@ import 'package:vtsa_mobile/features/auth/domain/user_profile.dart';
 
 typedef MobileAuthSession = ({TokenBundle tokens, UserProfile user});
 
-abstract interface class GoogleIdentityProvider {
+abstract class GoogleIdentityProvider {
+  bool get usesBrowserButton => false;
+
   Future<String?> authenticate();
 }
 

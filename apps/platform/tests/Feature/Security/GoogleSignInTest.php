@@ -110,6 +110,29 @@ final class GoogleSignInTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    public function test_configured_ios_client_can_sign_in_without_accepting_unapproved_clients(): void
+    {
+        $payload = $this->loginPayload($this->token(['azp' => 'ios.apps.googleusercontent.com']));
+        $this->postJson('/api/v1/auth/google', $payload)->assertUnauthorized();
+        config()->set('google_sign_in.ios_client_id', 'ios.apps.googleusercontent.com');
+        $this->postJson('/api/v1/auth/google', $payload)->assertOk()
+            ->assertJsonPath('data.status', 'registration_required');
+        $this->postJson('/api/v1/auth/google', $this->loginPayload($this->token([
+            'azp' => 'unapproved-ios.apps.googleusercontent.com',
+        ])))->assertUnauthorized();
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_web_client_uses_the_same_server_audience_and_cannot_substitute_another_audience(): void
+    {
+        $this->postJson('/api/v1/auth/google', $this->loginPayload($this->token([
+            'azp' => 'server.apps.googleusercontent.com',
+        ])))->assertOk()->assertJsonPath('data.status', 'registration_required');
+        $this->postJson('/api/v1/auth/google', $this->loginPayload($this->token([
+            'azp' => 'server.apps.googleusercontent.com', 'aud' => 'another.apps.googleusercontent.com',
+        ])))->assertUnauthorized();
+    }
+
     public function test_matching_email_requires_existing_password_then_links_and_signs_in(): void
     {
         $user = $this->existingUser();

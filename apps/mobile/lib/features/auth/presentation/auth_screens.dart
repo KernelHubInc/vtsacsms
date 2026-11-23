@@ -392,6 +392,19 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         onPressed: busy
                             ? null
                             : () async {
+                                if (widget
+                                        .dependencies
+                                        .auth
+                                        .googleIdentityProvider
+                                        ?.usesBrowserButton ==
+                                    true) {
+                                  widget.dependencies.auth.cancelGoogle();
+                                  setState(() {
+                                    _step = 0;
+                                    _email.clear();
+                                  });
+                                  return;
+                                }
                                 await widget.dependencies.auth
                                     .signInWithGoogle();
                                 if (!mounted) return;

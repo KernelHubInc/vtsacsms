@@ -32,21 +32,47 @@ def validate(data, environment):
 
 
 def prepare(data, environment, root=ROOT):
-    validate(data, environment)
+    config = validate(data, environment)
+    defines = build_defines(environment)
+    ios_client = defines.get('GOOGLE_SIGN_IN_IOS_CLIENT_ID')
+    if ios_client and config.get('CLIENT_ID') not in (None, '', ios_client):
+        raise ValueError('Firebase Apple OAuth client does not match the approved Google sign-in client.')
     mobile = root / 'apps/mobile'
     destination = mobile / 'ios/Runner/GoogleService-Info.plist'
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(data)
     destination.chmod(0o600)
-    project, api, tenant = ENVIRONMENTS[environment]
-    defines = {'APP_ENVIRONMENT': environment, 'API_BASE_URL': api, 'DEFAULT_TENANT_ID': tenant,
-               'FEATURE_OCPP': 'true', 'FEATURE_REMOTE_CHARGING': 'true', 'FEATURE_REAL_PAYMENTS': 'true',
-               'FEATURE_SIMULATED_CHARGING': 'false', 'FEATURE_SIMULATED_PAYMENTS': 'false'}
+    if ios_client:
+        info_path = mobile / 'ios/Runner/Info.plist'
+        info = plistlib.loads(info_path.read_bytes()) if info_path.exists() else {}
+        info['GIDClientID'] = ios_client
+        info['GIDServerClientID'] = defines['GOOGLE_SIGN_IN_SERVER_CLIENT_ID']
+        schemes = [item for item in info.get('CFBundleURLTypes', [])
+                   if item.get('CFBundleURLName') != 'google-sign-in']
+        schemes.append({'CFBundleURLName': 'google-sign-in', 'CFBundleURLSchemes': [reversed_client_id(ios_client)]})
+        info['CFBundleURLTypes'] = schemes
+        info_path.write_bytes(plistlib.dumps(info, sort_keys=False))
     output = mobile / '.codemagic'
     output.mkdir(parents=True, exist_ok=True)
     path = output / 'ios-defines.json'
     path.write_text(json.dumps(defines, indent=2) + '\n', encoding='utf-8')
     return path
+
+
+def reversed_client_id(client_id):
+    return '.'.join(reversed(client_id.split('.')))
+
+
+def build_defines(environment):
+    source = 'dart_defines.production.json' if environment == 'production' else 'dart_defines.staging-demo.json'
+    defines = json.loads((ROOT / 'apps/mobile' / source).read_text())
+    _, api, tenant = ENVIRONMENTS[environment]
+    if (defines.get('APP_ENVIRONMENT'), defines.get('API_BASE_URL'), defines.get('DEFAULT_TENANT_ID')) != (environment, api, tenant):
+        raise ValueError('Mobile build definitions do not match the selected environment.')
+    # A staging iOS build needs its own approved Apple OAuth client before activation.
+    if not defines.get('GOOGLE_SIGN_IN_IOS_CLIENT_ID'):
+        defines['GOOGLE_SIGN_IN_ENABLED'] = 'false'
+    return defines
 
 
 def main(argv=None):
