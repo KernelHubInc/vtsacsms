@@ -29,3 +29,11 @@ Regression coverage checks configured iOS authorized parties, rejects unapproved
 Acceptance includes Google chooser cancellation, existing password linking, new registration, logout/re-login, wrong-client failure, browser popup/origin restrictions and the Play-distributed signing certificate. Provider authentication needs a supervised account; fixture tests cannot prove Google Cloud console settings. Disable only Google authentication if rollback is necessary; preserve password recovery, provider-link data, charging and QR Ph settings. Roll back application images without restoring financial databases.
 
 This extends ADR 0030's client scope; its Identity ownership and linking decisions remain in force.
+
+## Client lifecycle correction (2026-11-25)
+
+Returning from a provider chooser must not issue private notice requests until the driver is authenticated and email-verified. Public station discovery can still refresh for guests. The same authenticated guard applies to the existing periodic notice refresh.
+
+An unauthorized response can expire only the token and tenant that sent it. Guest requests and delayed responses from a previous account must not clear a newer login, rotate its credentials, or replay an earlier account's mutation. Refresh completion checks the original session again before persisting rotated credentials; a retry is cancelled if the account changes before dispatch. A genuine current-session rejection still clears the expired credentials and requests sign-in. Refresh requests share one in-flight operation per session; the interceptor itself is not queued, so a rejected nested retry can finish without waiting behind its own error handler.
+
+Regression tests cover chooser pause/resume, Google enrollment continuation, guest requests, delayed cross-tenant rejection, late refresh success/failure, logout during refresh, and account switching before a mutation retry. Existing Google cancellation, password-confirmed linking and authenticated login coverage remains required. This is a Flutter client correction: deploy both browser bundles and distribute new native builds; no backend migration or authentication-policy change is required. Real provider/device acceptance remains a separate release check.

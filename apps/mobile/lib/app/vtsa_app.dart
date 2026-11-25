@@ -63,7 +63,11 @@ class _VtsaAppState extends State<VtsaApp> with WidgetsBindingObserver {
       if (widget.dependencies.network.isOnline) {
         unawaited(widget.dependencies.discovery.refresh());
         final notices = widget.dependencies.notices;
-        if (notices != null) unawaited(notices.refresh());
+        if (notices != null &&
+            widget.dependencies.auth.status == AuthStatus.authenticated &&
+            !widget.dependencies.auth.needsEmailVerification) {
+          unawaited(notices.refresh());
+        }
       }
     } else {
       widget.dependencies.discovery.stopAutoRefresh();
