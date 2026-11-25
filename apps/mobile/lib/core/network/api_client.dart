@@ -25,8 +25,9 @@ final class ApiClient {
       sendTimeout: const Duration(seconds: 20),
       headers: const {'Accept': 'application/json'},
     );
+    // A retry may fail inside onError; queuing it behind that handler deadlocks.
     _dio.interceptors.add(
-      QueuedInterceptorsWrapper(onRequest: _onRequest, onError: _onError),
+      InterceptorsWrapper(onRequest: _onRequest, onError: _onError),
     );
   }
 
@@ -35,6 +36,7 @@ final class ApiClient {
   final UlidGenerator _ids;
   final RetryDelay _retryDelay;
   Future<TokenBundle?>? _refreshing;
+  TokenBundle? _refreshingSession;
   void Function()? onSessionExpired;
 
   Dio get dio => _dio;
@@ -44,9 +46,22 @@ final class ApiClient {
     RequestInterceptorHandler handler,
   ) async {
     // Retries can retain old headers; never reuse credentials across an app lock.
-    options.headers.remove('Authorization');
-    options.headers.remove('X-Tenant-ID');
+    final previousAuthorization = options.headers.remove('Authorization');
+    final previousTenant = options.headers.remove('X-Tenant-ID');
     final tokens = await _tokens.read();
+    if (options.extra['auth_retried'] == true &&
+        (tokens == null ||
+            previousAuthorization != 'Bearer ${tokens.accessToken}' ||
+            previousTenant != tokens.tenantId)) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.cancel,
+          message: 'The account changed before this request could be retried.',
+        ),
+      );
+      return;
+    }
     if (_tokens case LockableTokenStore(
       locked: true,
     ) when options.extra['anonymous'] != true) {
@@ -74,18 +89,29 @@ final class ApiClient {
     ErrorInterceptorHandler handler,
   ) async {
     final request = error.requestOptions;
-    if (_canRefresh(error) && request.extra['auth_retried'] != true) {
-      final refreshed = await _refreshOnce();
-      if (refreshed != null) {
+    if (_canRefresh(error)) {
+      final rejected = await _tokens.read();
+      // A delayed guest or previous-account response cannot end a new session.
+      if (!_belongsTo(request, rejected)) return handler.next(error);
+      final refreshed = request.extra['auth_retried'] == true
+          ? null
+          : await _refreshOnce(rejected!);
+      if (refreshed != null && _sameSession(await _tokens.read(), refreshed)) {
         request.extra['auth_retried'] = true;
         request.headers['Authorization'] = 'Bearer ${refreshed.accessToken}';
         if (request.data case final FormData form) {
           request.data = form.clone();
         }
-        return handler.resolve(await _dio.fetch<Object?>(request));
+        try {
+          return handler.resolve(await _dio.fetch<Object?>(request));
+        } on DioException catch (retryError) {
+          return handler.next(retryError);
+        }
       }
-      await _tokens.clear();
-      onSessionExpired?.call();
+      if (_sameSession(await _tokens.read(), rejected)) {
+        await _tokens.clear();
+        onSessionExpired?.call();
+      }
     }
 
     final retries = (request.extra['retry_count'] as int?) ?? 0;
@@ -110,19 +136,37 @@ final class ApiClient {
         !path.contains('/auth/refresh');
   }
 
-  Future<TokenBundle?> _refreshOnce() {
+  static bool _sameSession(TokenBundle? current, TokenBundle? expected) =>
+      current != null &&
+      expected != null &&
+      current.accessToken == expected.accessToken &&
+      current.tenantId == expected.tenantId &&
+      current.deviceId == expected.deviceId;
+
+  static bool _belongsTo(RequestOptions request, TokenBundle? current) =>
+      current != null &&
+      request.headers['Authorization'] == 'Bearer ${current.accessToken}' &&
+      request.headers['X-Tenant-ID'] == current.tenantId;
+
+  Future<TokenBundle?> _refreshOnce(TokenBundle expected) {
     final active = _refreshing;
-    if (active != null) {
+    if (active != null && _sameSession(_refreshingSession, expected)) {
       return active;
     }
-    final operation = _refresh();
+    final operation = _refresh(expected);
     _refreshing = operation;
-    return operation.whenComplete(() => _refreshing = null);
+    _refreshingSession = expected;
+    return operation.whenComplete(() {
+      if (identical(_refreshing, operation)) {
+        _refreshing = null;
+        _refreshingSession = null;
+      }
+    });
   }
 
-  Future<TokenBundle?> _refresh() async {
+  Future<TokenBundle?> _refresh(TokenBundle expected) async {
     final current = await _tokens.read();
-    if (current?.refreshToken == null) {
+    if (!_sameSession(current, expected) || current?.refreshToken == null) {
       return null;
     }
     try {
@@ -149,6 +193,7 @@ final class ApiClient {
         tenantId: data['tenant_id'] as String? ?? current.tenantId,
         deviceId: data['device_id'] as String? ?? current.deviceId,
       );
+      if (!_sameSession(await _tokens.read(), expected)) return null;
       await _tokens.write(refreshed);
       return refreshed;
     } on DioException {
