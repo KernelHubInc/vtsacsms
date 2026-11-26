@@ -1,5 +1,27 @@
 # Customer support tickets — staging acceptance
 
+## Administrator support permissions
+
+FR-SUP-001 and FR-SUP-003: ticket visibility requires `support.view`; **Update status**, **Respond** and **Assign support level** require `support.manage` within the existing tenant/site scope. A role's name alone grants no authority. The original production administrator bootstrap had read-only module grants, so some existing administrator roles need the owner-approved support grant. Super administrators who already hold it need no change. Do not rerun demo seeders, replace all role permissions, or alter the original bootstrap/enrollment plan hash.
+
+After deploying this release to staging, preview one approved active tenant:
+
+```bash
+php artisan security:enable-administrator-support --tenant=APPROVED_TENANT_ULID
+```
+
+Apply only after reviewing the preview and recording the owner's authorization:
+
+```bash
+php artisan security:enable-administrator-support --tenant=APPROVED_TENANT_ULID --apply --approval-reference="APPROVED_CHANGE_REFERENCE"
+```
+
+The console-only Organizations workflow recognizes only the existing `platform-admin`, `platform-super-admin`, `production-administrator` and `production-super-administrator` keys. It requires their existing administration-panel and support-view grants, adds only missing `support.manage`, and audits each change as `identity.role.support_management_enabled`. It preserves all other grants, role assignments, membership state and tenant/site scopes. Preview is read-only; a repeated apply does not duplicate grants or audit records. It refuses inactive tenants and incomplete role prerequisites. Custom/operator/read-only roles and other tenants are unchanged. This is an explicit deployment operation, not an automatic application startup repair.
+
+The 2026-11-26 release also includes minimal Symfony security patch updates to `7.4.24` for HtmlSanitizer, HttpKernel, Mailer, Routing and their HttpFoundation dependency. No dependency major versions or Composer requirements change; the lockfile audit must pass before promotion.
+
+Verify both admin and superadmin can see and execute status/reply/level actions in both panels using synthetic staging tickets, with duplicate reply keys producing one public email intent. Internal notes must not queue customer emails. Confirm a read-only user and an out-of-scope operator cannot invoke those actions directly. Production verification should check permissions/actions without changing a real customer's ticket or sending test replies to them. Level 3 is Kernel Hub routing, not an individual-superadmin assignment. No mobile build, schema migration, charging configuration or payment configuration change is required. A code rollback retains the audited grant; a permission rollback must explicitly remove only the newly granted key from the recorded role after owner review.
+
 ## Images and support levels
 
 The updated mobile build adds **Add images** in **Activity → Session → Report an issue**. Choose up to five JPEG/PNG images, 2 MB each (maximum 3000 × 3000 pixels); review previews and remove unwanted images before submitting. Existing installed builds still support text reports. The website offers the same optional upload on the email-code confirmation step, after entering the request details. The server validates and sanitizes every image; invalid uploads never partially create a ticket. Avoid passwords, payment details, faces and identity documents.
