@@ -47,6 +47,8 @@ flowchart LR
 
 Controls are repeated at boundaries. Network placement alone never grants business authorization.
 
+Administrator support repair is an explicit, owner-approved Organizations deployment workflow, scoped to one active tenant and four recognized existing administrator role keys. It adds only a missing `support.manage` grant after validating existing administration-panel and support-view authority. It does not infer access from email/name, alter assignments/scopes, grant contact reveal, or change ticket policy. Preview is read-only; apply requires an approval reference and writes a tamper-evident role audit in the same transaction. It is unavailable to human/web contexts. See [the support runbook](../runbooks/support-tickets.md#administrator-support-permissions).
+
 ## 4. Identity and Authentication
 
 ### Human identities
