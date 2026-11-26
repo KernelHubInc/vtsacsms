@@ -50,6 +50,9 @@ ADRs preserve durable architectural choices and their tradeoffs. Accepted ADRs a
 
 | [0040](0040-google-sign-in-across-driver-clients.md) | Google sign-in across driver clients | Candidate; live provider and signed-device acceptance required |
 
+| [0041](0041-level-three-support-email-alerts.md) | Durable Level 3 Superadmin email alerts | Accepted by product-owner request |
+
 ## ADR Template
+
 
 New records should include status, date, owners, context, decision, decision details, consequences, alternatives, risks/controls, and follow-up decisions. Use the next zero-padded number and a stable descriptive filename.
