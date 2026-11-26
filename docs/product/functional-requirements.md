@@ -207,6 +207,7 @@
 - **FR-SUP-003:** Support users MUST see only policy-approved/masked data and sensitive reveals MUST be justified and audited.
 - **FR-SUP-004:** Refunds, remote commands, identity changes, and financial corrections initiated from support MUST invoke the owning context's controlled workflow.
 - **FR-SUP-005:** Attachments MUST be authorized, malware-scanned by a selected mechanism, size/type constrained, and retained according to policy.
+- **FR-SUP-006:** A transition into Level 3 MUST durably request an email alert for eligible tenant-wide Superadmins. Duplicate level selection MUST NOT resend. Delivery MUST recheck live access, exclude customer content, retry safely and retain acceptance/failure evidence without changing ticket permissions.
 
 ## 19. Reporting
 

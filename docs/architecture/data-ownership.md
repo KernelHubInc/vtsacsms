@@ -241,6 +241,8 @@ Charging owns `charging_budget_settings` and the final fee projections on sessio
 
 ### Support intake and correspondence contracts
 
+Level 3 escalation also invokes Notifications' `SupportEscalationEmails` contract inside the Support transaction. Notifications exclusively owns `support_escalation_deliveries`; Organizations supplies eligible Superadmin public IDs through `SupportSuperAdministrators`, Identity supplies the current verified address, and Support supplies only the ticket reference/priority through `SupportEmailQuery::escalation`. No module writes another owner's records. See [ADR 0041](decisions/0041-level-three-support-email-alerts.md) for rolling compatibility, recipient reauthorization, privacy and failure behavior.
+
 Support owns optional sanitized, encrypted ticket images and the three-level routing field. Image acceptance is atomic with the ticket; authorized staff image reads reuse ticket tenant/site policies. Level labels do not grant access or transfer customer content to Kernel Hub. See [ADR 0037](decisions/0037-private-ticket-images-and-support-levels.md) for bounded file sizes, database storage, private viewing and image retention. Notifications continues to receive text-only email facts through the existing contract.
 
 SUP-001–SUP-004 use Charging's `SupportSessionQuery` and Assets' `SupportStationQuery` for minimal authorized/public target facts. Support owns ticket/message content, idempotency intent and encrypted verified visitor contact. Identity's verified-contact query supplies the current enabled account email without exposing a full identity record.

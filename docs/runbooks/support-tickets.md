@@ -1,5 +1,15 @@
 # Customer support tickets — staging acceptance
 
+## Level 3 Superadmin email alerts
+
+FR-SUP-006: changing a ticket from another support level to **Level 3 — Kernel Hub (App Developer)** queues one operational email for each eligible Superadmin. Selecting Level 3 again queues nothing. A later genuine re-escalation sends a fresh alert. Recipients use their existing verified account email; no address configuration or mobile update is required. They must retain active, unexpired tenant-wide membership/assignment to the existing Superadmin role plus Admin-panel, Support view/manage access. The sender rechecks this access before every attempt.
+
+The email includes the ticket reference, priority and **Review support ticket** link. Sign in to Admin to see the filtered ticket, customer conversation and images. No customer description, subject, internal note or image is emailed. This alert is distinct from the customer's acknowledgement/reply; **Latest email** continues to describe customer correspondence.
+
+Apply `2026_11_27_000001_create_support_escalation_deliveries` after a backup, then deploy all PHP application processes including the existing support-mail worker. `notifications:send-support-emails` handles both queues. No charging/payment/Google/SMTP setting changes are needed. Inspect tenant-scoped `support_escalation_deliveries` for queued/retrying/accepted/failed/cancelled evidence. Mail-server acceptance does not prove inbox delivery. A missing recipient records `no_eligible_superadmin`; repair the account/role, then deliberately select another support level and re-escalate if a fresh alert is needed. Do not grant extra roles as a delivery workaround. Eight failed attempts need review before retry; account/permission revocation cancels an unsent alert.
+
+Staging acceptance must exercise a synthetic ticket and an SMTP capture inbox, verify a second Level 3 selection does not resend, and verify production recipient eligibility without emailing real customers or changing their tickets. Code rollback keeps the additive table; old mail workers ignore staff alerts. See [ADR 0041](../architecture/decisions/0041-level-three-support-email-alerts.md).
+
 ## Administrator support permissions
 
 FR-SUP-001 and FR-SUP-003: ticket visibility requires `support.view`; **Update status**, **Respond** and **Assign support level** require `support.manage` within the existing tenant/site scope. A role's name alone grants no authority. The original production administrator bootstrap had read-only module grants, so some existing administrator roles need the owner-approved support grant. Super administrators who already hold it need no change. Do not rerun demo seeders, replace all role permissions, or alter the original bootstrap/enrollment plan hash.

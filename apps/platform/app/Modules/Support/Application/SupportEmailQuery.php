@@ -9,6 +9,14 @@ use App\Modules\Support\Domain\Models\SupportTicket;
 
 final readonly class SupportEmailQuery
 {
+    /** @return array{ticket_number:string,priority:string}|null */
+    public function escalation(string $ticketId): ?array
+    {
+        $ticket = SupportTicket::query()->select(['ticket_number', 'priority'])->find($ticketId);
+
+        return $ticket === null ? null : ['ticket_number' => (string) $ticket->ticket_number, 'priority' => (string) $ticket->priority];
+    }
+
     /** @return array{email:string,ticket_number:string,subject:string,body:string,status:string}|null */
     public function message(string $ticketId, ?string $messageId): ?array
     {

@@ -9,6 +9,7 @@ use App\Foundation\Audit\AuditRecorder;
 use App\Foundation\Audit\AuditResult;
 use App\Models\User;
 use App\Modules\Notifications\Application\SupportEmailRequests;
+use App\Modules\Notifications\Application\SupportEscalationEmails;
 use App\Modules\Support\Domain\Models\SupportTicket;
 use App\Modules\Support\Domain\Models\SupportTicketMessage;
 use App\Modules\Tenancy\Application\CurrentTenant;
@@ -119,6 +120,10 @@ final readonly class SupportTicketService
                 'support_level' => $level,
             ]);
             $this->saveState($ticket);
+
+            if ($level === 3 && config('support.enabled')) {
+                app(SupportEscalationEmails::class)->enqueue((string) $ticket->getKey(), (string) Str::ulid());
+            }
 
             $this->audit->record(new AuditEntry(
                 'support.ticket.escalated',
