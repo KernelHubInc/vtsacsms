@@ -225,6 +225,7 @@
 - **FR-CMS-002:** Draft, review, publish, unpublish, and rollback actions MUST be authorized and audited.
 - **FR-CMS-003:** CMS content MUST be sanitized and MUST not execute untrusted script.
 - **FR-CMS-004:** Operational location/availability/tariff facts MUST remain owned by their contexts and be composed into public pages, not copied into editable CMS truth.
+- **FR-CMS-005:** Each environment MUST expose a dated, public changelog of verified releases, linked from the website and workforce panels. Production MUST exclude staging-only notes; staging MUST retain search exclusion. See `docs/runbooks/changelog.md`.
 
 ## 21. Integrations
 

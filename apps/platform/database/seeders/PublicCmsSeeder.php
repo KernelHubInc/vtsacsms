@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Modules\CMS\Application\PublishChangelog;
 use App\Modules\CMS\Domain\Models\AppStoreLink;
 use App\Modules\CMS\Domain\Models\CmsPage;
 use App\Modules\CMS\Domain\Models\CmsSection;
@@ -15,6 +16,7 @@ final class PublicCmsSeeder extends Seeder
 {
     public function run(): void
     {
+        app(PublishChangelog::class)->run();
         $pages = [
             ['home', 'Home', 'home', 'Charging that fits the places people already go.', 'Find dependable charging, understand every stop, and keep moving with a network designed around real journeys.', 'Explore the charging map', '/charging-map'],
             ['ev-charging-network', 'EV charging network', 'network', 'One connected network, built place by place.', 'Explore how sites, chargers, operators, and service teams work together to make public charging easier to trust.', 'Find a station', '/charging-map'],

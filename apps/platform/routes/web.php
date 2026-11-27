@@ -6,6 +6,7 @@ use App\Foundation\Features\Feature;
 use App\Http\Controllers\AcceptOperatorInvitationController;
 use App\Http\Controllers\AccountDeletionController;
 use App\Http\Controllers\Api\V1\PasswordController;
+use App\Http\Controllers\ChangelogController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicArticleController;
 use App\Http\Controllers\PublicPageController;
@@ -44,6 +45,7 @@ Route::get('/staging/kyc/{page}', StagingKycPolicyController::class)
     ->name('kyc.staging-policy');
 
 Route::get('/support', [PublicSupportController::class, 'show'])->name('public.support');
+Route::get('/changelog', ChangelogController::class)->name('public.changelog');
 Route::get('/support-images/{panel}/{image}', SupportImageController::class)
     ->whereIn('panel', ['admin', 'operator'])->whereUlid('image')->middleware('throttle:120,1')->name('support.images.show');
 Route::middleware([RequireSupportIntake::class, 'throttle:5,10'])->group(function (): void {

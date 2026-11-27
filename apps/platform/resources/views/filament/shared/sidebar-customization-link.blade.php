@@ -6,3 +6,8 @@
         </x-filament::button>
     </div>
 @endif
+<div class="mt-3">
+    <x-filament::button tag="a" color="gray" icon="heroicon-o-clock" :href="route('public.changelog')" class="w-full">
+        Changelog
+    </x-filament::button>
+</div>
