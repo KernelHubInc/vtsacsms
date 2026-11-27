@@ -12,7 +12,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{ $description }}">
-    <meta name="robots" content="{{ $seo?->noindex ? 'noindex, nofollow' : 'index, follow' }}">
+    <meta name="robots" content="{{ ($noindex ?? false) || $seo?->noindex ? 'noindex, nofollow' : 'index, follow' }}">
     <link rel="canonical" href="{{ $canonical }}">
     <meta property="og:type" content="{{ isset($article) ? 'article' : 'website' }}">
     <meta property="og:title" content="{{ $title }}">
@@ -74,12 +74,13 @@
         <div class="site-footer__grid">
             <div><a class="brand brand--footer" href="{{ route('home') }}" aria-label="Power Solutions home"><x-brand.logo inverse /></a><p>A clearer operating foundation for charging networks and the people who use them.</p></div>
             <nav aria-label="Explore"><strong>Explore</strong><a href="{{ route('public.charging-map') }}">Charging map</a><a href="{{ route('public.mobile-app') }}">Mobile app</a><a href="{{ route('public.partner-program') }}">Partner program</a></nav>
-            <nav aria-label="Help"><strong>Help</strong><a href="{{ route('public.frequently-asked-questions') }}">FAQs</a><a href="{{ route('public.support') }}">Support</a><a href="{{ route('public.contact') }}">Contact</a></nav>
+            <nav aria-label="Help"><strong>Help</strong><a href="{{ route('public.frequently-asked-questions') }}">FAQs</a><a href="{{ route('public.support') }}">Support</a><a href="{{ route('public.contact') }}">Contact</a><a href="{{ route('public.changelog') }}">Changelog</a></nav>
             <nav aria-label="Legal"><strong>Legal</strong><a href="{{ route('public.privacy-policy') }}">Privacy</a><a href="{{ route('public.account-deletion') }}">Account deletion</a><a href="{{ route('public.terms-of-service') }}">Terms</a><a href="{{ route('public.charging-terms') }}">Charging terms</a>@if ($content->published_refund_policy_id)<a href="{{ route('public.refund-policy') }}">Refund policy</a>@endif</nav>
         </div>
         <nav class="site-footer__compact-nav" aria-label="Map quick links">
             <a href="{{ route('public.support') }}">Support</a>
             <a href="{{ route('public.contact') }}">Contact</a>
+            <a href="{{ route('public.changelog') }}">Changelog</a>
             <a href="{{ route('public.privacy-policy') }}">Privacy</a>
         </nav>
         <div class="site-footer__base"><span>&copy; {{ now()->year }} {{ config('app.name') }}</span><span>Times and status signals may be delayed. Check station signage on arrival.</span></div>
