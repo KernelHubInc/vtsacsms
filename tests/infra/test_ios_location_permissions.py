@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import plistlib
+import re
 import shutil
 import subprocess
 import unittest
@@ -10,6 +11,12 @@ PODFILE = ROOT / 'apps/mobile/ios/Podfile'
 
 
 class IosLocationPermissionsTest(unittest.TestCase):
+    def test_project_applies_the_cocoapods_location_bypass(self):
+        pubspec = (ROOT / 'apps/mobile/pubspec.yaml').read_text()
+        self.assertRegex(pubspec, re.compile(
+            r'^flutter:\r?\n  config:\r?\n    enable-swift-package-manager: false\r?\n', re.MULTILINE,
+        ))
+
     def test_geolocator_excludes_always_authorization(self):
         self.assertIn('BYPASS_PERMISSION_LOCATION_ALWAYS=1', PODFILE.read_text())
 
@@ -24,6 +31,9 @@ class IosLocationPermissionsTest(unittest.TestCase):
     def test_pod_hook_preserves_flags_and_only_changes_geolocator(self):
         ruby = r'''
 require 'json'
+require 'yaml'
+project = YAML.safe_load(File.read(File.join(File.dirname(ARGV.fetch(0)), '..', 'pubspec.yaml')))
+abort('Foreground-location bypass requires CocoaPods for the pinned geolocator plugin') unless project.dig('flutter', 'config', 'enable-swift-package-manager') == false
 Config = Struct.new(:name, :build_settings)
 Target = Struct.new(:name, :build_configurations)
 Project = Struct.new(:targets)
