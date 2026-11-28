@@ -13,6 +13,7 @@ Use the existing Codemagic Flutter workflow editor and its connected App Store C
 | Flutter | `3.47.9`, stable |
 | Xcode | `27.2` stable; select this version explicitly, rather than `edge` or an older default. Record Xcode and iPhoneOS SDK versions in build evidence |
 | CocoaPods | Default |
+| Native plugin manager | CocoaPods, enforced by `flutter.config.enable-swift-package-manager: false` in `pubspec.yaml` |
 | Project path | `apps/mobile` |
 | Mode | Release |
 | Target | `lib/main.dart` |
@@ -38,6 +39,10 @@ set -euo pipefail
 cd "$CM_BUILD_DIR"
 xcodebuild -version
 xcrun --sdk iphoneos --show-sdk-version
+cd apps/mobile
+flutter clean
+flutter pub get --enforce-lockfile
+cd "$CM_BUILD_DIR"
 python3 scripts/prepare-ios-firebase.py --environment production
 ```
 
@@ -59,7 +64,9 @@ The generated production definitions use `https://evcspowersolutions.com`, Power
 
 The app requests location while open to center the map and find nearby chargers. `NSLocationWhenInUseUsageDescription` explains this use; background location and Always authorization are not part of the current feature. The Podfile sets `BYPASS_PERMISSION_LOCATION_ALWAYS=1` for every `geolocator_apple` build configuration while preserving existing compiler definitions and Flutter's build settings. This excludes the plugin's unused Always authorization code that can trigger `ITMS-90683`. Do not add an Always-location purpose string or background location mode to conceal that warning.
 
-For the first build containing this Podfile correction, clear the Codemagic dependency/build cache so CocoaPods regenerates its settings. Build from the updated `main` commit and use an unused iOS build number. Test nearby-station location permission when allowed and denied on an iPhone; denial must leave manual station discovery available. The Windows regression checks and Ruby Podfile-hook test do not prove a signed IPA or Apple's binary processing. Confirm that the new upload no longer reports `ITMS-90683` before selecting it for review.
+Flutter 3.47.9 can resolve plugins through Swift Package Manager, which bypasses the CocoaPods hook. The pinned `geolocator_apple` 2.3.14 Swift package does not define the foreground-only bypass, even though newer upstream documentation describes an environment-variable option. The project therefore explicitly disables Swift Package Manager in `pubspec.yaml`, so both local and Codemagic builds apply the existing CocoaPods hook. A runner's global Flutter configuration is insufficient as the release contract. Keep the generated Swift package integration references in Xcode; Flutter retains that scaffolding when SwiftPM is disabled. Re-enable SwiftPM only after the pinned plugin supports the bypass and a signed build passes Apple's processing checks.
+
+For the first build containing this project configuration correction, clear the Codemagic dependency/build cache so plugin resolution and CocoaPods settings are regenerated. The pre-build script also cleans generated Flutter artifacts before restoring the locked dependencies and preparing Firebase. Build from the updated `main` commit and use an unused iOS build number. Do not rerun the old Build 2 commit. Test nearby-station location permission when allowed and denied on an iPhone; denial must leave manual station discovery available. The Windows regression checks and Ruby Podfile-hook test do not prove a signed IPA or Apple's binary processing. Confirm that the new upload no longer reports `ITMS-90683` before selecting it for review. No backend deployment or Android store upload is required for this change.
 
 `ITMS-90725` on the earlier iOS 26.5 SDK upload is an advance SDK deadline notice. Apple's April 2027 requirement is the iOS 27 SDK or newer; the Xcode 27.2 Codemagic image meets that SDK generation while retaining the application's iOS 15.0 deployment target. These are build-time changes and require a new iOS binary, with no backend deployment or Android rebuild.
 
@@ -92,3 +99,5 @@ For a staging iOS workflow use `test_env`, a separate secure plist from `evcs-po
 Official references: [Firebase Flutter setup](https://firebase.google.com/docs/cloud-messaging/flutter/get-started), [Codemagic iOS signing](https://docs.codemagic.io/flutter-code-signing/ios-code-signing/), [App Store Connect upload](https://docs.codemagic.io/flutter-publishing/publishing-to-app-store/).
 
 Location/SDK references: [Geolocator iOS configuration](https://github.com/Baseflow/flutter-geolocator/blob/main/geolocator/README.md#ios), [Codemagic Xcode 27.2 image](https://docs.codemagic.io/specs-macos/xcode-27-2/), [Apple's April 2027 SDK requirement](https://developer.apple.com/news/?id=k1mtkt1k).
+
+Dependency-manager references: [Flutter project configuration](https://docs.flutter.dev/tools/pubspec#config-field), [disabling Swift Package Manager](https://docs.flutter.dev/packages-and-plugins/swift-package-manager/for-app-developers#how-to-turn-off-swift-package-manager), [Codemagic cache reset](https://docs.codemagic.io/knowledge-codemagic/caching/).
